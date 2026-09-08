@@ -920,9 +920,24 @@ struct EventMappingTests {
 
     // ---- 真實 fixture 回歸：每一筆實測 event 都必須被明確處理 ----
 
-    @Test("round1 的每個真實 event 都不落到 noChange")
+    /// 對現實的回歸測試 —— **必須含 round2**。
+    ///
+    /// round1 + round1b 只有 6 種 event（`SessionStart`、`UserPromptSubmit`、
+    /// `PreToolUse`、`PostToolUse`、`Stop`、`SessionEnd`），而這 6 種全都已被本檔
+    /// 其他具名測試釘住，所以只載它們等於零增量保護。
+    ///
+    /// round2 多帶 5 種本測試否則完全碰不到的：`Notification`、`PermissionRequest`、
+    /// `PostToolBatch`、`PostToolUseFailure`、`SubagentStop`。其中
+    /// **`PostToolUseFailure` 與 `Notification` 正是兩個靠實測才修對的映射**
+    /// （前者原本錯映射成 error、後者的未知型別 fallback 原本錯成 waiting），
+    /// 也就是最該有現實回歸測試的兩個。覆蓋從 6 種提升到 11 種。
+    @Test("三份 fixture 裡的每個真實 event 都不落到 noChange")
     func realEventsAreAllMapped() throws {
-        let all = try Fixtures.rawEvents(named: "round1") + Fixtures.rawEvents(named: "round1b")
+        let all = try Fixtures.rawEvents(named: "round1")
+            + Fixtures.rawEvents(named: "round1b")
+            + Fixtures.rawEvents(named: "round2")
+        let kinds = Set(all.compactMap { $0["hook_event_name"] as? String })
+        #expect(kinds.count >= 11, "三份 fixture 應涵蓋至少 11 種 event，實際 \(kinds.sorted())")
         for ev in all {
             let name = try #require(ev["hook_event_name"] as? String)
             let e = EventMapping.effect(forEvent: name,
