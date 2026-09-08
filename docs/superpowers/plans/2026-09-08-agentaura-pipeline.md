@@ -1509,11 +1509,22 @@ struct HookPayloadTests {
     /// 結果核心主張對 14 個 optional 欄位中的 12 個完全沒有測試。
     @Test("逐一破壞真實 payload 的每個欄位：只有兩個是必要的")
     func perFieldCorruptionTolerance() throws {
-        let reals = try Fixtures.rawEvents(named: "round2")
+        // 三份 fixture 全用，**不取樣**。
+        //
+        // 曾經有一版寫 `where i % 8 == 0`（為了控制測試時間），結果它靜默掏空了覆蓋：
+        // 9 個這個型別真的會讀的 key 完全沒有損壞測試，因為那個 stride 剛好錯過
+        // 它們在 corpus 裡的每一次出現 —— 其中包括 `error` 與 `is_interrupt`
+        // （`toolError` / `isInterrupt` 的來源），它們唯一的出現位置在 round2 的
+        // index 66，而 66 % 8 == 2。
+        //
+        // 取樣省下的時間遠不值得換掉覆蓋（1032 次建構 ~0.014s）。
+        let reals = try Fixtures.rawEvents(named: "round1")
+            + Fixtures.rawEvents(named: "round1b")
+            + Fixtures.rawEvents(named: "round2")
         let required: Set<String> = ["hook_event_name", "session_id"]
         var checked: Set<String> = []
 
-        for (i, json) in reals.enumerated() where i % 8 == 0 {   // 取樣，控制測試時間
+        for json in reals {
             for key in json.keys {
                 checked.insert(key)
 
@@ -1540,8 +1551,19 @@ struct HookPayloadTests {
                 }
             }
         }
-        #expect(checked.count >= 12,
-                "應掃過至少 12 個真實欄位，實際 \(checked.sorted())")
+        // 斷言涵蓋 corpus 裡出現過的**每一個** key，而不是「至少 N 個」——
+        // 後者無法察覺取樣把某些 key 整批跳過。
+        let allCorpusKeys = Set(reals.flatMap { $0.keys })
+        #expect(checked == allCorpusKeys,
+                "漏掃的 key：\(allCorpusKeys.subtracting(checked).sorted())")
+
+        // 特別點名這個型別會讀、且 corpus 有的 key —— 最容易被取樣跳過的那一批
+        for key in ["error", "is_interrupt", "message", "model",
+                    "notification_type", "reason", "source", "tool_input"] {
+            if allCorpusKeys.contains(key) {
+                #expect(checked.contains(key), "\(key) 在 corpus 裡卻沒被掃到")
+            }
+        }
     }
 
     @Test("effect 直接委派給 EventMapping，含 notification_type")
@@ -2071,6 +2093,7 @@ struct MergeRulesSlotTests {
     @Test("JSON round-trip 保留每一個 stored property")
     func codableRoundTripCoversEveryField() throws {
         var s = SessionSnapshot(sessionID: "round-trip-1")
+        s.schema              = 7
         s.hookEventName       = "PermissionRequest"
         s.writtenAt           = Date(timeIntervalSince1970: 1_788_628_111)
         s.pid                 = 4242
@@ -2091,14 +2114,31 @@ struct MergeRulesSlotTests {
         s.lastMessage         = "全部完成"
         s.toolDescription     = "Download example.com to dl2.html"
         s.toolDurationMs      = 12_403
+        s.toolError           = "File does not exist"
         s.turnStartedAt       = Date(timeIntervalSince1970: 1_788_628_000)
         s.subagents           = ["Explore": 2, "implementer": 1]
         s.toolFailures        = 3
         s.terminated          = true
 
-        // 每個欄位都不是預設值 —— 任何從 CodingKeys 漏掉的 key 都會讓下面的等式失敗
-        let blank = SessionSnapshot(sessionID: "round-trip-1")
-        #expect(s != blank, "測試資料必須與空白初始狀態不同，否則這個 gate 沒有意義")
+        // 「每個欄位都不是預設值」這件事本身要被檢查，不能只寫在 doc-comment 裡。
+        //
+        // 這個 gate 曾經自己漏過欄位：宣稱涵蓋「每一個 stored property」，但
+        // `toolError` 與 `schema` 從頭到尾沒被設值。實測把 `case toolError` 或
+        // `case schema` 從 CodingKeys 移掉 —— 編譯照過（optional 有隱含 nil 預設值、
+        // schema 有明確預設值），全套件 121 個測試無一變紅。
+        //
+        // 手寫的欄位清單會 drift，所以改用 `Mirror` 從型別本身推導：
+        // 只要有任何 stored property 停在預設值，這裡就紅，並指名是哪一個。
+        let blank = SessionSnapshot(sessionID: "blank")
+        let mine = Array(Mirror(reflecting: s).children)
+        let theirs = Array(Mirror(reflecting: blank).children)
+        #expect(mine.count == theirs.count)
+        for (a, b) in zip(mine, theirs) {
+            #expect("\(a.value)" != "\(b.value)", """
+                stored property `\(a.label ?? "?")` 沒被設成非預設值 —— 這個 gate 對它是盲的。
+                把它從 CodingKeys 移掉不會有任何測試變紅。請在上面補一行設值。
+                """)
+        }
 
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
         let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
@@ -2315,7 +2355,17 @@ Expected: 全部 PASS（14 個測試）
 手動把 `merge` 裡的 `if p.isSubagent` 分支改成一律寫 `s.mainActivity = a`（即回到單槽 last-write-wins），
 執行 `swift test --filter MergeRulesTests`。
 
-Expected: `subagentCannotMaskWaiting` 與 `mainToolNotOverwritten` **必須 FAIL**。
+Expected: **`subagentRecordedWhileWorking` 與 `stopClearsSubSlot` 必須 FAIL**。
+
+> 註：這裡原本寫 `subagentCannotMaskWaiting` 與 `mainToolNotOverwritten`，那是**錯的**
+> （T05 implementer 實測後回報）。原因：前者的情境裡主槽**已經是 waiting（靜止態）**，
+> §2.5.1 的 guard 在觸及「單槽 vs 分槽」那一行之前就 `break` 了，所以這個 mutation
+> 在該測試裡不可觀察；後者從不斷言 `mainActivity`，而它的情境裡 `mainActivity` 恰好
+> 已等於 subagent 的效果值（`working`），用同一個值覆寫看不出差別。
+>
+> 性質仍然被覆蓋 —— 只是由那兩個**直接斷言 `subActivity`** 的測試覆蓋。
+> 這是「mutation 有牙齒、但我指名的咬合點不對」的實例：mutation 表的測試名對應
+> 必須用實測驗證，不能靠讀碼推。
 確認 RED 後 `cp /tmp/aura-mut.bak Sources/AuraCore/MergeRules.swift   # 見 Global Constraints 的標準程序` 還原，再跑一次確認全綠。
 
 - [ ] **Step 7: 檢查行數**
@@ -2789,7 +2839,7 @@ public enum SessionReducer {
 - [ ] **Step 5: 執行確認通過**
 
 Run: `swift test --filter SessionReducerTests 2>&1 | tail -10`
-Expected: 全部 PASS（13 個測試）
+Expected: 全部 PASS（**12 個測試**）　<!-- 原寫 13；implementer 清點 @Test 實為 12 -->
 
 - [ ] **Step 6: Commit**
 
@@ -3054,7 +3104,7 @@ public struct SessionRegistry: Sendable {
 - [ ] **Step 4: 執行確認通過**
 
 Run: `swift test --filter SessionRegistryTests 2>&1 | tail -10`
-Expected: 全部 PASS（11 個測試）
+Expected: 全部 PASS（**15 個測試**）　<!-- 原寫 11；implementer 清點 @Test 實為 15 -->
 
 - [ ] **Step 5: Mutation 驗證**
 
@@ -3112,7 +3162,10 @@ struct AggregatePolicyTests {
 
     @Test("2 個 working + 1 個 error → error（使用者原始舉例）")
     func twoWorkingOneErrorIsError() {
-        let r = policy.aggregate([state("a", .working), state("b", .working), state("c", .error)])
+        // `.error` 刻意**不放在陣列首尾** —— 放在尾端時，「最後一個贏」的錯誤
+        // 實作會巧合給出正確答案，這條測試就對 D1 的核心 mutation 失去鑑別力
+        // （實測：mutation 下只有 `orderIndependent` 變紅，這條照樣綠）。
+        let r = policy.aggregate([state("a", .working), state("b", .error), state("c", .working)])
         #expect(r.activity == .error)
     }
 
@@ -3455,14 +3508,26 @@ struct SnapshotIOTests {
         try SnapshotIO.delete(sessionID: "s1", root: root)   // 重複刪不得丟錯
     }
 
-    @Test("allSessionIDs 忽略非 .json 檔與子目錄")
+    /// 三個過濾條件各有一個**只有它能擋**的樣本 —— 否則某個條件移除了測試還是綠的。
+    /// 實測過：原本只放一個叫 `sub` 的目錄，光靠副檔名就擋掉了，
+    /// `isRegularFile` 與 `isSafeSessionID` 兩個過濾都是空轉。
+    @Test("allSessionIDs 的三個過濾條件各自都有牙齒")
     func allSessionIDsFilters() throws {
         let root = try makeRoot()
         try SnapshotIO.update(sessionID: "s1", root: root) { _ in self.snap("s1", .done) }
+
+        // 只有副檔名過濾擋得住
         try Data("x".utf8).write(to: root.appendingPathComponent("README.txt"))
         try FileManager.default.createDirectory(at: root.appendingPathComponent("sub"),
                                                 withIntermediateDirectories: true)
-        #expect(SnapshotIO.allSessionIDs(root: root) == ["s1"])
+        // 只有 isRegularFile 擋得住：一個**目錄**叫 dir.json
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("dir.json"),
+                                                withIntermediateDirectories: true)
+        // 只有 isSafeSessionID 擋得住：檔名 stem 含空白，是合法檔名但不是合法 session id
+        try Data("{}".utf8).write(to: root.appendingPathComponent("bad name.json"))
+
+        #expect(SnapshotIO.allSessionIDs(root: root) == ["s1"],
+                "多出來的是：\(SnapshotIO.allSessionIDs(root: root))")
     }
 
     @Test("root 不存在時 update 會自動建立")
@@ -3588,7 +3653,7 @@ public enum SnapshotIO {
 - [ ] **Step 4: 執行確認通過**
 
 Run: `swift test --filter SnapshotIOTests 2>&1 | tail -12`
-Expected: 全部 PASS（13 個測試）
+Expected: 全部 PASS（**14 個測試**，實測）
 
 - [ ] **Step 5: Mutation 驗證 —— flock 是否真的有牙齒**
 
@@ -3597,8 +3662,19 @@ Expected: 全部 PASS（13 個測試）
 
 Expected: `concurrentUpdatesDoNotLoseCounts` **必須 FAIL**（累加數會少於 320）。還原後全綠。
 
-> 若沒鎖也偶然通過，把 `iterations` 提高到 200 再測 —— 競態必須能穩定重現，
-> 否則這條測試沒有牙齒。
+> 已實測：移除鎖後 3/3 次都紅，320 次累加只剩 9 / 22 / 29 次。不需要調高 `iterations`。
+
+- [ ] **Step 5b: Mutation 驗證 —— `allSessionIDs` 的三個過濾條件**
+
+分別把 `allSessionIDs` 的 `isRegularFile` 檢查、以及 `.filter(isSafeSessionID)` 各自移除一次。
+
+Expected: 兩次都必須讓 `allSessionIDsFilters` **FAIL** —— 移除 `isRegularFile` 會多出 `"dir"`，
+移除 `isSafeSessionID` 會多出 `"bad name"`。兩者在生產上的後果都是**幽靈 session**：
+面板列出一個 `read` 永遠回 nil 的 id。
+
+> 這條測試的前一版只放了一個叫 `sub` 的目錄，光靠副檔名過濾就擋掉了，
+> 導致另外兩個過濾條件移除後測試照樣全綠 —— 空轉的守衛比沒有守衛更糟，
+> 因為它製造信心。三個條件各需要一個**只有它擋得住**的樣本。
 
 - [ ] **Step 6: Commit**
 
@@ -4025,16 +4101,37 @@ struct HookFileSourceTests {
         }
     }
 
-    /// 從 AsyncStream 收集事件，直到滿足條件或逾時。
-    func collect(_ source: HookFileSource, until predicate: @escaping ([SessionSnapshot]) -> Bool,
+    /// 收集到的事件。用 actor 是為了讓逾時分支也能報出「收到了哪些」。
+    actor Collected {
+        private var items: [SessionSnapshot] = []
+        func add(_ s: SessionSnapshot) -> [SessionSnapshot] { items.append(s); return items }
+        func all() -> [SessionSnapshot] { items }
+    }
+
+    /// 從 AsyncStream 收集事件，直到滿足條件或**真的**逾時。
+    ///
+    /// 前一版寫成 `for await { got.append(); if predicate || Date() > deadline { break } }`,
+    /// deadline 只在收到元素之後才檢查 —— 零元素時 `for await` 永久 block，
+    /// `timeout` 參數形同虛設。實測：把 `FSEventStreamStart` 移除後，這個 suite
+    /// 不是變紅而是**掛住**（90s 強殺、零輸出），CI 上會變成 hung job 而非失敗。
+    /// 逾時必須由一條獨立的 task 計時並取消收集端。
+    func collect(_ source: HookFileSource,
+                 until predicate: @escaping @Sendable ([SessionSnapshot]) -> Bool,
                  timeout: TimeInterval = 5) async -> [SessionSnapshot] {
-        var got: [SessionSnapshot] = []
-        let deadline = Date().addingTimeInterval(timeout)
-        for await snap in source.snapshots {
-            got.append(snap)
-            if predicate(got) || Date() > deadline { break }
+        let box = Collected()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                for await snap in source.snapshots {
+                    if predicate(await box.add(snap)) { break }
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            }
+            await group.next()      // 誰先完成就結束
+            group.cancelAll()
         }
-        return got
+        return await box.all()
     }
 
     // ---- bootstrap ----
@@ -4125,13 +4222,34 @@ struct HookFileSourceTests {
         source.stop()
         try write("after-stop", .working, to: root)
 
-        // `stop()` 會呼叫 continuation.finish()，所以迭代會立刻結束。
-        // 刻意不開 Task：在 Task 裡 append 到外層的 var 會被 Swift 6 的嚴格併發
-        // 判為 data race（實測 error: sending value of non-Sendable type
-        // '() async -> ()' risks causing data races）。直接迭代既正確又更簡單。
-        var got: [SessionSnapshot] = []
-        for await s in source.snapshots { got.append(s) }
+        // 用有界的 `collect`，不要直接 `for await`。
+        //
+        // 前一版是 `for await s in source.snapshots { got.append(s) }`，靠
+        // 「stop() 會 finish() continuation，所以迭代立刻結束」來終止 ——
+        // 但那正是這條測試的**被測物**。實測：把 stop() 裡的 finish() 拿掉，
+        // 這條測試不是變紅而是掛住（120s 強殺）。
+        // 拿被測物當迴圈終止條件，等於測試在假設結論成立。
+        let got = await collect(source, until: { !$0.isEmpty }, timeout: 1)
         #expect(!got.contains { $0.sessionID == "after-stop" })
+    }
+
+    @Test("stop 是終局：再 start 也不會復活（釘死契約，不是缺陷）")
+    func stopIsTerminal() async throws {
+        let root = try makeRoot()
+        let source = HookFileSource(root: root)
+        source.start()
+        source.stop()
+        source.start()                      // 嘗試復活
+        defer { source.stop() }
+
+        Task { try? self.write("revived", .working, to: root) }
+        let got = await collect(source, until: { !$0.isEmpty }, timeout: 1)
+        #expect(got.isEmpty, """
+            契約：`snapshots` 是 init 建立的單一 AsyncStream，stop() 會 finish() 它，
+            之後 start() 不會有任何事件。生產上只在 applicationWillTerminate 呼叫一次，
+            所以這是刻意的契約。若這條變紅，表示有人讓 start() 可以復活 —— 那是好事，
+            但 AppDelegate 的生命週期假設要一起改，別讓它靜默地變成兩套語意。
+            """)
     }
 
     @Test("重複 start / stop 不 crash")
@@ -4253,6 +4371,10 @@ public final class HookFileSource: EventSource, @unchecked Sendable {
         stream = s
     }
 
+    /// **stop() 是終局。** `snapshots` 是 `init` 建立的單一 AsyncStream，
+    /// 這裡 `finish()` 之後再 `start()` 也不會有任何事件 —— source 已經聾了。
+    /// 生產上只在 `applicationWillTerminate` 呼叫一次，故這是刻意的契約；
+    /// `stopIsTerminal` 測試把它釘死，未來若有人加「休眠後重啟」會立刻紅。
     public func stop() {
         lock.lock(); defer { lock.unlock() }
         if let s = stream {
@@ -4283,14 +4405,28 @@ public final class HookFileSource: EventSource, @unchecked Sendable {
 - [ ] **Step 5: 執行確認通過**
 
 Run: `swift test --filter HookFileSourceTests 2>&1 | tail -12`
-Expected: 全部 PASS（10 個測試）
+Expected: 全部 PASS（**11 個測試**，實測 0.140s）
 
-- [ ] **Step 6: Mutation 驗證**
+- [ ] **Step 6: Mutation 驗證（三個，全部實測過）**
 
-手動把 `bootstrap()` 改成 `return []`，執行 `swift test --filter HookFileSourceTests`。
+**6a — `bootstrap()` 改成 `return []`**
+Expected: `bootstrapReadsExisting` 與 `bootstrapSkipsCorrupt` **必須 FAIL**。
 
-Expected: `bootstrapReadsExisting` 與 `bootstrapSkipsCorrupt` **必須 FAIL**。還原後全綠。
+**6b — 移除 `FSEventStreamStart(s)`（連同 `FSEventStreamSetDispatchQueue`）**
+Expected: `detectsNewFile`、`detectsModification`、`detectsManySessions` **必須 FAIL**，
+且各在 ~5s（逾時）而非無限等待。實測：3 紅、suite 20.6s 結束。
 
+> 這一條是這個 task 最重要的 mutation：它證明那三條測試真的走 FSEvents，
+> 而不是被別的路徑餵飽。**前提**：`collect` 必須是有界的（見 Step 1 的註解）——
+> 用原本那版 `collect`，同樣的 mutation 會讓 suite **掛住**（實測 90s 強殺、
+> 零輸出），CI 上是 hung job 而不是紅燈。
+
+**6c — 移除 `stop()` 裡的 `continuation?.finish()`**
+Expected: `stopIsTerminal` **必須 FAIL**（會收到 `revived`），1.2s 內結束。
+
+> 這一條釘的是「stop() 是終局」的契約。同樣需要有界的 `collect`：
+> `stopEndsStream` 原本直接 `for await`，靠「stream 已 finish」終止迴圈 ——
+> 而那正是被測物本身，拿被測物當終止條件，mutation 下就是掛住（實測 120s 強殺）。
 - [ ] **Step 7: Commit**
 
 ```bash
