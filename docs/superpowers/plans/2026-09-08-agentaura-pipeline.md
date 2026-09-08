@@ -3236,6 +3236,75 @@ struct AuraHookCLITests {
         #expect(r.stderr.isEmpty)
     }
 
+    @Test("stdin 直接關閉（沒有任何輸入）仍 exit 0")
+    func closedStdin() throws {
+        let root = try makeRoot()
+        let p = Process()
+        p.executableURL = try Self.binaryURL()
+        p.environment = ProcessInfo.processInfo.environment.merging(
+            ["AGENTAURA_ROOT": root.path]) { _, new in new }
+        let inPipe = Pipe(), out = Pipe(), err = Pipe()
+        p.standardInput = inPipe; p.standardOutput = out; p.standardError = err
+        try p.run()
+        try inPipe.fileHandleForWriting.close()   // 立刻關閉，不寫任何 bytes
+        let o = out.fileHandleForReading.readDataToEndOfFile()
+        let e = err.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        #expect(p.terminationStatus == 0)
+        #expect(o.isEmpty && e.isEmpty)
+    }
+
+    /// **行為式強制「任何錯誤都靜默 exit 0」**，取代靠人讀程式碼確認沒有
+    /// force unwrap / `try!` / `fatalError`。
+    ///
+    /// 用 regex 掃原始碼找 `!` 的誤報率太高（`!=`、`!x`、字串裡的 `!` 都會中）。
+    /// 改成把真實 payload 系統性破壞後餵進去 —— Swift runtime trap 會以 signal
+    /// 中止（terminationStatus 非 0），所以行為測試抓得到，而且不依賴我對程式碼的閱讀。
+    @Test("真實 payload 的系統性破壞版本全部 exit 0 且無輸出")
+    func fuzzedRealPayloadsAreSilent() throws {
+        let root = try makeRoot()
+        let reals = try Fixtures.rawEvents(named: "round2")
+        var cases: [(String, Data)] = []
+
+        for (i, json) in reals.enumerated() where i % 4 == 0 {   // 取樣，控制測試時間
+            let full = try Fixtures.jsonData(json)
+
+            // (1) 在多個比例處截斷
+            for frac in [0.1, 0.35, 0.6, 0.9] {
+                cases.append(("truncate-\(frac)-\(i)", full.prefix(Int(Double(full.count) * frac))))
+            }
+            // (2) 逐一移除每個 key
+            for key in json.keys {
+                var m = json; m.removeValue(forKey: key)
+                cases.append(("drop-\(key)-\(i)", try Fixtures.jsonData(m)))
+            }
+            // (3) 逐一把每個值換成型別不符的東西
+            for key in json.keys {
+                for wrong: Any in [NSNull(), 42, ["nested": ["deep": [1, 2, 3]]], [1, 2, 3]] {
+                    var m = json; m[key] = wrong
+                    cases.append(("retype-\(key)-\(i)", try Fixtures.jsonData(m)))
+                }
+            }
+        }
+
+        #expect(cases.count > 200, "破壞案例數應有規模，實際 \(cases.count)")
+
+        for (label, data) in cases {
+            let r = try run(String(decoding: data, as: UTF8.self), root: root)
+            #expect(r.exitCode == 0, "\(label) 的 exit code 是 \(r.exitCode)，不是 0")
+            #expect(r.stdout.isEmpty, "\(label) 有 stdout：\(r.stdout.prefix(120))")
+            #expect(r.stderr.isEmpty, "\(label) 有 stderr：\(r.stderr.prefix(120))")
+        }
+
+        // 破壞過程不得在狀態目錄產生非預期檔案
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        for f in files {
+            #expect(f.hasSuffix(".json"), "狀態目錄出現非 .json 檔：\(f)")
+            #expect(SnapshotIO.isSafeSessionID(String(f.dropLast(5))),
+                    "狀態目錄出現不安全的檔名：\(f)")
+        }
+    }
+
     @Test("超大 payload（1MB last_assistant_message）不 crash 且 exit 0")
     func hugePayload() throws {
         let big = String(repeating: "長訊息內容 ", count: 100_000)
