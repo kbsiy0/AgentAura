@@ -153,7 +153,9 @@ jsonl 格式）—— 不進第一版。
 | `SessionStart` 有 `model` | 見上表 |
 | `SubagentStop` 有 `agent_transcript_path` | subagent 的獨立 transcript |
 | **內部 subagent 的 `agent_type` 是空字串** | 見 §2.5.1 —— 這導出一個 critical bug |
-| `auto` 已是預設權限模式 | `PermissionRequest` 只在 `default` 模式觸發；`auto` 模式的拒絕走 `PermissionDenied` |
+| `auto` 已是預設權限模式 | `PermissionRequest` 只在**每次都問**的模式觸發（CLI 旗標是 `--permission-mode manual`，文件裡稱 `default`）；`auto` 模式的拒絕走 `PermissionDenied` |
+| **Bash exit≠0 不觸發 `PostToolUseFailure`** | 指令回非零只是「tool 成功執行、輸出裡有錯誤」。`PostToolUseFailure` 只在 tool 本身失敗時觸發（實測：`Read` 不存在的檔）。**影響 `tool_failures` 的語意** —— 面板該欄位計的是「tool 層級的錯誤」，不含失敗的 shell 指令。這其實是對的語意（測試紅燈是正常工作），但面板文案不可寫成「指令失敗數」 |
+| `PostToolUseFailure` **沒有** `tool_error` 欄位 | 文件說有，實測只有 `tool_name` / `tool_input` / `duration_ms`。故不得依賴 `tool_error` 顯示錯誤原因 |
 
 ### 2.2 event → activity 對照表
 
