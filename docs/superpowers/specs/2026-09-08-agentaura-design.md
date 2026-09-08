@@ -157,7 +157,9 @@ jsonl 格式）—— 不進第一版。
 | **內部 subagent 的 `agent_type` 是空字串** | 見 §2.5.1 —— 這導出一個 critical bug |
 | `auto` 已是預設權限模式 | `PermissionRequest` 只在**每次都問**的模式觸發（CLI 旗標是 `--permission-mode manual`，文件裡稱 `default`）；`auto` 模式的拒絕走 `PermissionDenied` |
 | **Bash exit≠0 不觸發 `PostToolUseFailure`** | 指令回非零只是「tool 成功執行、輸出裡有錯誤」。`PostToolUseFailure` 只在 tool 本身失敗時觸發（實測：`Read` 不存在的檔）。**影響 `tool_failures` 的語意** —— 面板該欄位計的是「tool 層級的錯誤」，不含失敗的 shell 指令。這其實是對的語意（測試紅燈是正常工作），但面板文案不可寫成「指令失敗數」 |
-| `PostToolUseFailure` **沒有** `tool_error` 欄位 | 文件說有，實測只有 `tool_name` / `tool_input` / `duration_ms`。故不得依賴 `tool_error` 顯示錯誤原因 |
+| `PostToolUseFailure` 的錯誤欄位叫 **`error`**，不叫 `tool_error` | **這一列先前是錯的**（原本寫「沒有錯誤欄位」）。錯誤來源是我當時用一份手寫的 key 清單過濾 payload 再印出來，`error` 被自己的過濾器濾掉，卻據此下了「不存在」的結論。實際值是完整的錯誤訊息（例：`File does not exist. Note: your current working directory is …`）。面板可用它顯示 tool 失敗的原因 |
+| `PostToolUseFailure` 另帶 **`is_interrupt`**（布林） | 區分「tool 真的失敗」與「使用者按 Ctrl+C 中斷」。**中斷不該計入 `tool_failures`** —— 那是使用者的動作，不是失敗。實測樣本只有 `false`，`true` 的情況未驗證 |
+| `PostToolBatch` 帶 **`tool_calls`**（陣列） | 該批次的全部 tool 呼叫。可得批次大小，目前不需要 |
 | CLI 的 `--permission-mode manual` 在 payload 裡是 `"default"` | 兩者是同一個模式的不同名字。狀態檔範例用 `"default"` 正確 |
 | `PermissionRequest` 帶 `tool_name` / `tool_input` / **`permission_suggestions`** | 最後一項是規則建議陣列。面板可用 `tool_input.description` 顯示「在等你批准什麼」 |
 | `SessionEnd` 的 `reason` 實測值：`"prompt_input_exit"` | 確認欄位名是 `reason` |
