@@ -1275,8 +1275,11 @@ public struct HookPayload: Sendable, Equatable {
     public let source: String?
     public let reason: String?
     public let toolName: String?
+    public let toolDescription: String?
     public let toolDurationMs: Int?
     public let notificationType: String?
+    public let notificationMessage: String?
+    public let model: String?
     public let lastMessage: String?
     public let agentID: String?
     public let agentType: String?
@@ -3739,8 +3742,10 @@ public final class HookFileSource: EventSource, @unchecked Sendable {
         let callback: FSEventStreamCallback = { _, info, count, eventPaths, _, _ in
             guard let info else { return }
             let source = Unmanaged<HookFileSource>.fromOpaque(info).takeUnretainedValue()
-            // kFSEventStreamCreateFlagFileEvents 下 eventPaths 是 C 字串陣列。
-            let paths = unsafeBitCast(eventPaths, to: UnsafePointer<UnsafePointer<CChar>>.self)
+            // 未設 kFSEventStreamCreateFlagUseCFTypes，故 eventPaths 是 char **。
+            // 用 assumingMemoryBound 而非 unsafeBitCast —— 後者從 raw pointer 硬轉型別，
+            // 編譯器會警告可能造成 undefined behavior（實測 Swift 6.3.3 確實會警告）。
+            let paths = eventPaths.assumingMemoryBound(to: UnsafePointer<CChar>.self)
             var changed: Set<String> = []
             for i in 0..<count {
                 let name = (String(cString: paths[i]) as NSString).lastPathComponent
