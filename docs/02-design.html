@@ -1,0 +1,498 @@
+<title>AgentAura 系統設計</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --bg-elev:#ffffff; --bg-sunk:#efeee9;
+    --ink:#1c1d1f; --ink-2:#55585e; --ink-3:#8a8e96;
+    --line:#dedcd5; --line-strong:#c4c2b9;
+    --working:#0a84ff; --waiting:#ff9f0a; --done:#30d158; --error:#ff453a; --idle:#8e8e93;
+    --accent:#5b4ee5;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#131417; --bg-elev:#1c1e22; --bg-sunk:#0e0f11;
+      --ink:#eceef2; --ink-2:#a4a9b3; --ink-3:#71767f;
+      --line:#2a2d33; --line-strong:#3a3e46; --accent:#8b80ff;
+    }
+  }
+  :root[data-theme="dark"]{
+      --bg:#131417; --bg-elev:#1c1e22; --bg-sunk:#0e0f11;
+      --ink:#eceef2; --ink-2:#a4a9b3; --ink-3:#71767f;
+      --line:#2a2d33; --line-strong:#3a3e46; --accent:#8b80ff;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;
+       -webkit-font-smoothing:antialiased;padding:0 0 6rem}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 1.5rem}
+  header{padding:4rem 0 2.5rem;border-bottom:1px solid var(--line);margin-bottom:2rem}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem}
+  h1{font-size:2.1rem;line-height:1.2;margin:0 0 .6rem;letter-spacing:-.02em;font-weight:650}
+  .sub{color:var(--ink-2);font-size:1.05rem;margin:0;max-width:56ch}
+  h2{font-size:1.35rem;margin:3.5rem 0 1rem;letter-spacing:-.01em;font-weight:640;
+     padding-top:1.5rem;border-top:1px solid var(--line)}
+  h3{font-size:1rem;margin:2rem 0 .6rem;font-weight:650}
+  h4{font-size:.9rem;margin:1.4rem 0 .4rem;font-weight:650;color:var(--ink-2)}
+  p{margin:0 0 1rem}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg-sunk);
+       padding:.12em .38em;border-radius:4px;border:1px solid var(--line)}
+  pre{background:var(--bg-sunk);border:1px solid var(--line);border-radius:10px;
+      padding:1.1rem 1.2rem;overflow-x:auto;font-family:var(--mono);font-size:.82rem;line-height:1.6;margin:1rem 0}
+  pre code{background:none;border:none;padding:0;font-size:1em}
+  .card{background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;padding:1.4rem 1.5rem;margin:1.25rem 0}
+  .fix{border-left:3px solid var(--error)}
+  .fix .tag{display:inline-block;background:var(--error);color:#fff;font:600 .68rem/1 var(--mono);
+            letter-spacing:.08em;padding:.32rem .55rem;border-radius:5px;margin-bottom:.8rem;text-transform:uppercase}
+  .note{border-left:3px solid var(--accent)}
+  .scroll{overflow-x:auto;margin:1.25rem 0;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;font-size:.875rem;min-width:600px}
+  th,td{text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 .72rem/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+     color:var(--ink-3);background:var(--bg-sunk)}
+  tbody tr:hover{background:var(--bg-sunk)}
+  td code{font-size:.82em}
+  .st{display:inline-flex;align-items:center;gap:.4rem;font:650 .78rem/1 var(--mono);white-space:nowrap}
+  .st i{width:8px;height:8px;border-radius:50%;display:block;flex:none}
+  .st-w i{background:var(--working)} .st-w{color:var(--working)}
+  .st-a i{background:var(--waiting)} .st-a{color:#c47800}
+  .st-d i{background:var(--done)}    .st-d{color:#1c9c43}
+  .st-e i{background:var(--error)}   .st-e{color:var(--error)}
+  .st-i i{background:var(--idle)}    .st-i{color:var(--idle)}
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]) .st-a{color:var(--waiting)}
+    :root:not([data-theme="light"]) .st-d{color:var(--done)}
+  }
+  svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  .figwrap{background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;
+           padding:1.5rem 1rem;margin:1.25rem 0;overflow-x:auto}
+  figcaption{font-size:.8rem;color:var(--ink-3);text-align:center;margin-top:.9rem;font-family:var(--mono)}
+  ul,ol{margin:0 0 1rem;padding-left:1.35rem}
+  li{margin-bottom:.42rem}
+  .q{background:var(--bg-elev);border:1px solid var(--line-strong);border-radius:12px;padding:1.4rem 1.5rem;margin:1.25rem 0}
+  .q ol{margin:.5rem 0 0}
+  .q li{margin-bottom:.9rem}
+  .tree{font-family:var(--mono);font-size:.8rem;line-height:1.75;white-space:pre;overflow-x:auto;
+        background:var(--bg-sunk);border:1px solid var(--line);border-radius:10px;padding:1.2rem;margin:1rem 0}
+  .tree b{color:var(--accent);font-weight:600}
+  .tree em{color:var(--ink-3);font-style:normal}
+  .dod{display:grid;gap:.7rem;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin:1.25rem 0}
+  .dod div{background:var(--bg-elev);border:1px solid var(--line);border-left:3px solid var(--accent);
+           border-radius:8px;padding:.85rem 1rem}
+  .dod b{display:block;font:600 .7rem/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+         color:var(--ink-3);margin-bottom:.3rem}
+  .dod span{font-family:var(--mono);font-size:.94rem;font-weight:600}
+  /* panel mock */
+  .panel{max-width:380px;margin:1.25rem auto;background:var(--bg-elev);border:1px solid var(--line-strong);
+         border-radius:14px;overflow:hidden;box-shadow:0 12px 34px rgba(0,0,0,.14)}
+  .ph{padding:.8rem 1rem;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:.7rem;background:var(--bg-sunk)}
+  .ph .mini{display:flex;gap:2.5px}
+  .ph .mini i{width:3.5px;height:11px;border-radius:2px;background:var(--waiting)}
+  .ph b{font-size:.82rem;font-weight:650;flex:1}
+  .ph small{font:.72rem var(--mono);color:var(--ink-3)}
+  .prow{padding:.75rem 1rem;border-bottom:1px solid var(--line);display:flex;gap:.7rem;align-items:flex-start}
+  .prow:last-child{border-bottom:none}
+  .prow .dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:.42rem}
+  .prow .body{flex:1;min-width:0}
+  .prow .t1{display:flex;align-items:baseline;gap:.45rem;flex-wrap:wrap}
+  .prow .t1 b{font-size:.86rem;font-weight:640}
+  .prow .t1 span{font:.7rem var(--mono);color:var(--ink-3)}
+  .prow .t2{font:.74rem/1.5 var(--mono);color:var(--ink-2);margin-top:.15rem;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prow .t3{font:.68rem var(--mono);color:var(--ink-3);margin-top:.2rem}
+  .pf{padding:.6rem 1rem;background:var(--bg-sunk);font:.7rem var(--mono);color:var(--ink-3);text-align:center}
+  footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);
+         color:var(--ink-3);font-size:.85rem;font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">AgentAura · 設計討論 02</div>
+  <h1>系統設計</h1>
+  <p class="sub">方案 1（Claude Code plugin + 單檔狀態信箱 + Swift menu bar app）的完整設計。含前一版兩個 mapping bug 的修正。</p>
+</header>
+
+<div class="card fix">
+<span class="tag">修正 · 來自你的提問</span>
+<p style="margin:0 0 .8rem"><strong>Bug 1 — <code>PostToolUseFailure → error</code> 是錯的。</strong>一個 tool call 中途失敗是 agent 工作的正常組成（grep 沒命中、測試紅燈、型別檢查失敗），不該把燈變紅。紅色只保留給 <code>StopFailure</code>（整輪因 API 錯誤死掉）。修掉之後才成立一個關鍵性質：<strong>所有 waiting / done / error 都是靜止態</strong> —— 後面不會再有事件蓋掉它們，所以「單檔覆寫、最後寫的贏」不會弄丟你需要看到的資訊。</p>
+<p style="margin:0"><strong>Bug 2 — session 結束時，未被確認的 error / done 會憑空消失。</strong>整夜跑 pipeline、terminal 自己收掉，你早上回來看到的是暗燈 —— 這剛好殺掉這產品最大的價值。修法：session 進入靜止態時標成 <em>unacknowledged</em>，即使 <code>SessionEnd</code> 到了或 pid 死了，它仍然參與 icon 聚合，直到你<strong>打開面板</strong>才算確認。因為 scope 是「只看」，打開面板正好是唯一的互動，用它當確認手勢最自然。</p>
+</div>
+
+<div class="card" style="border-left:3px solid #ff453a;background:linear-gradient(90deg,rgba(255,69,58,.06),transparent 55%)">
+<span style="display:inline-block;background:#ff453a;color:#fff;font:600 .68rem/1 var(--mono);letter-spacing:.08em;padding:.32rem .55rem;border-radius:5px;margin-bottom:.8rem;text-transform:uppercase">本文件已被部分校正</span>
+<p style="margin:0">2026-09-08 在機器上找到 33 個真實 hook payload，推翻了本文件數處建立在文件推測上的假設：<b>面板顯示的模型欄位拿不到</b>、<code>effort</code> 形狀不同、<code>Notification</code> 未知型別的 fallback 是錯的，並抓到一個 critical bug（<b>subagent 會蓋掉主 agent 的 waiting</b>）。校正詳見 <a href="03-measured-corrections.html" style="color:var(--accent)">設計討論 03</a>；正典為 <code>docs/superpowers/specs/2026-09-08-agentaura-design.md</code>。</p>
+</div>
+
+<h2>一、兩層狀態模型</h2>
+<p>把「單一 session 的狀態」和「icon 顏色」明確分成兩層，各有各的規則 —— 這是前一版沒講清楚的地方。</p>
+<div class="figwrap">
+<svg viewBox="0 0 940 300" role="img" aria-label="兩層狀態模型">
+  <defs><marker id="m1" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,1 L6.5,4 L0,7 z" fill="currentColor"/></marker></defs>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11">
+    <text x="120" y="20" text-anchor="middle" fill="#8a8e96" font-size="9.5" font-weight="700" letter-spacing="1">第 1 層 · PER-SESSION</text>
+    <text x="520" y="20" text-anchor="middle" fill="#8a8e96" font-size="9.5" font-weight="700" letter-spacing="1">第 2 層 · 跨 SESSION 聚合</text>
+    <text x="840" y="20" text-anchor="middle" fill="#8a8e96" font-size="9.5" font-weight="700" letter-spacing="1">輸出</text>
+
+    <!-- session boxes -->
+    <g>
+      <rect x="16" y="40" width="208" height="56" rx="9" fill="rgba(10,132,255,.09)" stroke="#0a84ff" stroke-width="1.4"/>
+      <text x="30" y="60" fill="#0a84ff" font-size="11.5" font-weight="700">session A · payments-api</text>
+      <text x="30" y="76" fill="#55585e" font-size="10">last = PostToolUse</text>
+      <text x="30" y="89" fill="#0a84ff" font-size="10" font-weight="600">→ working</text>
+    </g>
+    <g>
+      <rect x="16" y="112" width="208" height="56" rx="9" fill="rgba(10,132,255,.09)" stroke="#0a84ff" stroke-width="1.4"/>
+      <text x="30" y="132" fill="#0a84ff" font-size="11.5" font-weight="700">session B · fitness-tracker</text>
+      <text x="30" y="148" fill="#55585e" font-size="10">last = PreToolUse(Bash)</text>
+      <text x="30" y="161" fill="#0a84ff" font-size="10" font-weight="600">→ working</text>
+    </g>
+    <g>
+      <rect x="16" y="184" width="208" height="56" rx="9" fill="rgba(255,69,58,.11)" stroke="#ff453a" stroke-width="1.4"/>
+      <text x="30" y="204" fill="#ff453a" font-size="11.5" font-weight="700">session C · AgentAura</text>
+      <text x="30" y="220" fill="#55585e" font-size="10">last = StopFailure</text>
+      <text x="30" y="233" fill="#ff453a" font-size="10" font-weight="600">→ error · unacked</text>
+    </g>
+    <text x="120" y="262" text-anchor="middle" fill="#8a8e96" font-size="9.5">規則：state = f(last_event)</text>
+    <text x="120" y="277" text-anchor="middle" fill="#8a8e96" font-size="9.5">各自一個檔案，互不影響</text>
+
+    <g fill="none" stroke="#8a8e96" stroke-width="1.5" color="#8a8e96" marker-end="url(#m1)">
+      <path d="M224 68 C290 68 300 130 350 140"/>
+      <path d="M224 140 L350 140"/>
+      <path d="M224 212 C290 212 300 150 350 140"/>
+      <line x1="690" y1="140" x2="752" y2="140"/>
+    </g>
+
+    <g>
+      <rect x="350" y="98" width="340" height="84" rx="9" fill="rgba(91,78,229,.08)" stroke="#5b4ee5" stroke-width="1.4"/>
+      <text x="520" y="120" text-anchor="middle" fill="#5b4ee5" font-size="12" font-weight="700">AggregatePolicy · 優先級取最大</text>
+      <text x="520" y="141" text-anchor="middle" fill="#55585e" font-size="11" font-family="ui-monospace,Menlo,monospace">error &gt; waiting &gt; working &gt; done &gt; idle</text>
+      <text x="520" y="163" text-anchor="middle" fill="#8a8e96" font-size="9.5">與寫入順序、先後完全無關 · 純函數</text>
+      <text x="520" y="176" text-anchor="middle" fill="#8a8e96" font-size="9.5">unacked 的已結束 session 仍然計入</text>
+    </g>
+
+    <g>
+      <rect x="752" y="106" width="172" height="68" rx="9" fill="rgba(255,69,58,.11)" stroke="#ff453a" stroke-width="1.4"/>
+      <text x="838" y="130" text-anchor="middle" fill="#ff453a" font-size="12" font-weight="700">icon = error</text>
+      <text x="838" y="150" text-anchor="middle" fill="#55585e" font-size="10">紅色 double blink</text>
+      <text x="838" y="165" text-anchor="middle" fill="#8a8e96" font-size="9.5">3 live · 1 需要你</text>
+    </g>
+    <text x="838" y="200" text-anchor="middle" fill="#1c9c43" font-size="9.5" font-weight="600">← 你提的情境，正確結果</text>
+  </g>
+</svg>
+<figcaption>Fig 1 · 兩個 working + 一個 error → icon 是紅的，與順序無關</figcaption>
+</div>
+
+<h3>第 1 層：event → activity 對照表（已修正）</h3>
+<div class="scroll">
+<table>
+<thead><tr><th style="min-width:200px">最後收到的 hook event</th><th style="min-width:110px">activity</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td><code>SessionStart</code></td><td><span class="st st-i"><i></i>idle</span></td><td>已開但還沒下第一個 prompt</td></tr>
+<tr><td><code>UserPromptSubmit</code></td><td><span class="st st-w"><i></i>working</span></td><td>一輪開始 · 記錄 <code>turn_started_at</code></td></tr>
+<tr><td><code>PreToolUse</code> / <code>PostToolUse</code></td><td><span class="st st-w"><i></i>working</span></td><td>面板顯示 <code>tool_name</code></td></tr>
+<tr><td><code>PostToolUseFailure</code></td><td><span class="st st-w"><i></i>working</span></td><td><b>修正</b>：不再是 error，只累加 <code>tool_failures</code> 給面板看</td></tr>
+<tr><td><code>PostToolBatch</code></td><td><span class="st st-w"><i></i>working</span></td><td>並行 tool 批次結束</td></tr>
+<tr><td><code>SubagentStart</code> / <code>SubagentStop</code></td><td><span class="st st-w"><i></i>working</span></td><td>累加 <code>subagents[agent_type]</code></td></tr>
+<tr><td><code>PreCompact</code> / <code>PostCompact</code></td><td><span class="st st-w"><i></i>working</span></td><td>面板可標「壓縮中」</td></tr>
+<tr><td><code>PermissionRequest</code></td><td><span class="st st-a"><i></i>waiting</span></td><td><b>最重要的訊號</b> · agent 被擋住，你的 wall-clock 在燒</td></tr>
+<tr><td><code>PermissionDenied</code></td><td><span class="st st-w"><i></i>working</span></td><td>auto mode 自己拒掉了，不需要你</td></tr>
+<tr><td><code>Elicitation</code></td><td><span class="st st-a"><i></i>waiting</span></td><td>MCP server 要你輸入</td></tr>
+<tr><td><code>ElicitationResult</code></td><td><span class="st st-w"><i></i>working</span></td><td>已回覆</td></tr>
+<tr><td><code>Notification</code></td><td><span class="st st-a"><i></i>waiting</span> / <span class="st st-w"><i></i>working</span></td><td>需按 <code>notification_type</code> 分流 —— <b>值域待實測</b>，未知的 type 一律當 waiting（寧可誤報也不要漏掉在等你的）</td></tr>
+<tr><td><code>Stop</code></td><td><span class="st st-d"><i></i>done</span></td><td>靜止態 · 標 unacked · 存 <code>last_assistant_message</code> 摘要</td></tr>
+<tr><td><code>StopFailure</code></td><td><span class="st st-e"><i></i>error</span></td><td>靜止態 · 標 unacked · 存 <code>error_type</code></td></tr>
+<tr><td><code>SessionEnd</code></td><td>—</td><td>若 unacked 則保留在尾巴清單；否則移除</td></tr>
+<tr><td>pid 已死（app 主動偵測）</td><td>—</td><td>同上。crash / 強制關窗都走這條</td></tr>
+</tbody>
+</table>
+</div>
+<p style="color:var(--ink-3);font-size:.87rem;margin-top:-.4rem">關鍵性質：<code>waiting</code> / <code>done</code> / <code>error</code> 三者之後在使用者行動前不會有新事件，所以「覆寫式單檔」不會弄丟它們。這是整個設計能這麼簡單的原因。</p>
+
+<h3>第 2 層：聚合優先級（已裁決）</h3>
+<div class="card note">
+<p style="margin:0 0 .7rem"><code>error</code> 和 <code>waiting</code> 誰優先，我認為值得你決定，因為兩者「急」的性質不同：</p>
+<ul style="margin:0 0 .7rem">
+  <li><span class="st st-a"><i></i>waiting</span> —— agent <b>正被擋住</b>，每一秒都在浪費你的 wall-clock。時間壓力高。</li>
+  <li><span class="st st-e"><i></i>error</span> —— 已經停了，<b>沒有時間壓力</b>，但比較觸目、你會想知道。</li>
+</ul>
+<p style="margin:0"><b>裁決結果：<code>error &gt; waiting &gt; working &gt; done &gt; idle</code></b> —— 紅色絕對優先，最不易錯過。（我原本建議 waiting 優先，讓「還能救的」贏；使用者選了 error 優先，這是產品判斷。）實作為 <code>Activity</code> enum 的 rawValue 順序 + 一條 mutation 驗證，面板排序同步跟進。</p>
+</div>
+
+<h2>二、元件切分與介面</h2>
+<p>核心邏輯（<code>AuraCore</code>）完全不碰 AppKit，是純函數 + 純資料，可以在無 GUI 環境完整測試。AppKit 只出現在最外層的 renderer。</p>
+<div class="figwrap">
+<svg viewBox="0 0 940 250" role="img" aria-label="元件圖">
+  <defs><marker id="m2" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,1 L6.5,4 L0,7 z" fill="currentColor"/></marker></defs>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="10.5">
+    <rect x="10" y="44" width="200" height="150" rx="10" fill="none" stroke="#c4c2b9" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <text x="110" y="34" text-anchor="middle" fill="#8a8e96" font-size="9.5" font-weight="700" letter-spacing=".8">邊界 · I/O</text>
+    <rect x="240" y="44" width="420" height="150" rx="10" fill="rgba(48,209,88,.05)" stroke="#30d158" stroke-width="1.3"/>
+    <text x="450" y="34" text-anchor="middle" fill="#1c9c43" font-size="9.5" font-weight="700" letter-spacing=".8">AuraCore · 純邏輯 · 100% 可測</text>
+    <rect x="690" y="44" width="240" height="150" rx="10" fill="none" stroke="#c4c2b9" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <text x="810" y="34" text-anchor="middle" fill="#8a8e96" font-size="9.5" font-weight="700" letter-spacing=".8">邊界 · AppKit</text>
+
+    <g>
+      <rect x="26" y="62" width="168" height="52" rx="7" fill="#fff" fill-opacity=".04" stroke="#0a84ff" stroke-width="1.3"/>
+      <text x="110" y="82" text-anchor="middle" fill="#0a84ff" font-size="11" font-weight="700">HookFileSource</text>
+      <text x="110" y="97" text-anchor="middle" fill="#8a8e96" font-size="9">FSEvents + bootstrap</text>
+      <text x="110" y="108" text-anchor="middle" fill="#8a8e96" font-size="9">: EventSource</text>
+
+      <rect x="26" y="128" width="168" height="50" rx="7" fill="#fff" fill-opacity=".04" stroke="#c4c2b9" stroke-width="1.3"/>
+      <text x="110" y="148" text-anchor="middle" fill="#55585e" font-size="11" font-weight="700">LivenessProber</text>
+      <text x="110" y="163" text-anchor="middle" fill="#8a8e96" font-size="9">pid + 啟動時戳驗證</text>
+    </g>
+    <g>
+      <rect x="258" y="70" width="176" height="46" rx="7" fill="rgba(48,209,88,.09)" stroke="#30d158" stroke-width="1.3"/>
+      <text x="346" y="89" text-anchor="middle" fill="#1c9c43" font-size="11" font-weight="700">SessionReducer</text>
+      <text x="346" y="104" text-anchor="middle" fill="#8a8e96" font-size="9">Snapshot → SessionState</text>
+
+      <rect x="258" y="128" width="176" height="46" rx="7" fill="rgba(48,209,88,.09)" stroke="#30d158" stroke-width="1.3"/>
+      <text x="346" y="147" text-anchor="middle" fill="#1c9c43" font-size="11" font-weight="700">SessionRegistry</text>
+      <text x="346" y="162" text-anchor="middle" fill="#8a8e96" font-size="9">現存 session + unacked 尾巴</text>
+
+      <rect x="466" y="70" width="176" height="46" rx="7" fill="rgba(91,78,229,.1)" stroke="#5b4ee5" stroke-width="1.3"/>
+      <text x="554" y="89" text-anchor="middle" fill="#5b4ee5" font-size="11" font-weight="700">AggregatePolicy</text>
+      <text x="554" y="104" text-anchor="middle" fill="#8a8e96" font-size="9">[SessionState] → IconState</text>
+
+      <rect x="466" y="128" width="176" height="46" rx="7" fill="rgba(48,209,88,.09)" stroke="#30d158" stroke-width="1.3"/>
+      <text x="554" y="147" text-anchor="middle" fill="#1c9c43" font-size="11" font-weight="700">PanelViewModel</text>
+      <text x="554" y="162" text-anchor="middle" fill="#8a8e96" font-size="9">排序 · 格式化 · 相對時間</text>
+    </g>
+    <g>
+      <rect x="706" y="62" width="208" height="52" rx="7" fill="#fff" fill-opacity=".04" stroke="#c4c2b9" stroke-width="1.3"/>
+      <text x="810" y="82" text-anchor="middle" fill="#55585e" font-size="11" font-weight="700">StatusItemController</text>
+      <text x="810" y="97" text-anchor="middle" fill="#8a8e96" font-size="9">NSStatusItem + LEDStripView</text>
+      <text x="810" y="108" text-anchor="middle" fill="#8a8e96" font-size="9">: IconRenderer</text>
+
+      <rect x="706" y="128" width="208" height="50" rx="7" fill="#fff" fill-opacity=".04" stroke="#c4c2b9" stroke-width="1.3"/>
+      <text x="810" y="148" text-anchor="middle" fill="#55585e" font-size="11" font-weight="700">PanelView (SwiftUI)</text>
+      <text x="810" y="163" text-anchor="middle" fill="#8a8e96" font-size="9">開啟即 acknowledge</text>
+    </g>
+    <g fill="none" stroke="#8a8e96" stroke-width="1.4" color="#8a8e96" marker-end="url(#m2)">
+      <line x1="194" y1="88" x2="252" y2="90"/>
+      <line x1="194" y1="152" x2="252" y2="150"/>
+      <line x1="434" y1="93" x2="460" y2="140" />
+      <line x1="434" y1="150" x2="460" y2="93"/>
+      <line x1="642" y1="88" x2="700" y2="88"/>
+      <line x1="642" y1="150" x2="700" y2="150"/>
+    </g>
+    <text x="470" y="220" text-anchor="middle" fill="#8a8e96" font-size="9.5">AnimationDriver（AppKit 側）在螢幕睡眠 / menu bar 被遮蔽 / 系統開啟「減少動態效果」時停止重繪</text>
+  </g>
+</svg>
+<figcaption>Fig 2 · EventSource 與 IconRenderer 是兩個 protocol 縫，方案 3 之後接在左邊</figcaption>
+</div>
+
+<pre><code>protocol EventSource {                        // 方案 1 = HookFileSource；方案 3 = TranscriptSource (v2)
+    func bootstrap() throws -> [SessionSnapshot]     // app 啟動時掃目錄，還原現況
+    var snapshots: AsyncStream&lt;SessionSnapshot&gt; { get }
+}
+
+enum Activity: Int, Comparable { case idle, done, working, waiting, error }   // rawValue 即優先序
+
+struct SessionState {
+    let id: String, projectPath: String, model: String?, permissionMode: String?
+    let activity: Activity
+    let currentTool: String?, turnStartedAt: Date?
+    let subagents: [String: Int], toolFailures: Int
+    let lastMessage: String?, errorType: String?
+    let acknowledged: Bool
+    let liveness: Liveness                      // .alive(pid_t) | .ended
+}
+
+protocol AggregatePolicy { func aggregate(_ s: [SessionState]) -> IconState }  // 純函數
+protocol IconRenderer    { func render(_ s: IconState) }
+</code></pre>
+
+<h2>三、資料契約</h2>
+<p><code>~/.agentaura/sessions/&lt;session_id&gt;.json</code> —— 每個 session 一個檔，由 <code>aura-hook</code> 覆寫。</p>
+<pre><code>{
+  "schema": 1,
+  "session_id": "abc123",
+  "hook_event_name": "PermissionRequest",
+  "written_at": "2026-09-08T17:42:03.117Z",
+  "pid": 48213,                    // hook 的 getppid() = claude 本體
+  "pid_started_at": 1757352011,    // 防 pid 回收誤判
+  "cwd": "/Users/you/Code/Vibe/AgentAura",
+  "model": "claude-opus-5",
+  "permission_mode": "default",
+  "effort": "high",
+  "tool_name": "Bash",
+  "notification_type": null,
+  "error_type": null,
+  "last_message": null,
+  // ↓ 累積欄位：aura-hook 在 flock 下 read-merge-write 帶過來
+  "turn_started_at": "2026-09-08T17:41:12.004Z",
+  "subagents": { "Explore": 2, "implementer": 1 },
+  "tool_failures": 3
+}</code></pre>
+
+<h4>為什麼 <code>aura-hook</code> 要做 read-merge-write（而不是純覆寫）</h4>
+<p>面板要顯示「已跑多久」、「subagent 數量」、「tool 失敗次數」，這三個是累積量，不是最後事件的函數。兩個選擇：讓 app 在記憶體累積（app 重啟就歸零），或讓 helper 在檔案裡累積（永久正確）。選後者，因為你會整夜跑 pipeline，app 重啟後面板變空白是不能接受的。</p>
+<p>競態安全靠 <code>flock(LOCK_EX)</code>。因為檔案是 per-session，跨 session 零競爭；同一 session 內事件近乎循序，overlap 極少 —— 但 <code>async: true</code> 理論上可能重疊，所以鎖是必要的，不是可選的。App 端讀取取 <code>LOCK_SH</code>，讀不到就重試（不能因為讀到半截 JSON 就當成沒有 session）。</p>
+
+<h2>四、面板（詳細版）</h2>
+<div class="panel">
+  <div class="ph">
+    <div class="mini"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <b>1 個在等你 · 2 個在跑</b>
+    <small>⌘,</small>
+  </div>
+  <div class="prow">
+    <div class="dot" style="background:var(--waiting)"></div>
+    <div class="body">
+      <div class="t1"><b>payments-api</b><span>opus-5 · high · default</span></div>
+      <div class="t2">等待權限：Bash — <span style="color:var(--waiting)">已等 4m 12s</span></div>
+      <div class="t3">本輪 8m 03s · 3 subagents · 1 tool 失敗</div>
+    </div>
+  </div>
+  <div class="prow">
+    <div class="dot" style="background:var(--working)"></div>
+    <div class="body">
+      <div class="t1"><b>fitness-tracker</b><span>sonnet-5 · medium · acceptEdits</span></div>
+      <div class="t2">Edit → src/composition/BodyMetrics.swift</div>
+      <div class="t3">本輪 1m 47s · Explore ×2</div>
+    </div>
+  </div>
+  <div class="prow">
+    <div class="dot" style="background:var(--error)"></div>
+    <div class="body">
+      <div class="t1"><b>AgentAura</b><span>opus-5 · 已結束</span></div>
+      <div class="t2" style="color:var(--error)">StopFailure — overloaded_error</div>
+      <div class="t3">32m 前 · 未確認</div>
+    </div>
+  </div>
+  <div class="prow">
+    <div class="dot" style="background:var(--done)"></div>
+    <div class="body">
+      <div class="t1"><b>ml-pipeline</b><span>opus-5 · 已結束</span></div>
+      <div class="t2">「已完成 12 個 task，全部測試綠燈」</div>
+      <div class="t3">2h 14m 前 · 未確認</div>
+    </div>
+  </div>
+  <div class="pf">打開面板即確認 · 尾巴清空</div>
+</div>
+<p>排序：<span class="kv">error → waiting → working → done</span>（與聚合優先序一致），同組內最近活動優先。已結束但未確認的保留在各組下半部，打開面板就清掉。</p>
+
+<h2>五、失效模式與處理</h2>
+<div class="scroll">
+<table>
+<thead><tr><th style="min-width:190px">失效模式</th><th style="min-width:150px">後果（若不處理）</th><th>處理</th></tr></thead>
+<tbody>
+<tr><td>terminal 被強制關閉，<code>SessionEnd</code> 沒來</td><td>永遠卡 working</td><td><code>LivenessProber</code> 每 5s 對所有 <code>.alive(pid)</code> 做 <code>kill(pid,0)</code></td></tr>
+<tr><td>pid 被系統回收給另一個 process</td><td>死 session 被誤判為活著</td><td>比對 <code>proc_pidinfo</code> 的啟動時戳，不只比 pid</td></tr>
+<tr><td>App 端讀到寫入一半的 JSON</td><td>session 閃現／消失</td><td>讀取取 <code>LOCK_SH</code>；解析失敗保留上一次已知狀態並重試，<b>絕不當成 session 不存在</b></td></tr>
+<tr><td><code>Notification</code> 出現未知 <code>notification_type</code></td><td>在等你卻顯示 working（最糟的錯）</td><td>未知 type fallback 成 <code>waiting</code>；寧可誤報</td></tr>
+<tr><td>Claude Code 之後新增 hook event</td><td>解析爆掉</td><td>未知 <code>hook_event_name</code> 不改變 activity，只更新時戳；schema 版本欄位擋不相容</td></tr>
+<tr><td>App 沒開時累積了一堆事件</td><td>啟動後畫面空白</td><td><code>bootstrap()</code> 掃目錄；靜止態天生就在檔案裡</td></tr>
+<tr><td>殘留檔案（機器重開、session 早就沒了）</td><td>幽靈 session</td><td>啟動時 pid 一律驗證；已死且已確認的直接刪檔</td></tr>
+<tr><td>磁碟滿 / 目錄不可寫</td><td>hook 失敗噴到 agent 畫面上</td><td><code>aura-hook</code> 任何錯誤都靜默 <code>exit 0</code>；<b>觀測性絕不可干擾 agent</b>（user CLAUDE.md #8）</td></tr>
+<tr><td>session 數量爆掉（50+）</td><td>menu bar 卡頓</td><td>聚合是 O(n) 純函數；重繪節流 ≥ 100ms；面板列表虛擬化</td></tr>
+<tr><td>螢幕睡眠 / menu bar 被全螢幕遮蔽</td><td>白吃電池</td><td><code>AnimationDriver</code> 監聽 <code>NSWorkspace</code> 睡眠通知與 <code>NSStatusItem.isVisible</code>，停止重繪</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>六、測試策略</h2>
+<p>依 user CLAUDE.md Lessons Learned #1，T01 不含任何生產碼，只建對抗式測試底座。</p>
+
+<h4>T01-a · 對抗式 double（刻意回「樂於配合」的 fixture 不會回的東西）</h4>
+<ol>
+  <li>截斷／半截 JSON（模擬讀到寫入中）</li>
+  <li>pid 已死；pid 被回收成另一個啟動時戳更晚的 process</li>
+  <li>事件亂序落地（<code>async</code> 導致 <code>Stop</code> 比 <code>PostToolUse</code> 早寫入）</li>
+  <li>未知 <code>hook_event_name</code>、未知 <code>notification_type</code>、缺必要欄位、多出未知欄位</li>
+  <li>50 個 session 併發寫同一目錄</li>
+  <li>emoji / unicode / 超長專案路徑；<code>session_id</code> 含 <code>../</code> 之類的 path traversal</li>
+  <li>時鐘倒退（<code>turn_started_at</code> 落在未來）</li>
+  <li>磁碟滿 / 目錄唯讀 → <code>aura-hook</code> 必須靜默成功</li>
+</ol>
+
+<h4>T01-b · composition-root smoke（測過的能力 ≠ 接線的能力）</h4>
+<ul>
+  <li>實跑 <code>AppDelegate.buildGraph()</code>，斷言 FSEvents watcher <b>真的</b>訂閱到 <code>~/.agentaura/sessions</code></li>
+  <li>斷言 <code>StatusItemController</code> 真的收到 <code>IconState</code> 更新（spy 斷言呼叫確實發生，不是被 catch-all 吞掉）</li>
+  <li><b>斷言 plugin 的 <code>hooks/hooks.json</code> 裡的 command 路徑，指向 app bundle 內真實存在且可執行的 <code>aura-hook</code></b> —— 這是 tested≠wired 最經典的位置，路徑一錯整個產品靜默失效而所有單元測試照樣全綠</li>
+  <li>端到端 wired-gate：用<b>真的</b> <code>aura-hook</code> 二進位 + 真的檔案 + 真的 FSEvents，不 mock 任何一層，斷言 IconState 改變</li>
+</ul>
+
+<h4>Mutation 驗證（每個關鍵 gate 都做）</h4>
+<ul>
+  <li>撤掉 <code>AggregatePolicy</code> 的優先序 → 「2 working + 1 error 應為 error」必須 RED</li>
+  <li>撤掉 unacked 尾巴保留 → 「session 結束後 error 仍計入」必須 RED</li>
+  <li>把 <code>PostToolUseFailure</code> 改回 error → 「tool 失敗不改變 activity」必須 RED</li>
+  <li>把 <code>aura-hook</code> 路徑改成不存在 → composition-root smoke 必須 RED</li>
+</ul>
+
+<h2>七、檔案佈局</h2>
+<div class="tree">AgentAura/
+├─ <b>Package.swift</b>                     <em>SwiftPM · executable + test targets</em>
+├─ <b>Sources/AuraCore/</b>                 <em>純邏輯，零 AppKit 依賴</em>
+│   ├─ SessionSnapshot.swift          <em>檔案 schema · 容錯 Decodable</em>
+│   ├─ Activity.swift                 <em>狀態列舉 + event→activity 對照表</em>
+│   ├─ SessionReducer.swift           <em>Snapshot → SessionState</em>
+│   ├─ SessionRegistry.swift          <em>現存 session + unacked 尾巴</em>
+│   ├─ AggregatePolicy.swift          <em>[SessionState] → IconState（優先序在此）</em>
+│   ├─ PanelViewModel.swift           <em>排序 · 相對時間格式化</em>
+│   ├─ Liveness.swift                 <em>pid + 啟動時戳驗證</em>
+│   └─ EventSource.swift              <em>protocol</em>
+├─ <b>Sources/AuraHookFile/</b>
+│   ├─ HookFileSource.swift           <em>FSEvents watch + bootstrap</em>
+│   └─ SnapshotIO.swift               <em>flock 讀寫 · 原子 rename</em>
+├─ <b>Sources/aura-hook/</b>                <em>helper CLI，被 hook 呼叫</em>
+│   ├─ main.swift                     <em>stdin → merge → write · 任何錯誤都 exit 0</em>
+│   └─ MergeRules.swift               <em>累積欄位合併</em>
+├─ <b>Sources/AgentAuraApp/</b>             <em>AppKit / SwiftUI</em>
+│   ├─ AppDelegate.swift              <em>composition root（唯一組裝點）</em>
+│   ├─ StatusItemController.swift     <em>NSStatusItem</em>
+│   ├─ LEDStripView.swift             <em>8 顆 LED 繪製</em>
+│   ├─ AnimationDriver.swift          <em>省電節流</em>
+│   └─ Panel/PanelView.swift          <em>SwiftUI 面板</em>
+├─ <b>plugin/</b>                           <em>Claude Code plugin</em>
+│   ├─ .claude-plugin/plugin.json
+│   └─ hooks/hooks.json               <em>全部 async: true</em>
+└─ <b>Tests/AuraCoreTests/</b>              <em>對抗式 double + composition-root smoke</em>
+</div>
+<p style="color:var(--ink-3);font-size:.87rem">單檔 200 行上限（user CLAUDE.md 通用架構原則）。<code>AuraCore</code> 不 import AppKit —— 這條用測試強制，不靠自律。</p>
+
+<h2>八、DoD（可量測）</h2>
+<div class="dod">
+  <div><b>hook 延遲</b><span>p95 &lt; 5ms</span></div>
+  <div><b>端到端反應</b><span>p95 &lt; 250ms</span></div>
+  <div><b>AuraCore 覆蓋率</b><span>≥ 90%</span></div>
+  <div><b>單檔行數</b><span>≤ 200</span></div>
+  <div><b>idle CPU</b><span>&lt; 0.1%</span></div>
+  <div><b>動畫中 CPU</b><span>&lt; 1.5%</span></div>
+  <div><b>50 session 記憶體</b><span>&lt; 60 MB</span></div>
+  <div><b>agent 減速</b><span>0 ms（async）</span></div>
+</div>
+
+<h2>九、里程碑</h2>
+<div class="scroll">
+<table>
+<thead><tr><th>階段</th><th style="min-width:230px">內容</th><th>出場條件</th></tr></thead>
+<tbody>
+<tr><td><b>M0</b> 實測 payload</td><td>裝一個只做 <code>cat &gt;&gt; log</code> 的 hook，跑一輪真實 Claude Code（含 subagent、權限請求、故意觸發失敗），錄下<b>真實</b>的 hook JSON</td><td>拿到全部 event 的真實樣本 → fixture 建在現實上，不是我猜的 schema</td></tr>
+<tr><td><b>M1</b> 測試底座</td><td>T01-a 對抗式 double + T01-b composition-root smoke。零生產碼</td><td>測試全部 RED 且理由正確</td></tr>
+<tr><td><b>M2</b> AuraCore</td><td>Reducer / Registry / AggregatePolicy / Liveness · TDD</td><td>M1 全綠 + mutation 驗證通過</td></tr>
+<tr><td><b>M3</b> hook 管線</td><td><code>aura-hook</code> + plugin + <code>HookFileSource</code></td><td>端到端 wired-gate 綠（真二進位、真檔案、真 FSEvents）</td></tr>
+<tr><td><b>M4</b> Menu bar</td><td><code>NSStatusItem</code> + LED 動畫 + <code>AnimationDriver</code></td><td>CPU / 記憶體 DoD 達標 + 截圖驗收</td></tr>
+<tr><td><b>M5</b> 面板</td><td>SwiftUI 詳細面板 + acknowledge</td><td>Tier 1（動視覺路徑）→ persona-tester 3+ persona 過門檻</td></tr>
+<tr><td><b>M6</b> 開源</td><td>安裝器 · README · 移除流程 · ad-hoc 簽章說明</td><td>乾淨機器上照 README 從零裝起來能跑</td></tr>
+</tbody>
+</table>
+</div>
+<p><b>M0 是刻意排在最前面的。</b>我現在對 <code>notification_type</code> 的值域、<code>Notification</code> 什麼時候真的觸發、<code>effort</code> 欄位的實際形狀都只有文件層級的認識。先錄真實 payload 再寫 fixture，可以避免整套測試建在我猜的 schema 上 —— 那正是 user CLAUDE.md 說的「gates share one eye」的起點。</p>
+
+<h2>十、已裁決</h2>
+<div class="q">
+<ol>
+  <li><b>聚合優先序 = <code>error &gt; waiting &gt; working &gt; done &gt; idle</code></b><br>
+  <span style="color:var(--ink-3);font-size:.9rem">使用者裁決（未採用我建議的 waiting 優先）：紅色絕對優先，最不易錯過。實作為 <code>Activity</code> enum 的 rawValue 順序 + 對應 mutation 測試。面板排序同步跟進。</span></li>
+  <li><b>打開面板即 acknowledge</b><br>
+  <span style="color:var(--ink-3);font-size:.9rem">面板開啟瞬間，registry 中所有未確認 session 一律標為已確認（不論是否可見）。已結束且已確認者移出 registry 並刪檔。</span></li>
+  <li><b>設計核准，已寫成 spec</b><br>
+  <span style="color:var(--ink-3);font-size:.9rem"><code>docs/superpowers/specs/2026-09-08-agentaura-design.md</code> 為正典；本文件為討論呈現記錄。</span></li>
+</ol>
+</div>
+
+<footer>AgentAura · 設計討論 02 · 2026-09-08 · brainstorm 產出，尚未進入實作</footer>
+</div>

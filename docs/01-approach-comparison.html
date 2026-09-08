@@ -1,0 +1,432 @@
+<title>AgentAura 架構方案比較</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --bg-elev:#ffffff; --bg-sunk:#efeee9;
+    --ink:#1c1d1f; --ink-2:#55585e; --ink-3:#8a8e96;
+    --line:#dedcd5; --line-strong:#c4c2b9;
+    --working:#0a84ff; --waiting:#ff9f0a; --done:#30d158; --error:#ff453a; --idle:#8e8e93;
+    --accent:#5b4ee5;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#131417; --bg-elev:#1c1e22; --bg-sunk:#0e0f11;
+      --ink:#eceef2; --ink-2:#a4a9b3; --ink-3:#71767f;
+      --line:#2a2d33; --line-strong:#3a3e46;
+      --accent:#8b80ff;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#131417; --bg-elev:#1c1e22; --bg-sunk:#0e0f11;
+    --ink:#eceef2; --ink-2:#a4a9b3; --ink-3:#71767f;
+    --line:#2a2d33; --line-strong:#3a3e46;
+    --accent:#8b80ff;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;
+       -webkit-font-smoothing:antialiased;padding:0 0 6rem}
+  .wrap{max-width:960px;margin:0 auto;padding:0 1.5rem}
+  header{padding:4rem 0 2.5rem;border-bottom:1px solid var(--line);margin-bottom:3rem}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem}
+  h1{font-size:2.1rem;line-height:1.2;margin:0 0 .6rem;letter-spacing:-.02em;font-weight:650}
+  .sub{color:var(--ink-2);font-size:1.05rem;margin:0;max-width:52ch}
+  h2{font-size:1.4rem;margin:3.5rem 0 1rem;letter-spacing:-.01em;font-weight:640;
+     padding-top:1.5rem;border-top:1px solid var(--line)}
+  h2:first-of-type{border-top:none;padding-top:0}
+  h3{font-size:1.02rem;margin:2rem 0 .6rem;font-weight:640}
+  p{margin:0 0 1rem}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg-sunk);
+       padding:.12em .38em;border-radius:4px;border:1px solid var(--line)}
+  .card{background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;padding:1.5rem;margin:1.25rem 0}
+  .locked{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .lk{background:var(--bg-elev);border:1px solid var(--line);border-left:3px solid var(--done);
+      border-radius:8px;padding:.9rem 1rem}
+  .lk b{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
+        color:var(--ink-3);font-family:var(--mono);margin-bottom:.3rem;font-weight:600}
+  .lk span{font-size:.95rem;font-weight:560}
+  .scroll{overflow-x:auto;margin:1.25rem 0;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:640px}
+  th,td{text-align:left;padding:.65rem .8rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 .74rem/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+     color:var(--ink-3);background:var(--bg-sunk)}
+  tbody tr:hover{background:var(--bg-sunk)}
+  .yes{color:var(--done);font-weight:640}
+  .no{color:var(--error);font-weight:640}
+  .mid{color:var(--waiting);font-weight:640}
+  svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  .figwrap{background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;
+           padding:1.5rem 1rem;margin:1.25rem 0;overflow-x:auto}
+  figcaption{font-size:.82rem;color:var(--ink-3);text-align:center;margin-top:.9rem;font-family:var(--mono)}
+  .rec{border-left:3px solid var(--accent);background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 7%,transparent),transparent 60%)}
+  .rec .tag{display:inline-block;background:var(--accent);color:#fff;font:600 .7rem/1 var(--mono);
+            letter-spacing:.08em;padding:.35rem .55rem;border-radius:5px;margin-bottom:.9rem;text-transform:uppercase}
+  .warn{border-left:3px solid var(--waiting)}
+  /* ---- menu bar prototype ---- */
+  .mbdemo{background:var(--bg-sunk);border:1px solid var(--line);border-radius:12px;padding:0;margin:1.25rem 0;overflow:hidden}
+  .mbrow{display:flex;align-items:center;gap:1rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--line)}
+  .mbrow:last-child{border-bottom:none}
+  .mbbar{background:#22242a;border-radius:7px;padding:5px 12px;display:flex;align-items:center;
+         min-width:132px;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+  .strip{display:flex;gap:3px;align-items:center;height:14px}
+  .led{width:4px;height:12px;border-radius:2px;background:#3a3d44}
+  .mbmeta{flex:1;min-width:0}
+  .mbmeta b{display:block;font-size:.93rem;font-weight:600}
+  .mbmeta small{color:var(--ink-3);font-size:.8rem;font-family:var(--mono)}
+  @keyframes comet{0%,100%{opacity:.12}18%{opacity:1}}
+  @keyframes solidon{0%,100%{opacity:1}}
+  @keyframes dblink{0%,14%{opacity:1}15%,29%{opacity:.08}30%,44%{opacity:1}45%,100%{opacity:.08}}
+  @keyframes breathe{0%,100%{opacity:.22}50%{opacity:.9}}
+  .s-working .led{background:var(--working);animation:comet 1.4s linear infinite}
+  .s-working .led:nth-child(1){animation-delay:0s}
+  .s-working .led:nth-child(2){animation-delay:.1s}
+  .s-working .led:nth-child(3){animation-delay:.2s}
+  .s-working .led:nth-child(4){animation-delay:.3s}
+  .s-working .led:nth-child(5){animation-delay:.4s}
+  .s-working .led:nth-child(6){animation-delay:.5s}
+  .s-working .led:nth-child(7){animation-delay:.6s}
+  .s-working .led:nth-child(8){animation-delay:.7s}
+  .s-waiting .led{background:var(--waiting);animation:breathe 1.1s ease-in-out infinite}
+  .s-done .led{background:var(--done)}
+  .s-error .led{background:var(--error);animation:dblink 1.1s steps(1,end) infinite}
+  .s-idle .led{background:#3a3d44}
+  .s-idle .led:nth-child(4),.s-idle .led:nth-child(5){background:#4a4e57}
+  @media (prefers-reduced-motion:reduce){.led{animation:none!important;opacity:1!important}}
+  ul{margin:0 0 1rem;padding-left:1.3rem}
+  li{margin-bottom:.4rem}
+  .q{background:var(--bg-elev);border:1px solid var(--line-strong);border-radius:12px;
+     padding:1.4rem 1.5rem;margin:1.25rem 0}
+  .q ol{margin:.5rem 0 0;padding-left:1.4rem}
+  .q li{margin-bottom:.7rem}
+  .kv{font-family:var(--mono);font-size:.84rem}
+  .pill{display:inline-flex;align-items:center;gap:.4rem;font:600 .78rem/1 var(--mono);
+        padding:.35rem .6rem;border-radius:20px;border:1px solid var(--line)}
+  .pill i{width:7px;height:7px;border-radius:50%;display:block}
+  footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);
+         color:var(--ink-3);font-size:.85rem;font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">AgentAura · 設計討論 01</div>
+  <h1>Claude Code 狀態燈：架構方案比較</h1>
+  <p class="sub">把 SidePulse 的硬體體驗做成純軟體的 macOS menu bar app。這份文件比較三種狀態來源機制，並提出推薦方案。</p>
+</header>
+
+<h2>一、已鎖定的需求</h2>
+<div class="locked">
+  <div class="lk"><b>核心定位</b><span>多 session 聚合儀表板</span></div>
+  <div class="lk"><b>分發目標</b><span>按開源標準寫，先自用跑起來</span></div>
+  <div class="lk"><b>互動深度</b><span>只看（read-only 狀態燈）</span></div>
+</div>
+<p>推論出的三條硬約束：<strong>(1)</strong> 不寫死路徑、hook 安裝必須可逆且不破壞使用者現有設定；<strong>(2)</strong> 不受 App Sandbox 限制，可自由讀 <code>~/.claude/</code>；<strong>(3)</strong> 不需要雙向通道 —— 事件單向流入即可，架構可以很乾淨。</p>
+
+<h2>二、核心技術問題</h2>
+<div class="card warn">
+<p style="margin:0"><strong>Hook 給的是「狀態轉移」，我們要的是「當前狀態」。</strong>這個落差製造三個必須處理的失效模式：</p>
+<ul style="margin:.9rem 0 0">
+  <li><b>殘留狀態（stale）</b>：terminal 被強制關掉 → <code>SessionEnd</code> 永遠不會來 → 那個 session 永遠卡在 working。</li>
+  <li><b>App 沒開時的事件</b>：hook 照樣觸發但沒人接 → app 啟動後對現況一無所知，明明有 3 個 session 在跑卻顯示「無」。</li>
+  <li><b>絕不可拖慢 agent</b>：每個 tool call 都會觸發 hook。同步 hook 會直接卡住 Claude Code。</li>
+</ul>
+</div>
+
+<h2>三、三種方案</h2>
+
+<h3>方案 1 —— Claude Code Plugin + 單檔狀態信箱 <span class="pill" style="border-color:var(--accent);color:var(--accent)">推薦</span></h3>
+<div class="figwrap">
+<svg viewBox="0 0 900 260" role="img" aria-label="方案 1 拓撲圖">
+  <defs>
+    <marker id="a1" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,1 L7,4.5 L0,8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="currentColor" stroke-width="1.6" color="#8a8e96">
+    <line x1="196" y1="66" x2="256" y2="66" marker-end="url(#a1)"/>
+    <line x1="196" y1="140" x2="256" y2="140" marker-end="url(#a1)"/>
+    <line x1="196" y1="214" x2="256" y2="214" marker-end="url(#a1)"/>
+    <path d="M400 66 C440 66 440 140 470 140" marker-end="url(#a1)"/>
+    <line x1="400" y1="140" x2="470" y2="140" marker-end="url(#a1)"/>
+    <path d="M400 214 C440 214 440 140 470 140" marker-end="url(#a1)"/>
+    <line x1="626" y1="140" x2="690" y2="140" marker-end="url(#a1)"/>
+  </g>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11.5">
+    <g>
+      <rect x="16" y="42" width="180" height="48" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+      <text x="106" y="62" text-anchor="middle" fill="#55585e" font-size="12" font-weight="600">claude (session A)</text>
+      <text x="106" y="78" text-anchor="middle" fill="#8a8e96">PreToolUse …</text>
+    </g>
+    <g>
+      <rect x="16" y="116" width="180" height="48" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+      <text x="106" y="136" text-anchor="middle" fill="#55585e" font-size="12" font-weight="600">claude (session B)</text>
+      <text x="106" y="152" text-anchor="middle" fill="#8a8e96">PermissionRequest</text>
+    </g>
+    <g>
+      <rect x="16" y="190" width="180" height="48" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+      <text x="106" y="210" text-anchor="middle" fill="#55585e" font-size="12" font-weight="600">claude (session C)</text>
+      <text x="106" y="226" text-anchor="middle" fill="#8a8e96">Stop</text>
+    </g>
+    <g fill="#0a84ff">
+      <rect x="256" y="42" width="144" height="48" rx="8" fill="rgba(10,132,255,.09)" stroke="#0a84ff" stroke-width="1.4"/>
+      <text x="328" y="62" text-anchor="middle" font-size="12" font-weight="700">aura-hook</text>
+      <text x="328" y="78" text-anchor="middle" font-size="10.5" fill="#0a84ff" opacity=".8">async · ~2ms</text>
+      <rect x="256" y="116" width="144" height="48" rx="8" fill="rgba(10,132,255,.09)" stroke="#0a84ff" stroke-width="1.4"/>
+      <text x="328" y="136" text-anchor="middle" font-size="12" font-weight="700">aura-hook</text>
+      <text x="328" y="152" text-anchor="middle" font-size="10.5" opacity=".8">async · ~2ms</text>
+      <rect x="256" y="190" width="144" height="48" rx="8" fill="rgba(10,132,255,.09)" stroke="#0a84ff" stroke-width="1.4"/>
+      <text x="328" y="210" text-anchor="middle" font-size="12" font-weight="700">aura-hook</text>
+      <text x="328" y="226" text-anchor="middle" font-size="10.5" opacity=".8">async · ~2ms</text>
+    </g>
+    <g>
+      <rect x="470" y="88" width="156" height="104" rx="8" fill="rgba(48,209,88,.08)" stroke="#30d158" stroke-width="1.4"/>
+      <text x="548" y="110" text-anchor="middle" fill="#1c9c43" font-size="11.5" font-weight="700">~/.agentaura/</text>
+      <text x="548" y="128" text-anchor="middle" fill="#1c9c43" font-size="11.5" font-weight="700">sessions/</text>
+      <text x="548" y="150" text-anchor="middle" fill="#55585e" font-size="10">&lt;session_id&gt;.json</text>
+      <text x="548" y="166" text-anchor="middle" fill="#8a8e96" font-size="10">覆寫 · atomic rename</text>
+      <text x="548" y="181" text-anchor="middle" fill="#8a8e96" font-size="10">last-write-wins</text>
+    </g>
+    <g>
+      <rect x="690" y="88" width="194" height="104" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+      <text x="787" y="110" text-anchor="middle" fill="#55585e" font-size="12" font-weight="700">AgentAura.app</text>
+      <text x="787" y="131" text-anchor="middle" fill="#8a8e96" font-size="10">FSEvents watch</text>
+      <text x="787" y="147" text-anchor="middle" fill="#8a8e96" font-size="10">reduce → SessionState</text>
+      <text x="787" y="163" text-anchor="middle" fill="#8a8e96" font-size="10">kill(pid,0) liveness</text>
+      <text x="787" y="180" text-anchor="middle" fill="#8a8e96" font-size="10">NSStatusItem 動畫</text>
+    </g>
+  </g>
+  <text x="548" y="222" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="10" fill="#8a8e96">app 沒開 → 檔案仍在 → 啟動即讀到正確現況</text>
+</svg>
+<figcaption>Fig 1 · 每個 session 一個狀態檔，覆寫式寫入，app 用 FSEvents 監看</figcaption>
+</div>
+
+<p><strong>關鍵洞見（讓這個方案變得極簡的原因）</strong>：狀態幾乎是「最後一個事件」的純函數 —— <code>state = f(last_event)</code>。所以不需要 event log、不需要 replay、不需要處理亂序。每個 session 一個檔案，直接覆寫，最後寫的贏。App 啟動時掃一次目錄就有正確現況。</p>
+
+<p><strong>安裝方式走 Claude Code plugin</strong>：plugin 自帶 <code>hooks/hooks.json</code>，用 <code>/plugin install</code> / <code>uninstall</code> 管理 —— 完全不用手改 <code>~/.claude/settings.json</code>，天生可逆、天生不破壞使用者現有 hooks。這比 SidePulse 直接改 settings.json 乾淨。</p>
+
+<h3>方案 2 —— Local HTTP hook 直打 app</h3>
+<div class="figwrap">
+<svg viewBox="0 0 900 150" role="img" aria-label="方案 2 拓撲圖">
+  <defs>
+    <marker id="a2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,1 L7,4.5 L0,8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="currentColor" stroke-width="1.6" color="#8a8e96">
+    <line x1="216" y1="60" x2="330" y2="60" marker-end="url(#a2)"/>
+    <line x1="570" y1="60" x2="660" y2="60" marker-end="url(#a2)"/>
+    <path d="M450 96 L450 122 L216 122 L216 84" stroke="#ff453a" stroke-dasharray="4 3" marker-end="url(#a2)" color="#ff453a"/>
+  </g>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11.5">
+    <rect x="16" y="36" width="200" height="48" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+    <text x="116" y="57" text-anchor="middle" fill="#55585e" font-size="12" font-weight="600">claude × N sessions</text>
+    <text x="116" y="73" text-anchor="middle" fill="#8a8e96">type: "http" hook</text>
+
+    <rect x="330" y="36" width="240" height="48" rx="8" fill="rgba(10,132,255,.09)" stroke="#0a84ff" stroke-width="1.4"/>
+    <text x="450" y="57" text-anchor="middle" fill="#0a84ff" font-size="12" font-weight="700">127.0.0.1:PORT/event</text>
+    <text x="450" y="73" text-anchor="middle" fill="#0a84ff" font-size="10.5" opacity=".8">零 process spawn · 最低延遲</text>
+
+    <rect x="660" y="36" width="224" height="48" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+    <text x="772" y="57" text-anchor="middle" fill="#55585e" font-size="12" font-weight="700">AgentAura.app</text>
+    <text x="772" y="73" text-anchor="middle" fill="#8a8e96" font-size="10">狀態全在記憶體</text>
+
+    <text x="450" y="140" text-anchor="middle" fill="#ff453a" font-size="10.5" font-weight="600">app 沒開 → connection refused → 事件永久遺失</text>
+  </g>
+</svg>
+<figcaption>Fig 2 · Claude Code 自己發 HTTP，不 fork 任何 process，但狀態沒有落地</figcaption>
+</div>
+
+<h3>方案 3 —— Zero-config：直接觀測 transcript 與 process</h3>
+<div class="figwrap">
+<svg viewBox="0 0 900 150" role="img" aria-label="方案 3 拓撲圖">
+  <defs>
+    <marker id="a3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,1 L7,4.5 L0,8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="currentColor" stroke-width="1.6" color="#8a8e96">
+    <line x1="330" y1="46" x2="420" y2="60" marker-end="url(#a3)"/>
+    <line x1="330" y1="102" x2="420" y2="80" marker-end="url(#a3)"/>
+    <line x1="660" y1="70" x2="740" y2="70" marker-end="url(#a3)"/>
+  </g>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11.5">
+    <rect x="16" y="22" width="314" height="48" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+    <text x="173" y="43" text-anchor="middle" fill="#55585e" font-size="12" font-weight="600">~/.claude/projects/**/*.jsonl</text>
+    <text x="173" y="59" text-anchor="middle" fill="#ff9f0a" font-size="10">內部格式 · 無正式契約</text>
+
+    <rect x="16" y="80" width="314" height="44" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+    <text x="173" y="107" text-anchor="middle" fill="#55585e" font-size="12" font-weight="600">pgrep claude · process 掃描</text>
+
+    <rect x="420" y="46" width="240" height="48" rx="8" fill="rgba(255,159,10,.09)" stroke="#ff9f0a" stroke-width="1.4"/>
+    <text x="540" y="67" text-anchor="middle" fill="#c47800" font-size="12" font-weight="700">推測式 state 推導</text>
+    <text x="540" y="83" text-anchor="middle" fill="#c47800" font-size="10.5" opacity=".85">polling · 看不到 PermissionRequest</text>
+
+    <rect x="740" y="46" width="144" height="48" rx="8" fill="none" stroke="#c4c2b9" stroke-width="1.4"/>
+    <text x="812" y="74" text-anchor="middle" fill="#55585e" font-size="12" font-weight="700">AgentAura.app</text>
+  </g>
+</svg>
+<figcaption>Fig 3 · 完全不動使用者設定，代價是精確度與穩定度</figcaption>
+</div>
+
+<h2>四、逐項 verdict</h2>
+<div class="scroll">
+<table>
+<thead><tr>
+  <th style="min-width:150px">判準</th>
+  <th>方案 1 · Plugin + 檔案</th>
+  <th>方案 2 · Local HTTP</th>
+  <th>方案 3 · Zero-config 觀測</th>
+</tr></thead>
+<tbody>
+<tr><td><b>不拖慢 agent</b></td>
+  <td><span class="yes">通過</span><br><small>async fire-and-forget，agent 不等</small></td>
+  <td><span class="yes">通過</span><br><small>零 spawn，loopback 往返 &lt;1ms</small></td>
+  <td><span class="yes">通過</span><br><small>完全不介入 agent</small></td></tr>
+<tr><td><b>App 沒開時的事件</b></td>
+  <td><span class="yes">狀態落地在檔案</span><br><small>啟動掃目錄即還原</small></td>
+  <td><span class="no">永久遺失</span><br><small>啟動後一片空白直到下個事件</small></td>
+  <td><span class="yes">歷史都在 transcript</span></td></tr>
+<tr><td><b>「有人在等你」精準度</b></td>
+  <td><span class="yes">高</span><br><small>PermissionRequest / Notification 直接給</small></td>
+  <td><span class="yes">高</span><br><small>同上</small></td>
+  <td><span class="no">低</span><br><small>要靠靜止時間猜，會誤判</small></td></tr>
+<tr><td><b>殘留狀態偵測</b></td>
+  <td><span class="yes">檔案帶 pid → kill(pid,0)</span></td>
+  <td><span class="mid">要另外做心跳</span></td>
+  <td><span class="yes">process 掃描天生就有</span></td></tr>
+<tr><td><b>對契約的依賴</b></td>
+  <td><span class="yes">公開 hook API</span></td>
+  <td><span class="yes">公開 hook API</span></td>
+  <td><span class="no">內部 jsonl 格式，隨時會變</span></td></tr>
+<tr><td><b>安裝侵入性 / 可逆性</b></td>
+  <td><span class="yes">/plugin install · uninstall</span><br><small>不碰 settings.json</small></td>
+  <td><span class="mid">同上，但多一個監聽 port</span></td>
+  <td><span class="yes">零安裝</span></td></tr>
+<tr><td><b>之後擴到 Codex / Cursor</b></td>
+  <td><span class="mid">要各自寫 adapter</span></td>
+  <td><span class="mid">同上</span></td>
+  <td><span class="yes">觀測法天生比較通用</span></td></tr>
+<tr><td><b>實作複雜度</b></td>
+  <td><span class="yes">低</span><br><small>沒有 event log、沒有亂序問題</small></td>
+  <td><span class="mid">中</span><br><small>port 衝突、防火牆、重連</small></td>
+  <td><span class="no">高</span><br><small>parser + heuristic + 一直要跟上游追</small></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="card rec">
+<span class="tag">推薦</span>
+<p style="margin:0 0 .8rem"><strong>方案 1 為主，把「事件來源」抽成 interface，讓方案 3 之後能當 fallback 補上。</strong></p>
+<p style="margin:0">理由：方案 1 在「不拖慢 agent」、「狀態落地」、「等待精準度」三個最重要的判準上同時最強，而且是唯一實作複雜度最低的。方案 2 唯一贏的是延遲，但 loopback 往返和 2ms process spawn 對「人眼看 menu bar」這個場景毫無差別 —— 拿永久遺失事件去換使用者感知不到的延遲，不划算。方案 3 的價值在「零安裝就有基本功能」和「之後接其他 agent」，所以留成 <code>EventSource</code> 的第二個實作，不進第一版。</p>
+</div>
+
+<h2>五、狀態機（hook event → state）</h2>
+<p>驗證前面那個「<code>state = f(last_event)</code>」的洞見。除了 subagent 計數，所有狀態都能由最後一個事件單獨決定：</p>
+<div class="figwrap">
+<svg viewBox="0 0 900 400" role="img" aria-label="hook event 到 state 的映射">
+  <defs>
+    <marker id="am" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+      <path d="M0,1 L6.5,4 L0,7 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11">
+    <text x="150" y="22" text-anchor="middle" fill="#8a8e96" font-size="10" font-weight="700" letter-spacing="1">HOOK EVENT</text>
+    <text x="720" y="22" text-anchor="middle" fill="#8a8e96" font-size="10" font-weight="700" letter-spacing="1">SESSION STATE</text>
+
+    <g fill="#55585e">
+      <text x="286" y="52">SessionStart</text>
+      <text x="286" y="80">UserPromptSubmit</text>
+      <text x="286" y="108">PreToolUse</text>
+      <text x="286" y="136">PostToolUse</text>
+      <text x="286" y="164">SubagentStart / Stop</text>
+      <text x="286" y="192">PostCompact</text>
+      <text x="286" y="220">PermissionRequest</text>
+      <text x="286" y="248">Notification</text>
+      <text x="286" y="276">Stop</text>
+      <text x="286" y="304">StopFailure</text>
+      <text x="286" y="332">PostToolUseFailure</text>
+      <text x="286" y="360">SessionEnd</text>
+    </g>
+
+    <g fill="none" stroke-width="1.5" marker-end="url(#am)">
+      <path d="M300 48 C420 48 460 96 540 100" stroke="#8e8e93" color="#8e8e93"/>
+      <path d="M300 76 C420 76 470 160 540 172" stroke="#0a84ff" color="#0a84ff"/>
+      <path d="M300 104 C420 104 470 160 540 172" stroke="#0a84ff" color="#0a84ff"/>
+      <path d="M300 132 C420 132 470 160 540 172" stroke="#0a84ff" color="#0a84ff"/>
+      <path d="M300 160 C420 160 470 168 540 172" stroke="#0a84ff" color="#0a84ff"/>
+      <path d="M300 188 C420 188 470 176 540 172" stroke="#0a84ff" color="#0a84ff"/>
+      <path d="M300 216 C420 216 470 240 540 244" stroke="#ff9f0a" color="#ff9f0a"/>
+      <path d="M300 244 C420 244 470 244 540 244" stroke="#ff9f0a" color="#ff9f0a"/>
+      <path d="M300 272 C420 272 470 312 540 316" stroke="#30d158" color="#30d158"/>
+      <path d="M300 300 C420 300 470 380 540 384" stroke="#ff453a" color="#ff453a"/>
+      <path d="M300 328 C420 328 470 380 540 384" stroke="#ff453a" color="#ff453a"/>
+      <path d="M300 356 C400 356 400 110 540 100" stroke="#8e8e93" color="#8e8e93" stroke-dasharray="4 3"/>
+    </g>
+
+    <g>
+      <rect x="540" y="82" width="200" height="36" rx="18" fill="rgba(142,142,147,.12)" stroke="#8e8e93" stroke-width="1.4"/>
+      <circle cx="562" cy="100" r="5" fill="#8e8e93"/>
+      <text x="576" y="105" fill="#55585e" font-size="12" font-weight="700">idle</text>
+      <text x="750" y="105" fill="#8a8e96" font-size="10">全暗 / 微弱</text>
+
+      <rect x="540" y="154" width="200" height="36" rx="18" fill="rgba(10,132,255,.12)" stroke="#0a84ff" stroke-width="1.4"/>
+      <circle cx="562" cy="172" r="5" fill="#0a84ff"/>
+      <text x="576" y="177" fill="#0a84ff" font-size="12" font-weight="700">working</text>
+      <text x="750" y="177" fill="#8a8e96" font-size="10">藍色 comet 跑動</text>
+
+      <rect x="540" y="226" width="200" height="36" rx="18" fill="rgba(255,159,10,.14)" stroke="#ff9f0a" stroke-width="1.4"/>
+      <circle cx="562" cy="244" r="5" fill="#ff9f0a"/>
+      <text x="576" y="249" fill="#c47800" font-size="12" font-weight="700">waiting</text>
+      <text x="750" y="249" fill="#8a8e96" font-size="10">橘色呼吸</text>
+
+      <rect x="540" y="298" width="200" height="36" rx="18" fill="rgba(48,209,88,.14)" stroke="#30d158" stroke-width="1.4"/>
+      <circle cx="562" cy="316" r="5" fill="#30d158"/>
+      <text x="576" y="321" fill="#1c9c43" font-size="12" font-weight="700">done</text>
+      <text x="750" y="321" fill="#8a8e96" font-size="10">恆亮綠</text>
+
+      <rect x="540" y="366" width="200" height="36" rx="18" fill="rgba(255,69,58,.14)" stroke="#ff453a" stroke-width="1.4"/>
+      <circle cx="562" cy="384" r="5" fill="#ff453a"/>
+      <text x="576" y="389" fill="#ff453a" font-size="12" font-weight="700">error</text>
+      <text x="750" y="389" fill="#8a8e96" font-size="10">紅色 double blink</text>
+    </g>
+  </g>
+</svg>
+<figcaption>Fig 4 · SessionEnd（虛線）代表移除該 session；pid 已死也走同一條路</figcaption>
+</div>
+
+<h2>六、Menu bar 視覺語言草案（動的，可以直接看）</h2>
+<p>聚合規則按「最緊急者優先」：<span class="kv">error &gt; waiting &gt; working &gt; done &gt; idle</span>。也就是說只要有任何一個 session 在等你，整條燈就是橘的。</p>
+<div class="mbdemo">
+  <div class="mbrow">
+    <div class="mbbar"><div class="strip s-working"><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i></div></div>
+    <div class="mbmeta"><b>working</b><small>3 sessions 在跑，沒人需要你</small></div>
+  </div>
+  <div class="mbrow">
+    <div class="mbbar"><div class="strip s-waiting"><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i></div></div>
+    <div class="mbmeta"><b>waiting</b><small>有 session 卡在權限請求 / 提問 — 最重要的狀態</small></div>
+  </div>
+  <div class="mbrow">
+    <div class="mbbar"><div class="strip s-done"><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i></div></div>
+    <div class="mbmeta"><b>done</b><small>全部收工，且你還沒看過</small></div>
+  </div>
+  <div class="mbrow">
+    <div class="mbbar"><div class="strip s-error"><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i></div></div>
+    <div class="mbmeta"><b>error</b><small>StopFailure / tool 失敗</small></div>
+  </div>
+  <div class="mbrow">
+    <div class="mbbar"><div class="strip s-idle"><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i><i class="led"></i></div></div>
+    <div class="mbmeta"><b>idle</b><small>沒有活著的 session</small></div>
+  </div>
+</div>
+<p style="color:var(--ink-3);font-size:.88rem">已知的 macOS 約束：menu bar item 寬度要克制（8 顆 LED 大約 40pt 還可以）；動畫在螢幕睡眠 / menu bar 被遮住時必須停掉省電；必須跟隨深淺色，並尊重系統的「減少動態效果」設定（這份文件本身已經照做了）。</p>
+
+<h2>七、需要你決定的事</h2>
+<div class="q">
+<ol>
+  <li><b>推薦方案（方案 1）接受嗎？</b>還是想改用其他方案 / 混搭。</li>
+  <li><b>Icon 形態</b>：真的做 8 顆迷你 LED 燈條（最像硬體），還是做單一符號 + 顏色 + 動畫（最符合 macOS menu bar 慣例、辨識距離更遠）？我可以兩個都做成原型讓你挑。</li>
+  <li><b>下拉面板要顯示到多細</b>：專案名 + 狀態就好，還是也要模型、已跑多久、正在跑什麼 tool、subagent 數量？</li>
+</ol>
+</div>
+
+<footer>AgentAura · 設計討論 01 · 2026-09-08 · 此文件為 brainstorm 產出，尚未進入實作</footer>
+</div>

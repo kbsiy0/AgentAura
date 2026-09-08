@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# 擋住 push 到 main 與對 main 的 force push。
+# 正當的例外：AGENTAURA_ALLOW_MAIN=1 git push ...
+[ "${AGENTAURA_ALLOW_MAIN:-}" = "1" ] && exit 0
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in refs/heads/main) ;; *) continue ;; esac
+
+  if [ "$local_sha" = "$zero" ]; then
+    echo "" >&2; echo "  ✗ 拒絕：不可刪除遠端 main" >&2; echo "" >&2
+    exit 1
+  fi
+  # 非 fast-forward（force push）：remote_sha 不是 local_sha 的祖先
+  if [ "$remote_sha" != "$zero" ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+    echo "" >&2; echo "  ✗ 拒絕：不可 force push 到 main" >&2; echo "" >&2
+    exit 1
+  fi
+  cat >&2 <<'MSG'
+
+  ✗ 拒絕：不可直接 push 到 main
+
+  變更走 PR：
+      git push -u origin change/<scope>
+      gh pr create --base main
+
+  若這次真的是正當例外：
+      AGENTAURA_ALLOW_MAIN=1 git push ...
+
+MSG
+  exit 1
+done
+exit 0

@@ -1,0 +1,236 @@
+<title>實測校正與 前一個專案 殘留</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --bg-elev:#ffffff; --bg-sunk:#efeee9;
+    --ink:#1c1d1f; --ink-2:#55585e; --ink-3:#8a8e96;
+    --line:#dedcd5; --line-strong:#c4c2b9;
+    --working:#0a84ff; --waiting:#ff9f0a; --done:#30d158; --error:#ff453a; --idle:#8e8e93;
+    --accent:#5b4ee5;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC",sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#131417;--bg-elev:#1c1e22;--bg-sunk:#0e0f11;--ink:#eceef2;--ink-2:#a4a9b3;
+    --ink-3:#71767f;--line:#2a2d33;--line-strong:#3a3e46;--accent:#8b80ff;}}
+  :root[data-theme="dark"]{--bg:#131417;--bg-elev:#1c1e22;--bg-sunk:#0e0f11;--ink:#eceef2;
+    --ink-2:#a4a9b3;--ink-3:#71767f;--line:#2a2d33;--line-strong:#3a3e46;--accent:#8b80ff;}
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;
+       -webkit-font-smoothing:antialiased;padding:0 0 6rem}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 1.5rem}
+  header{padding:4rem 0 2.5rem;border-bottom:1px solid var(--line);margin-bottom:2rem}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem}
+  h1{font-size:2.05rem;line-height:1.2;margin:0 0 .6rem;letter-spacing:-.02em;font-weight:650}
+  .sub{color:var(--ink-2);font-size:1.05rem;margin:0;max-width:58ch}
+  h2{font-size:1.32rem;margin:3.5rem 0 1rem;letter-spacing:-.01em;font-weight:640;padding-top:1.5rem;border-top:1px solid var(--line)}
+  h3{font-size:1rem;margin:2rem 0 .6rem;font-weight:650}
+  p{margin:0 0 1rem}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg-sunk);padding:.12em .38em;border-radius:4px;border:1px solid var(--line)}
+  pre{background:var(--bg-sunk);border:1px solid var(--line);border-radius:10px;padding:1.1rem 1.2rem;
+      overflow-x:auto;font-family:var(--mono);font-size:.8rem;line-height:1.65;margin:1rem 0}
+  pre code{background:none;border:none;padding:0;font-size:1em}
+  .card{background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;padding:1.4rem 1.5rem;margin:1.25rem 0}
+  .alarm{border-left:3px solid var(--error);background:linear-gradient(90deg,rgba(255,69,58,.06),transparent 55%)}
+  .good{border-left:3px solid var(--done)}
+  .note{border-left:3px solid var(--accent)}
+  .tag{display:inline-block;color:#fff;font:600 .68rem/1 var(--mono);letter-spacing:.08em;
+       padding:.32rem .55rem;border-radius:5px;margin-bottom:.8rem;text-transform:uppercase}
+  .tag.e{background:var(--error)} .tag.g{background:var(--done)} .tag.a{background:var(--accent)}
+  .scroll{overflow-x:auto;margin:1.25rem 0}
+  table{border-collapse:collapse;width:100%;font-size:.875rem;min-width:620px}
+  th,td{text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 .72rem/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:var(--bg-sunk)}
+  tbody tr:hover{background:var(--bg-sunk)}
+  .was{color:var(--ink-3);text-decoration:line-through}
+  .now{color:var(--error);font-weight:640}
+  svg{display:block;max-width:100%;height:auto;margin:0 auto}
+  .figwrap{background:var(--bg-elev);border:1px solid var(--line);border-radius:12px;padding:1.5rem 1rem;margin:1.25rem 0;overflow-x:auto}
+  figcaption{font-size:.8rem;color:var(--ink-3);text-align:center;margin-top:.9rem;font-family:var(--mono)}
+  ul,ol{margin:0 0 1rem;padding-left:1.35rem} li{margin-bottom:.42rem}
+  .q{background:var(--bg-elev);border:1px solid var(--line-strong);border-radius:12px;padding:1.4rem 1.5rem;margin:1.25rem 0}
+  .q li{margin-bottom:.9rem}
+  .cover{display:grid;gap:.55rem;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:1.25rem 0}
+  .cover div{border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;background:var(--bg-elev);font-family:var(--mono);font-size:.78rem}
+  .cover .ok{border-left:3px solid var(--done)} .cover .miss{border-left:3px solid var(--error);opacity:.8}
+  .cover b{display:block;font-size:.86rem;margin-bottom:.15rem}
+  footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);color:var(--ink-3);font-size:.85rem;font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">AgentAura · 設計討論 03</div>
+  <h1>實測校正與 前一個專案 殘留</h1>
+  <p class="sub">在機器上找到前一個同類專案 前一個專案 留下的 33 個真實 hook payload。它們回答了 spec §8 裡列的未驗證事項，抓到一個 critical bug，並暴露一個目前正在發生的問題。</p>
+</header>
+
+<div class="card alarm">
+<span class="tag e">正在發生 · 需要你決定</span>
+<p style="margin:0 0 .8rem"><strong>前一個專案 的 7 個 hook 還全部留在 <code>~/.claude/settings.json</code>，但 app 已經不存在了。</strong></p>
+<pre style="margin:.4rem 0 .8rem"><code>$ ls /Applications/前一個專案.app
+ls: No such file or directory
+
+$ echo '{}' | /Applications/前一個專案.app/Contents/Resources/prior-hook hook
+zsh: no such file or directory
+exit=127</code></pre>
+<p style="margin:0 0 .8rem">註冊在 <code>SessionStart</code>、<code>UserPromptSubmit</code>、<code>PreToolUse</code>、<code>PostToolUse</code>、<code>Notification</code>、<code>Stop</code>、<code>SessionEnd</code> 七個事件上，全部是<strong>同步</strong> command hook（沒有 <code>async: true</code>）。也就是說<strong>這台機器上每一個 Claude Code session、每一次 tool call，都在同步 fork 一個不存在的執行檔然後拿到 exit 127</strong>。不會擋住 agent（127 ≠ 2），但每個 tool call 都白付一次 fork/exec。</p>
+<p style="margin:0"><code>settings.json.ORIGINAL</code>（前一個專案 安裝前的備份）證實乾淨基線是<strong>完全沒有 <code>hooks</code> key</strong> —— 沒有需要保留的既有 hook。所以清理動作就是把整個 <code>hooks</code> 區塊移除。</p>
+</div>
+
+<div class="card note">
+<span class="tag a">這件事驗證了設計決策 D3</span>
+<p style="margin:0">前一個專案 直接改 <code>settings.json</code>，app 被移除後 hook 就孤兒化了 —— <strong>這正是 AgentAura 選擇走 Claude Code plugin 而非改 settings.json 的理由</strong>（spec §3.2）。<code>/plugin uninstall</code> 天生可逆，不可能留下指向已刪除執行檔的死 hook。原本這是紙上的論證，現在有你自己機器上的實證。</p>
+</div>
+
+<h2>一、CRITICAL：subagent 會蓋掉主 agent 的 waiting</h2>
+<p>Subagent 的 tool 事件<strong>共用父 session 的 <code>session_id</code></strong>，只靠 <code>agent_id</code> 區分（主 agent 為 <code>null</code>）。在單槽 last-write-wins 下，subagent 的事件會覆寫主 agent 的狀態。</p>
+<p>下圖是實測資料裡的真實時序（session <code>e69dc6d9</code>）—— 主 agent 一個 Bash 跑了 19.47 秒，期間 subagent 插進 8 個事件：</p>
+
+<div class="figwrap">
+<svg viewBox="0 0 940 330" role="img" aria-label="subagent 覆蓋主 agent 狀態的時序圖">
+  <g font-family="ui-monospace,Menlo,monospace" font-size="10.5">
+    <!-- axis -->
+    <line x1="80" y1="290" x2="900" y2="290" stroke="#c4c2b9" stroke-width="1.2"/>
+    <g fill="#8a8e96" font-size="9.5">
+      <text x="81" y="306" text-anchor="middle">+41.6s</text>
+      <text x="295" y="306" text-anchor="middle">+46.8</text>
+      <text x="375" y="306" text-anchor="middle">+48.8</text>
+      <text x="650" y="306" text-anchor="middle">+55.5</text>
+      <text x="747" y="306" text-anchor="middle">+57.9</text>
+      <text x="878" y="306" text-anchor="middle">+61.1s</text>
+    </g>
+
+    <!-- MAIN lane -->
+    <text x="72" y="66" text-anchor="end" fill="#0a84ff" font-size="11" font-weight="700">MAIN</text>
+    <text x="72" y="80" text-anchor="end" fill="#8a8e96" font-size="9">agent_id=null</text>
+    <rect x="81" y="48" width="797" height="30" rx="6" fill="rgba(10,132,255,.16)" stroke="#0a84ff" stroke-width="1.4"/>
+    <text x="479" y="68" text-anchor="middle" fill="#0a84ff" font-size="11" font-weight="650">PreToolUse Bash ────────── 19.47s ────────── PostToolUse</text>
+
+    <!-- SUB lane -->
+    <text x="72" y="130" text-anchor="end" fill="#c47800" font-size="11" font-weight="700">subagent</text>
+    <text x="72" y="144" text-anchor="end" fill="#8a8e96" font-size="9">implementer</text>
+    <g fill="rgba(255,159,10,.9)">
+      <rect x="292" y="114" width="9" height="28" rx="2"/>
+      <rect x="372" y="114" width="9" height="28" rx="2"/>
+      <rect x="646" y="114" width="9" height="28" rx="2"/>
+      <rect x="744" y="114" width="9" height="28" rx="2"/>
+    </g>
+    <g fill="rgba(255,159,10,.45)">
+      <rect x="304" y="114" width="7" height="28" rx="2"/>
+      <rect x="384" y="114" width="7" height="28" rx="2"/>
+      <rect x="658" y="114" width="7" height="28" rx="2"/>
+      <rect x="756" y="114" width="7" height="28" rx="2"/>
+    </g>
+    <text x="530" y="164" text-anchor="middle" fill="#8a8e96" font-size="9.5">8 個 Write 事件（Pre/Post 各 4 對），全部落在主 agent 那顆 tool 的區間內</text>
+
+    <!-- danger overlay -->
+    <line x1="81" y1="190" x2="900" y2="190" stroke="#2a2d33" stroke-width=".8" stroke-dasharray="3 3" opacity=".35"/>
+    <text x="72" y="216" text-anchor="end" fill="#ff453a" font-size="11" font-weight="700">危險情境</text>
+    <text x="72" y="230" text-anchor="end" fill="#8a8e96" font-size="9">單槽 last-write-wins</text>
+    <text x="72" y="244" text-anchor="end" fill="#8a8e96" font-size="9">下的檔案內容</text>
+
+    <rect x="81" y="200" width="211" height="26" rx="5" fill="rgba(255,159,10,.2)" stroke="#ff9f0a" stroke-width="1.3"/>
+    <text x="186" y="217" text-anchor="middle" fill="#c47800" font-size="10.5" font-weight="700">waiting ← 你被需要了</text>
+
+    <rect x="292" y="200" width="586" height="26" rx="5" fill="rgba(10,132,255,.14)" stroke="#0a84ff" stroke-width="1.3" stroke-dasharray="5 3"/>
+    <text x="585" y="217" text-anchor="middle" fill="#0a84ff" font-size="10.5" font-weight="700">working ← 被 subagent 蓋掉，橘燈消失 14.3 秒</text>
+
+    <path d="M292 236 L292 254" stroke="#ff453a" stroke-width="1.4" fill="none"/>
+    <text x="298" y="252" fill="#ff453a" font-size="10" font-weight="650">首個 subagent 事件在 20ms 內就把它抹掉</text>
+
+    <text x="479" y="278" text-anchor="middle" fill="#8a8e96" font-size="9.5">把主 agent 那顆 tool 換成 PermissionRequest，就是這個結果 —— 產品唯一最重要的訊號被靜默抹除</text>
+  </g>
+</svg>
+<figcaption>Fig 1 · 實測時序（session e69dc6d9）· 一個 session_id 內主／subagent 交錯 5 次</figcaption>
+</div>
+
+<div class="card good">
+<span class="tag g">修法</span>
+<p style="margin:0 0 .7rem">檔案裡分兩槽，session 的 activity 取兩者在既有優先序下的 <strong>max</strong>：</p>
+<pre style="margin:0 0 .7rem"><code>if payload.agent_id == nil { file.main_activity = activity(of: payload) }
+else                       { file.sub_activity  = activity(of: payload) }
+
+let activity = max(file.main_activity, file.sub_activity ?? .idle)</code></pre>
+<p style="margin:0">因為 <code>waiting</code>(3) &gt; <code>working</code>(2)，<code>max</code> 天生保住 waiting。<strong>不新增任何機制</strong> —— 純粹複用 D1 已裁決的優先序。附一條 mutation 驗證：改回單槽 → 對應測試必 RED。</p>
+</div>
+
+<h2>二、一個必須避免的錯誤解讀</h2>
+<p>初次分析時我把兩個 log 檔合併、依時間排序，看到「<code>SessionEnd</code> 之後 11 秒還有事件」，一度判定為嚴重 bug（殭屍 session 復活）。</p>
+<p>按 <code>session_id</code> 重新分組後證實是<strong>合併造成的假象</strong> —— probe hook 是全域安裝的，兩個檔案裡混著兩個不同 session 的事件。單一 session（<code>91a40169</code>）的時序完全乾淨：</p>
+<pre><code>SessionStart → UserPromptSubmit → (PreToolUse/PostToolUse)* → Stop → SessionEnd
+                                                    SessionEnd 之後：0 個事件 ✓</code></pre>
+<p>同一份資料裡，<strong>subagent 覆蓋主 agent 則是真的</strong>（§一）。教訓已寫進 spec §5.1 測試案例 11-12：跨 session 的資料一律先按 <code>session_id</code> 分組再看時序。</p>
+
+<h2>三、payload 契約校正（7 項）</h2>
+<p>前一版的欄位假設建立在文件推測上。實測後：</p>
+<div class="scroll">
+<table>
+<thead><tr><th style="min-width:150px">欄位</th><th style="min-width:180px">文件／前一版假設</th><th>實測結果</th></tr></thead>
+<tbody>
+<tr><td><code>model</code></td><td class="was">SessionStart 帶 model</td><td class="now">任何 event 都沒有</td></tr>
+<tr><td><code>effort</code></td><td class="was">字串 <code>"high"</code></td><td class="now">物件 <code>{"level":"xhigh"}</code></td></tr>
+<tr><td>SessionEnd 結束原因</td><td class="was"><code>end_reason</code></td><td class="now">實際是 <code>reason</code></td></tr>
+<tr><td><code>SessionStart</code></td><td class="was">無額外欄位</td><td><b>有 <code>source</code></b>（fresh / resume）</td></tr>
+<tr><td><code>PostToolUse</code></td><td class="was">只有 tool_output</td><td><b>有 <code>duration_ms</code></b> 與 <code>tool_response</code></td></tr>
+<tr><td><code>Stop</code></td><td>last_assistant_message</td><td>確認存在；另有 <code>background_tasks</code> / <code>session_crons</code> / <code>stop_hook_active</code></td></tr>
+<tr><td>全部 tool event</td><td>—</td><td>皆帶 <code>scratchpad_dir</code> / <code>prompt_id</code> / <code>transcript_path</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>影響</strong>：面板不能顯示模型（hook 完全拿不到）。<code>transcript_path</code> 出現在每個 payload 上，是唯一的 enrichment 縫，但那要依賴內部 jsonl 格式 —— 不進第一版。反過來拿到兩個沒預期的好東西：<code>duration_ms</code>（面板可顯示 tool 耗時）與 <code>source</code>（區分新開／resume）。</p>
+
+<h2>四、Notification 的 12 種型別 —— 我原本的 fallback 是錯的</h2>
+<p>前一版寫「未知 <code>notification_type</code> 一律 fallback 成 <code>waiting</code>，寧可誤報也不要漏掉在等你的」。<strong>這是錯的</strong>：未知空間裡佔多數的是雜訊。</p>
+<div class="scroll">
+<table>
+<thead><tr><th style="min-width:280px">notification_type</th><th>activity</th></tr></thead>
+<tbody>
+<tr><td><code>permission_prompt</code> / <code>idle_prompt</code> / <code>agent_needs_input</code></td><td><span style="color:var(--waiting);font-weight:640">waiting</span></td></tr>
+<tr><td><code>elicitation_dialog</code> / <code>elicitation_url_dialog</code></td><td><span style="color:var(--waiting);font-weight:640">waiting</span></td></tr>
+<tr><td><code>agent_completed</code></td><td><span style="color:var(--done);font-weight:640">done</span> —— 不是 waiting</td></tr>
+<tr><td><code>auth_success</code></td><td>不改變</td></tr>
+<tr><td><code>elicitation_complete</code> / <code>elicitation_response</code></td><td>不改變</td></tr>
+<tr><td><code>quota_auto_resume_fired</code> / <code>_stale</code> / <code>_disabled</code></td><td>不改變</td></tr>
+<tr><td>未知型別</td><td><b>不改變</b>（原本是 waiting）</td></tr>
+</tbody>
+</table>
+</div>
+<p>改成「不改變」是安全的，理由：<strong><code>PermissionRequest</code> 是獨立的 hook event</strong>，已經直接覆蓋「有人在等你」這個最重要的情況，不需要靠 <code>Notification</code> 兜底。照原本的寫法，<code>auth_success</code> 或 quota 自動續用都會讓 icon 無故亮橘。</p>
+<p style="color:var(--ink-3);font-size:.88rem">注意：這 12 個型別的來源是 前一個專案 的 matcher 設定與官方文件 —— <strong>從未捕獲過活的 <code>Notification</code> payload</strong>，連 <code>notification_type</code> 這個欄位名本身都未經量測。所以在 M0 補到真實 payload 之前，<code>Notification</code> 一律不改變 activity（fail-safe，讓 <code>PermissionRequest</code> 承擔）。</p>
+
+<h2>五、涵蓋範圍與剩餘缺口</h2>
+<div class="cover">
+  <div class="ok"><b>PreToolUse</b>15 筆</div>
+  <div class="ok"><b>PostToolUse</b>14 筆</div>
+  <div class="ok"><b>SessionStart</b>1 筆</div>
+  <div class="ok"><b>UserPromptSubmit</b>1 筆</div>
+  <div class="ok"><b>Stop</b>1 筆</div>
+  <div class="ok"><b>SessionEnd</b>1 筆</div>
+  <div class="miss"><b>Notification</b>0 筆</div>
+  <div class="miss"><b>PermissionRequest</b>0 筆</div>
+  <div class="miss"><b>StopFailure</b>0 筆</div>
+  <div class="miss"><b>PostToolUseFailure</b>0 筆</div>
+  <div class="miss"><b>SubagentStart/Stop</b>0 筆</div>
+  <div class="miss"><b>PostToolBatch</b>0 筆</div>
+  <div class="miss"><b>PreCompact/PostCompact</b>0 筆</div>
+</div>
+<p>只涵蓋 2 個 session、1 種 subagent 型別（<code>implementer</code>）、1 種 effort（<code>xhigh</code>）。<strong>缺口即 M0 的工作範圍</strong>，M0 因此從「錄全部」縮減成「補這 5 個 event + 驗 3 個機制」。</p>
+<h3>仍待實測的 3 個機制問題</h3>
+<ol>
+  <li>plugin 的 <code>hooks/hooks.json</code> 是否支援 <code>async: true</code>（前一個專案 走 settings.json，沒驗過 plugin 路徑）</li>
+  <li>hook 子行程的 <code>getppid()</code> 是否等於 claude 本體的 pid（可能中間隔一層 shell）—— 這條若不成立，liveness 偵測整套失效</li>
+  <li><code>${CLAUDE_PLUGIN_ROOT}</code> 在 plugin hook command 中的實際展開結果</li>
+</ol>
+<p style="color:var(--ink-3);font-size:.88rem">已由實測回答（原本列在 spec §8）：payload 欄位集合、事件時序、<code>PreToolUse</code> 與權限提示的相對順序、subagent 共用 session_id 的行為、<code>model</code> 不存在、<code>effort</code> 形狀、<code>SessionEnd</code> 欄位名、hooks 改完立即生效不需重啟。</p>
+
+<h2>六、需要你決定</h2>
+<div class="q">
+<ol>
+  <li><b>要不要清掉 <code>~/.claude/settings.json</code> 裡那 7 個死 hook？</b><br>
+  <span style="color:var(--ink-3);font-size:.92rem">會先備份現檔，只移除 <code>hooks</code> key（<code>settings.json.ORIGINAL</code> 已證實乾淨基線就是沒有 hooks），其他 9 個 key 完全不動。改完立即生效，不用重啟。</span></li>
+  <li><b>前一個專案 具體是哪裡不符你的需求？</b><br>
+  <span style="color:var(--ink-3);font-size:.92rem">這是最有價值的設計輸入。是形態不對（鍵盤 Caps Lock LED 而不是 menu bar）、狀態語意不準、太吵、看不出是哪個專案、還是別的？我想避免在 AgentAura 上重踩同一個坑。</span></li>
+</ol>
+</div>
+
+<footer>AgentAura · 設計討論 03 · 2026-09-08 · 實測資料保存於 docs/evidence/hook-payloads/</footer>
+</div>

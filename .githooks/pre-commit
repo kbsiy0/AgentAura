@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# 擋住直接 commit 到 main（user CLAUDE.md：main 受保護）。
+# GitHub Free 的私有 repo 不提供 branch protection，故在本機強制。
+# 正當的例外（例如手動 merge PR）：AGENTAURA_ALLOW_MAIN=1 git commit ...
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$branch" = "main" ] && [ "${AGENTAURA_ALLOW_MAIN:-}" != "1" ]; then
+  cat >&2 <<'MSG'
+
+  ✗ 拒絕：不可直接 commit 到 main
+
+  main 受保護。請開 change branch：
+      git checkout -b change/<scope>
+
+  變更走 PR 進 main。若這次真的是正當例外：
+      AGENTAURA_ALLOW_MAIN=1 git commit ...
+
+MSG
+  exit 1
+fi

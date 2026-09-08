@@ -5,3 +5,4 @@ DerivedData/
 *.xcuserdatad
 xcuserdata/
 .firecrawl/
+.superpowers/
