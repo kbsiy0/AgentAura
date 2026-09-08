@@ -1095,6 +1095,16 @@ struct HookPayloadTests {
         #expect(!internals.isEmpty, "實測確實有 agent_type 為空字串的 subagent")
     }
 
+    @Test("PostModelSwitch 的 to_model 被當成 model 讀出來")
+    func modelFromPostModelSwitch() throws {
+        let p = try #require(HookPayload(json: [
+            "hook_event_name": "PostModelSwitch", "session_id": "s1",
+            "from_model": "claude-sonnet-5", "to_model": "claude-opus-5",
+        ]))
+        #expect(p.model == "claude-opus-5", "使用者中途 /model 換模型，面板不得顯示舊模型")
+        #expect(p.effect == .noChange, "換模型不改變 activity")
+    }
+
     @Test("SessionStart 的 model 被讀出來，其他 event 沒有")
     func modelFromSessionStart() throws {
         let starts = try Fixtures.events(named: "round2", kind: "SessionStart")
@@ -1212,7 +1222,9 @@ public struct HookPayload: Sendable, Equatable {
         toolDurationMs   = json["duration_ms"] as? Int
         notificationType = Self.nonEmpty(json["notification_type"])
         notificationMessage = Self.nonEmpty(json["message"])
-        model            = Self.nonEmpty(json["model"])
+        // model 只有 SessionStart 提供；PostModelSwitch 用 to_model 帶新模型。
+        // 少了後者，使用者中途 /model 換模型後面板會顯示過時的模型。
+        model            = Self.nonEmpty(json["model"]) ?? Self.nonEmpty(json["to_model"])
         lastMessage      = Self.string(json["last_assistant_message"])
         agentID          = Self.nonEmpty(json["agent_id"])
         // 內部 subagent 的 agent_type 是**空字串**而非 null —— 正規化，
@@ -3632,6 +3644,7 @@ cat > plugin/hooks/hooks.json <<'EOF'
   "Stop":               [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
   "StopFailure":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
   "SessionEnd":         [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
+  "PostModelSwitch":    [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
   "Notification": [
     { "matcher": "permission_prompt|idle_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog|agent_completed",
       "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }
@@ -3712,7 +3725,8 @@ struct PluginWiringTests {
         let needed = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
                       "PostToolUseFailure", "PostToolBatch", "PermissionRequest",
                       "PermissionDenied", "SubagentStart", "SubagentStop",
-                      "Stop", "StopFailure", "SessionEnd", "Notification"]
+                      "Stop", "StopFailure", "SessionEnd", "Notification",
+                      "PostModelSwitch"]
         for e in needed {
             #expect(registered.contains(e), "\(e) 有對照規則卻沒有註冊 hook —— tested≠wired")
         }

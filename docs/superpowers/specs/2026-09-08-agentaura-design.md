@@ -189,7 +189,20 @@ enum Activity: Int, Comparable {
 | `StopFailure` | `error` | 靜止態，標 unacked，存 `error_type` |
 | `SessionEnd` | — | 若 unacked 則移入尾巴清單；否則移除 |
 | pid 已死（app 偵測） | — | 同上。crash / 強制關窗走這條 |
+| `PostModelSwitch` | 不變 | activity 不變，但**必須讀 `to_model` 更新 model** —— 見下方說明 |
 | 未知 `hook_event_name` | 不變 | 只更新 `written_at`，activity 保持原值 |
+
+`PostModelSwitch` 是拿官方完整 event 清單逐一對照時發現的缺口：`model` 只有 `SessionStart`
+提供，使用者中途 `/model` 換模型後，面板會一直顯示開場時的模型。該 event 帶
+`from_model` / `to_model`，讀 `to_model` 即可修正。activity 不受影響。
+
+其餘落到 default（不改變 activity）的 event 逐一確認過皆正確：`Setup`（只在 `--init-only`
+觸發）、`UserPromptExpansion`（緊接著會有 `UserPromptSubmit`）、`TaskCreated` / `TaskCompleted`、
+`InstructionsLoaded`、`ConfigChange`、`CwdChanged`、`DirectoryAdded`、`FileChanged`、
+`WorktreeCreate` / `WorktreeRemove`、`PreModelSwitch`（等 `PostModelSwitch` 即可）。
+`MessageDisplay` 刻意**不註冊** —— 它在助理訊息串流時持續觸發，量級不適合當狀態訊號。
+`TeammateIdle` 待觀察：使用者的 settings 有 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`，
+可能真的會觸發，屆時再依實測決定映射。
 
 ### 2.2.1 `Notification` 的 12 種型別
 
