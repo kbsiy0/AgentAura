@@ -31,18 +31,45 @@ struct SessionReducerTests {
         #expect(SessionReducer.state(from: s, liveness: probe).activity == .error)
     }
 
+    /// D1 的**反方向**：subagent 的活動優先序較高時，由它把結果往上頂。
+    ///
+    /// 這個方向曾經全專案零覆蓋 —— `activityTakesMax` 與 `errorBeatsWaiting`
+    /// 都把較高優先序放在 `mainActivity`，所以把 `effectiveActivity` 改成
+    /// `{ mainActivity }`（完全忽略 subActivity），121 個測試無一變紅。
+    ///
+    /// 真實情境：主槽 `working`（非靜止態，§2.5.1 的 guard 放行）＋ subagent
+    /// 自己的 tool 觸發 `PermissionRequest` → `subActivity = .waiting`。
+    /// 這條壞掉的後果是使用者漏看「subagent 正在等你」。
+    @Test("subagent 優先序較高時由它決定結果 —— D1 的反方向")
+    func subActivityRaisesEffectiveActivity() {
+        let waiting = snapshot { $0.mainActivity = .working; $0.subActivity = .waiting }
+        #expect(waiting.effectiveActivity == .waiting)
+        #expect(SessionReducer.state(from: waiting, liveness: probe).activity == .waiting)
+
+        let err = snapshot { $0.mainActivity = .working; $0.subActivity = .error }
+        #expect(err.effectiveActivity == .error)
+        #expect(SessionReducer.state(from: err, liveness: probe).activity == .error)
+    }
+
     @Test("專案名取 cwd 的 basename")
     func projectName() {
         #expect(SessionReducer.state(from: snapshot { _ in }, liveness: probe).projectName == "payments-api")
     }
 
-    @Test("cwd 為 nil 或空時給可讀的替代名，不得 crash")
+    /// 斷言**具體值**，不是「非空」。
+    ///
+    /// `!name.isEmpty` 無法區分兩個 fallback：實測把 `"(unknown)"` 與 `"(root)"`
+    /// 都改成同一個 `"x"`，這條測試照樣通過。而面板上「(unknown)」（沒有 cwd）
+    /// 與「(root)」（cwd 是根目錄）對使用者除錯是不同訊息。
+    @Test("cwd 缺失與根目錄給出兩個可區分的替代名")
     func projectNameFallback() {
-        for cwd in [nil, "", "/"] {
-            let s = snapshot { $0.cwd = cwd }
-            let name = SessionReducer.state(from: s, liveness: probe).projectName
-            #expect(!name.isEmpty)
+        func name(_ cwd: String?) -> String {
+            SessionReducer.state(from: snapshot { $0.cwd = cwd }, liveness: probe).projectName
         }
+        #expect(name(nil) == "(unknown)")
+        #expect(name("") == "(unknown)")
+        #expect(name("/") == "(root)")
+        #expect(name(nil) != name("/"), "兩個 fallback 必須可區分")
     }
 
     @Test("unicode / emoji 專案名保留完整")
@@ -60,6 +87,24 @@ struct SessionReducerTests {
     @Test("subagent 槽為空時 subagentTool 為 nil")
     func subagentToolNilWhenEmpty() {
         #expect(SessionReducer.state(from: snapshot { _ in }, liveness: probe).subagentTool == nil)
+    }
+
+    /// `subagentLabel` 的四種 (type, tool) 組合都要有樣本。
+    ///
+    /// 兩個混合 nil 的分支曾經從未被觸及：把 `case (t?, nil)` 與 `case (nil, u?)`
+    /// 各自改成 `return nil`，`SessionReducerTests` 都是 12/12 全綠。
+    /// 「有型別、沒 tool」是真實的中間狀態 —— `SubagentStart` 剛發生、
+    /// `PreToolUse` 還沒到。
+    @Test("subagentTool 的四種組合都有覆蓋")
+    func subagentToolAllCombinations() {
+        func label(type: String?, tool: String?) -> String? {
+            let s = snapshot { $0.subAgentType = type; $0.subTool = tool; $0.subActivity = .working }
+            return SessionReducer.state(from: s, liveness: probe).subagentTool
+        }
+        #expect(label(type: "Explore", tool: "Grep") == "Explore → Grep")
+        #expect(label(type: "Explore", tool: nil) == "Explore")
+        #expect(label(type: nil, tool: "Grep") == "Grep")
+        #expect(label(type: nil, tool: nil) == nil)
     }
 
     @Test("pid 活著 → liveness 為 alive")

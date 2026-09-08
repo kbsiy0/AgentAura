@@ -5,7 +5,11 @@ import Foundation
 @Suite("SessionRegistry unacked 尾巴（§2.4）")
 struct SessionRegistryTests {
 
-    func state(_ id: String, _ a: Activity, live: Bool = true) -> SessionState {
+    /// `at` 的預設值與原本寫死的值相同，所以既有測試行為完全不變。
+    /// 加這個參數是因為 `upsert` 的「時戳前進 → 撤銷確認」分支需要兩個
+    /// 不同時戳的 state 才能觸及，而整份測試檔原本沒有任何一對。
+    func state(_ id: String, _ a: Activity, live: Bool = true,
+               at t: TimeInterval = 1_788_628_000) -> SessionState {
         SessionState(id: id, projectName: id, projectPath: "/x/\(id)",
                      permissionMode: nil, effort: nil, model: nil,
                      activity: a, mainActivity: a, subActivity: nil,
@@ -13,7 +17,7 @@ struct SessionRegistryTests {
                      turnStartedAt: nil, subagents: [:], toolFailures: 0,
                      lastMessage: nil, errorType: nil, toolError: nil,
                      liveness: live ? .alive(pid: 1) : .ended,
-                     updatedAt: Date(timeIntervalSince1970: 1_788_628_000))
+                     updatedAt: Date(timeIntervalSince1970: t))
     }
 
     @Test("活著的 session 都可見")
@@ -146,5 +150,40 @@ struct SessionRegistryTests {
         for i in 0..<50 { r.upsert(state("s\(i)", i.isMultiple(of: 3) ? .waiting : .working)) }
         #expect(r.visible.count == 50)
         #expect(r.acknowledgeAll().isEmpty, "全部活著 → 沒有可刪的")
+    }
+
+    /// `upsert` 的「時戳前進也要撤銷確認」分支。
+    ///
+    /// 這個分支曾經從未被觸及（整份測試檔的 `updatedAt` 都是同一個值）。
+    /// 實測刪掉 `|| old.updatedAt < s.updatedAt`，15/15 全綠。
+    @Test("已確認後又發生新一輪同類結果（時戳前進）—— 不得被當成已看過而靜默吞掉")
+    func newerTimestampRevokesAck() {
+        var r = SessionRegistry()
+        r.upsert(state("a", .error))            // 第一次失敗，session 還活著
+        _ = r.acknowledgeAll()                  // 使用者開了面板，看過了
+        #expect(r.isAcknowledged("a"))
+
+        // 第二次失敗（同樣分類為 .error）之後 session 結束。
+        // 時戳前進是「這是新結果」的唯一訊號 —— activity 值一模一樣。
+        r.upsert(state("a", .error, live: false, at: 1_788_628_050))
+        #expect(r.visible.map(\.id) == ["a"], """
+            新一輪的 error 必須重新變成未確認。
+            少了 `|| old.updatedAt < s.updatedAt`，第二次失敗會被當成「已看過又已結束」
+            直接從表中清掉 —— 使用者永遠不會知道它發生過。
+            """)
+    }
+
+    /// `upsert` 的「已看過又已結束 → 立即清掉」分支（與 `newerTimestampRevokesAck`
+    /// 是同一段程式碼的另一半：那裡時戳前進所以**留下**，這裡時戳不變所以**清掉**）。
+    ///
+    /// 這個分支曾經從未被觸及。實測整段刪掉，15/15 全綠 —— 後果是 `states`
+    /// 單調累積殘留 entry（`visible` 有自己的過濾所以畫面正常，但記憶體會漏）。
+    @Test("已確認的 session 之後結束（時戳不變）—— 立即從表中清除")
+    func endedAfterAckRemovedImmediately() {
+        var r = SessionRegistry()
+        r.upsert(state("a", .done))
+        _ = r.acknowledgeAll()
+        r.upsert(state("a", .done, live: false))     // 同時戳 → 不撤銷確認
+        #expect(r.states["a"] == nil, "已看過又已結束 → 立即清掉，不等下一次 acknowledgeAll")
     }
 }
