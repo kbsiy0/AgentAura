@@ -62,9 +62,17 @@ struct EndToEndWiredGateTests {
         let graph = PipelineGraph.production(root: root)
         graph.start(); defer { graph.stop() }
 
+        // `error` 刻意**先發**，不放在最後。
+        //
+        // 原本的順序是 working、working、error —— error 剛好是最後一個事件，
+        // 所以「last-write-wins」的錯誤實作在這個順序下也會給出 `.error`，
+        // 這條端到端測試因此無法單獨排除那個替代假說。
+        // 把 error 移到最前面，last-write-wins 會得到 `.working`，測試就有鑑別力了。
+        // （同一招在 T09 的 `twoWorkingOneErrorIsError` 用過 —— 固定測資的
+        // 元素位置會決定一個 mutation 是否可觀察。）
+        try fireHook(#"{"hook_event_name":"StopFailure","session_id":"e1","reason":"overloaded_error"}"#, root: root)
         try fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w1","tool_name":"Bash"}"#, root: root)
         try fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w2","tool_name":"Read"}"#, root: root)
-        try fireHook(#"{"hook_event_name":"StopFailure","session_id":"e1","reason":"overloaded_error"}"#, root: root)
 
         let final = await wait(for: graph) { $0.activity == .error && $0.counts.values.reduce(0,+) >= 3 }
         #expect(final.activity == .error, "使用者原始舉例，端到端驗證")

@@ -12,7 +12,20 @@ public final class PipelineGraph: @unchecked Sendable {
     public let source: EventSource
     public let root: URL
 
-    public private(set) var registry = SessionRegistry()
+    /// **刻意不是 `public`。**
+    ///
+    /// 所有寫入都在 `lock` 下，但一個 `public` 的裸屬性讓外部可以**繞過 lock 直接讀**，
+    /// 與 `ingest()` 的鎖內寫入形成未同步的並發存取 —— `@unchecked Sendable` 的承諾
+    /// 就只兌現了一半。實證：面板的 `refreshPanel()` 原本寫 `graph.registry.visible`，
+    /// 正是這種讀取。收成 `internal` 之後，App target（只 `import AuraHookFile`）
+    /// 拿不到它，被迫走下面那個上鎖的 `visibleSessions`；測試用 `@testable` 仍可存取。
+    private(set) var registry = SessionRegistry()
+
+    /// 面板要列的 session。**上鎖**讀取 —— 這是外部取得 registry 內容的唯一途徑。
+    public var visibleSessions: [SessionState] {
+        lock.lock(); defer { lock.unlock() }
+        return registry.visible
+    }
     public var onIconStateChange: ((IconState) -> Void)?
 
     private var consumeTask: Task<Void, Never>?
