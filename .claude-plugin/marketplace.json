@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "agentaura",
+  "description": "AgentAura 的本地 marketplace —— 自用安裝用，不上架",
+  "owner": { "name": "AgentAura", "email": "" },
+  "plugins": [
+    {
+      "name": "agentaura",
+      "description": "把 Claude Code 的運行狀態顯示在 macOS menu bar",
+      "source": "./plugin",
+      "category": "development"
+    }
+  ]
+}
