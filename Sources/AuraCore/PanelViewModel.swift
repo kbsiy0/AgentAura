@@ -1,0 +1,112 @@
+import Foundation
+
+public struct PanelRow: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let projectName: String
+    public let activity: Activity
+    public let headline: String
+    public let detail: String
+    public let meta: String
+    public let relativeTime: String
+    public let isEnded: Bool
+}
+
+/// 面板的呈現邏輯。純函數，所以排序、截斷、時間格式化都可測 ——
+/// 這些是最容易在 UI 層被寫成「看起來對」但邊界錯的東西（負數時長、懸空分隔符、
+/// 未截斷的長訊息把面板撐爆）。
+public enum PanelViewModel {
+
+    public static func rows(from states: [SessionState], now: Date = Date()) -> [PanelRow] {
+        states
+            .sorted { a, b in
+                // 與 D1 一致：優先序高的在前
+                if a.activity != b.activity { return a.activity > b.activity }
+                // 活著的優先於已結束的
+                let aEnded = a.liveness == .ended, bEnded = b.liveness == .ended
+                if aEnded != bEnded { return !aEnded }
+                // 同組內最近活動優先
+                return a.updatedAt > b.updatedAt
+            }
+            .map { row(for: $0, now: now) }
+    }
+
+    static func row(for s: SessionState, now: Date) -> PanelRow {
+        PanelRow(id: s.id,
+                 projectName: s.projectName,
+                 activity: s.activity,
+                 headline: headline(for: s),
+                 detail: detail(for: s, now: now),
+                 meta: meta(for: s),
+                 relativeTime: relativeTime(from: s.updatedAt, now: now),
+                 isEnded: s.liveness == .ended)
+    }
+
+    static func headline(for s: SessionState) -> String {
+        switch s.activity {
+        case .waiting:
+            let what = s.currentTool ?? "輸入"
+            return "等你批准：\(what)"
+        case .error:
+            return s.toolError ?? s.errorType ?? "執行失敗"
+        case .done:
+            return summarise(s.lastMessage) ?? "已完成"
+        case .working:
+            if let sub = s.subagentTool { return sub }
+            return s.currentTool ?? "執行中"
+        case .idle:
+            return "等你下指令"
+        }
+    }
+
+    /// 完成訊息可能很長（實測有數千字），面板不能被它撐爆。
+    static func summarise(_ text: String?, limit: Int = 80) -> String? {
+        guard let text, !text.isEmpty else { return nil }
+        let flat = text.split(whereSeparator: \.isNewline)
+            .first?.trimmingCharacters(in: .whitespaces) ?? ""
+        guard !flat.isEmpty else { return nil }
+        return flat.count <= limit ? flat : String(flat.prefix(limit)) + "…"
+    }
+
+    static func detail(for s: SessionState, now: Date) -> String {
+        var parts: [String] = []
+        if let start = s.turnStartedAt {
+            parts.append("本輪 " + duration(now.timeIntervalSince(start)))
+        }
+        let subs = s.subagents.values.reduce(0, +)
+        if subs > 0 { parts.append("\(subs) subagents") }
+        if s.toolFailures > 0 { parts.append("\(s.toolFailures) tool 失敗") }
+        return parts.joined(separator: " · ")
+    }
+
+    static func meta(for s: SessionState) -> String {
+        [s.model, s.effort, s.permissionMode]
+            .compactMap { $0 }                 // 缺值就整段省略，不留懸空分隔符
+            .joined(separator: " · ")
+    }
+
+    public static func duration(_ seconds: Double) -> String {
+        let t = Int(max(0, seconds))           // 時鐘倒退 clamp 到 0
+        if t < 60 { return "\(t)s" }
+        if t < 3_600 { return "\(t / 60)m \(t % 60)s" }
+        return "\(t / 3_600)h \((t % 3_600) / 60)m"
+    }
+
+    public static func relativeTime(from date: Date, now: Date = Date()) -> String {
+        let t = max(0, now.timeIntervalSince(date))
+        if t < 5 { return "剛剛" }
+        return duration(t) + "前"
+    }
+
+    public static func title(for icon: IconState) -> String {
+        let attention = icon.attentionCount
+        if attention > 0 {
+            let live = icon.liveCount
+            return live > attention
+                ? "\(attention) 個在等你 · \(live - attention) 個在跑"
+                : "\(attention) 個在等你"
+        }
+        if icon.liveCount > 0 { return "\(icon.liveCount) 個 session 在跑" }
+        let done = icon.counts[.done] ?? 0
+        return done > 0 ? "\(done) 個已完成" : "沒有活著的 session"
+    }
+}

@@ -16,6 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.status.apply(appearance, phase: phase)
         }
 
+        status.attachPopover()
+        status.onOpen = { [weak self] in
+            guard let self else { return }
+            self.graph.acknowledgeAll()
+            self.refreshPanel()
+        }
+
         graph = PipelineGraph.production()
         // onIconStateChange 從 FSEvents 的背景 queue 上來，所以要 hop 回 main。
         graph.onIconStateChange = { icon in
@@ -23,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.driver.setIcon(icon)
                 self.driver.setIconVisible(self.status.isVisible)
+                self.refreshPanel()
             }
         }
         graph.start()
@@ -36,5 +44,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         livenessTimer?.invalidate()
         graph?.stop()
+    }
+
+    private func refreshPanel() {
+        let icon = graph.iconState
+        // `graph.registry` 是 internal 且未加鎖 —— 走上鎖的 `visibleSessions`。
+        // 這個 callback 會從 FSEvents 的背景 queue 觸發，直接讀 registry 就是 data race。
+        let rows = PanelViewModel.rows(from: graph.visibleSessions)
+        status.setPanel(title: PanelViewModel.title(for: icon), rows: rows)
     }
 }
