@@ -22,13 +22,19 @@ struct IsolationTests {
         return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
-    /// 禁止的 import 寫法：一般 import、`@testable import`、與 scoped import
-    /// （`import class AppKit.NSWindow` 之類）——這些字面上都不含 `"import AppKit"`
-    /// 這個子字串，單純 `contains` 檢查會漏放行。錨定在行首，避免命中散文註解或字串字面值。
-    static let bannedImportPattern =
-        "(?m)^[ \\t]*(@testable[ \\t]+)?import[ \\t]+" +
-        "((class|struct|enum|protocol|typealias|func|var|let|actor)[ \\t]+)?" +
-        "(AppKit|SwiftUI|Cocoa)\\b"
+    /// 禁止 `AuraCore` 依賴 AppKit / SwiftUI / Cocoa。
+    ///
+    /// 必須涵蓋 Swift 完整的 import 語法，而不只是 `import AppKit` 這一種形狀：
+    /// `import` **之前**可以有任意數量的 attribute（`@testable`、`@preconcurrency`、
+    /// `@_exported`、`@_spi(...)` …）與 access-level modifier（Swift 6 的
+    /// `internal import` / `public import` / `package import` …）；**之後**可以有一個
+    /// 宣告關鍵字（scoped import，如 `import class AppKit.NSWindow`）。
+    /// 錨定在行首，所以散文註解與字串字面值不會誤觸。
+    static let bannedImportPattern: String = {
+        let modifiers = #"(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)\n]*\))?|public|package|internal|fileprivate|private)[ \t]+)*"#
+        let kind = #"(?:(?:class|struct|enum|protocol|typealias|func|var|let|actor|inout)[ \t]+)?"#
+        return #"(?m)^[ \t]*"# + modifiers + #"import[ \t]+"# + kind + #"(?:AppKit|SwiftUI|Cocoa)\b"#
+    }()
 
     @Test("AuraCore 不得依賴 AppKit / SwiftUI / Cocoa（含 scoped import）")
     func coreHasNoUIImports() throws {
@@ -40,20 +46,40 @@ struct IsolationTests {
         }
     }
 
-    @Test("regex gate 對各種 import 寫法都有牙齒")
+    @Test("regex gate 涵蓋 Swift 完整的 import 語法")
     func importPatternCoverage() {
         let shouldMatch = [
-            "import AppKit", "  import AppKit", "\timport SwiftUI",
+            "import AppKit",
+            "  import AppKit",
+            "\timport SwiftUI",
+            "import Cocoa",
             "@testable import AppKit",
-            "import class AppKit.NSWindow",     // scoped —— contains 檢查會漏掉
-            "import struct SwiftUI.Color", "import Cocoa",
+            "import class AppKit.NSWindow",            // scoped
+            "import struct SwiftUI.Color",
+            "import AppKit.NSWindow",                  // submodule，無宣告關鍵字
+            "@preconcurrency import AppKit",           // Swift 6 常見
+            "@_exported import AppKit",
+            "@_implementationOnly import AppKit",
+            "@_spi(Private) import AppKit",
+            "internal import AppKit",                  // Swift 6 access-level import
+            "public import AppKit",
+            "package import AppKit",
+            "fileprivate import SwiftUI",
+            "private import Cocoa",
+            "@preconcurrency internal import AppKit",  // 兩者疊加
+            "internal import struct AppKit.NSView",    // modifier + scoped
         ]
         let shouldNotMatch = [
             "/// 此 module 不得依賴 AppKit",
-            "// 說明：不要 import AppKit 進來",
+            "// 不要 import AppKit 進來",
+            "/// internal import AppKit 是禁止的",
+            "    // import AppKit",
             "import Foundation",
+            "internal import Foundation",
             "let s = \"import AppKit\"",
             "importAppKit",
+            "public func importAppKitThing() {}",
+            "#if canImport(AppKit)",
         ]
         for line in shouldMatch {
             #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) != nil,
