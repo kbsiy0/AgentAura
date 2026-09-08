@@ -44,9 +44,24 @@ if ! (cd "$TMP" && swift build --build-tests 2>&1 | grep -q "error:"); then
 else
   echo "    ✗ plan 的程式碼編不過："
   (cd "$TMP" && swift build --build-tests 2>&1 | grep "error:" | sort -u | head -10 | sed 's/^/      /')
-  rm -rf "$TMP"; exit 1
+  rm -rf "$TMP" 2>/dev/null || true; exit 1
 fi
-rm -rf "$TMP"
+# SwiftPM 可能還在寫 .build，rm 失敗不該讓整支腳本失敗
+rm -rf "$TMP" 2>/dev/null || true
 
 echo "==> 3/3 產生 brief"
 "$SK/scripts/task-brief" "$PLAN" "$N"
+
+BRIEF=".superpowers/sdd/$(basename "$PLAN" .md)/task-${N}-brief.md"
+if [ ! -f "$BRIEF" ]; then
+  echo "    x brief 沒有產生出來：$BRIEF"
+  exit 1
+fi
+
+# 把來源 commit 蓋在 brief 裡，讓「這份 brief 對應哪一版 plan」在 brief 內就看得到。
+# 起因：批次產生的 brief 曾經比 plan 舊 43 分鐘，implementer 因此重新發現了
+# 我已修好的四個缺陷，而它無從得知手上的 brief 過期了。
+printf '\n---\n\n_此 brief 由 scripts/dispatch-brief.sh 產生於 %s，來源 plan commit `%s`（該 commit 的程式碼經 swift build --build-tests 驗證零 error）。_\n' \
+  "$(date '+%Y-%m-%d %H:%M')" "$(git rev-parse --short HEAD)" >> "$BRIEF"
+
+echo "==> OK  $BRIEF  (plan commit $(git rev-parse --short HEAD))"
