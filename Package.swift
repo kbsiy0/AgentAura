@@ -8,6 +8,7 @@ let package = Package(
         .target(name: "AuraCore"),
         .target(name: "AuraHookFile", dependencies: ["AuraCore"]),
         .executableTarget(name: "aura-hook", dependencies: ["AuraCore", "AuraHookFile"]),
+        .executableTarget(name: "AgentAuraApp", dependencies: ["AuraCore", "AuraHookFile"]),
         .testTarget(
             name: "AuraCoreTests",
             dependencies: ["AuraCore", "AuraHookFile"],
