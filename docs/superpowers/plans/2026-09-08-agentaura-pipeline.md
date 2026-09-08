@@ -1747,6 +1747,55 @@ struct MergeRulesTests {
         #expect(s.subagents.isEmpty, "不得出現空字串鍵")
     }
 
+    /// **系統性的欄位帶過來測試。**
+    ///
+    /// `merge` 用 `?? s.field` 或 `if let ... { s.field = ... }` 把 14 個欄位帶過來，
+    /// 但原本只有 `model` 有專門的帶過來測試。其餘 13 個若哪天被寫成直接覆寫
+    /// （`s.cwd = p.cwd`），一個不帶 `cwd` 的事件就會把它清成 nil，而沒有任何測試會紅。
+    ///
+    /// 這個測試先用一連串事件把每個「來自 payload」的欄位都填上非 nil 值，
+    /// 斷言確實都填上了（否則後面就是 nil == nil，證明不了任何事），
+    /// 再送一個什麼都不帶的最小事件，斷言全部存活。
+    @Test("後續事件不得清掉先前累積的欄位")
+    func fieldsCarryForward() {
+        func p(_ json: [String: Any]) -> HookPayload {
+            HookPayload(json: json.merging(["session_id": "s1"]) { a, _ in a })!
+        }
+        var s = merge(p(["hook_event_name": "SessionStart", "cwd": "/x/proj",
+                         "source": "startup", "model": "claude-opus-5[1m]"]), into: nil)
+        s = merge(p(["hook_event_name": "UserPromptSubmit",
+                     "permission_mode": "default", "effort": ["level": "xhigh"]]), into: s)
+        s = merge(p(["hook_event_name": "PostToolUse", "tool_name": "Bash",
+                     "tool_input": ["description": "下載檔案"], "duration_ms": 1234]), into: s)
+        s = merge(p(["hook_event_name": "Notification",
+                     "notification_type": "idle_prompt", "message": "等你輸入"]), into: s)
+
+        // 先證明測試資料真的填上了 —— 否則下面是 nil == nil，什麼都沒驗到
+        #expect(s.cwd != nil && s.source != nil && s.model != nil
+                && s.permissionMode != nil && s.effort != nil && s.mainTool != nil
+                && s.toolDescription != nil && s.toolDurationMs != nil
+                && s.notificationType != nil && s.notificationMessage != nil,
+                "setup 必須把每個欄位都填上非 nil")
+
+        let before = s
+        // 一個什麼都不帶的最小事件
+        s = merge(p(["hook_event_name": "PostToolBatch"]), into: s,
+                  at: t0.addingTimeInterval(60))
+
+        #expect(s.cwd == before.cwd)
+        #expect(s.source == before.source)
+        #expect(s.model == before.model)
+        #expect(s.permissionMode == before.permissionMode)
+        #expect(s.effort == before.effort)
+        #expect(s.mainTool == before.mainTool)
+        #expect(s.toolDescription == before.toolDescription)
+        #expect(s.toolDurationMs == before.toolDurationMs)
+        #expect(s.notificationType == before.notificationType)
+        #expect(s.notificationMessage == before.notificationMessage)
+        #expect(s.turnStartedAt == before.turnStartedAt)
+        #expect(s.writtenAt == t0.addingTimeInterval(60), "只有時戳該變")
+    }
+
     @Test("model 只由 SessionStart 提供，後續事件必須帶過來")
     func modelCarriedForward() {
         let start = HookPayload(json: [
