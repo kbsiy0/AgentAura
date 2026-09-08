@@ -239,61 +239,6 @@ struct HookPayloadTests {
         #expect(b.effect == .noChange)
     }
 
-    // ---- 欄位覆蓋率自我推導（不靠手列清單）----
-
-    /// 手列清單版本（上面每一個測試）漏掉 `agentID`/`lastMessage`/`source`/`toolDurationMs`
-    /// 四個欄位「值是否真的被解析出來」的斷言。這裡改成對每個宣告欄位定義「原始 JSON
-    /// 有沒有帶值」的判定式，掃過三份真實 fixture 全部 141 筆 payload：原始鍵有合法值時，
-    /// 對應屬性就不能是 nil —— 抓「讀錯鍵名/轉型寫錯導致欄位永遠讀不出來」這種
-    /// 一路綠燈也不會被發現的錯，並斷言每個欄位在真實資料裡至少命中一次。
-    @Test("每個宣告欄位在真實 payload 裡都真的被解析出值（自我推導覆蓋率）")
-    func perFieldTolerance() throws {
-        struct FieldProbe {
-            let name: String
-            let hasRawValue: ([String: Any]) -> Bool
-            let propertyValue: (HookPayload) -> Any?
-        }
-
-        let probes: [FieldProbe] = [
-            .init(name: "cwd", hasRawValue: { ($0["cwd"] as? String)?.isEmpty == false }, propertyValue: { $0.cwd }),
-            .init(name: "permissionMode", hasRawValue: { ($0["permission_mode"] as? String)?.isEmpty == false }, propertyValue: { $0.permissionMode }),
-            .init(name: "source", hasRawValue: { ($0["source"] as? String)?.isEmpty == false }, propertyValue: { $0.source }),
-            .init(name: "reason", hasRawValue: { (($0["reason"] as? String) ?? ($0["end_reason"] as? String))?.isEmpty == false }, propertyValue: { $0.reason }),
-            .init(name: "toolName", hasRawValue: { ($0["tool_name"] as? String)?.isEmpty == false }, propertyValue: { $0.toolName }),
-            .init(name: "toolDescription", hasRawValue: { (($0["tool_input"] as? [String: Any])?["description"] as? String)?.isEmpty == false }, propertyValue: { $0.toolDescription }),
-            .init(name: "toolDurationMs", hasRawValue: { $0["duration_ms"] is Int }, propertyValue: { $0.toolDurationMs }),
-            .init(name: "model", hasRawValue: { (($0["model"] as? String) ?? ($0["to_model"] as? String))?.isEmpty == false }, propertyValue: { $0.model }),
-            .init(name: "notificationType", hasRawValue: { ($0["notification_type"] as? String)?.isEmpty == false }, propertyValue: { $0.notificationType }),
-            .init(name: "notificationMessage", hasRawValue: { ($0["message"] as? String)?.isEmpty == false }, propertyValue: { $0.notificationMessage }),
-            .init(name: "lastMessage", hasRawValue: { ($0["last_assistant_message"] as? String)?.isEmpty == false }, propertyValue: { $0.lastMessage }),
-            .init(name: "agentID", hasRawValue: { ($0["agent_id"] as? String)?.isEmpty == false }, propertyValue: { $0.agentID }),
-            .init(name: "agentType", hasRawValue: { ($0["agent_type"] as? String)?.isEmpty == false }, propertyValue: { $0.agentType }),
-        ]
-
-        let all = try Fixtures.rawEvents(named: "round1")
-            + Fixtures.rawEvents(named: "round1b")
-            + Fixtures.rawEvents(named: "round2")
-        #expect(all.count == 141)
-
-        var exercised: Set<String> = []
-        var combinations = 0
-        for json in all {
-            guard let p = HookPayload(json: json) else {
-                Issue.record("真實 payload 解析失敗：\(json["hook_event_name"] ?? "?")")
-                continue
-            }
-            for probe in probes where probe.hasRawValue(json) {
-                combinations += 1
-                #expect(probe.propertyValue(p) != nil,
-                        "\(probe.name) 原始值存在卻沒被解析出來（event: \(json["hook_event_name"] ?? "?"))")
-                exercised.insert(probe.name)
-            }
-        }
-
-        for probe in probes {
-            #expect(exercised.contains(probe.name),
-                    "真實 fixture 裡沒有任何 payload 讓 \(probe.name) 有值 —— 這個欄位的覆蓋率是空的")
-        }
-        #expect(combinations > 0)
-    }
+    // 兩個系統性掃描（extractionMatchesRawValues / perFieldCorruptionTolerance）
+    // 移到 HookPayloadToleranceTests.swift —— 各自的意圖見該檔的 doc comment。
 }

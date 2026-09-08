@@ -18,6 +18,16 @@ public struct HookPayload: Sendable, Equatable {
     /// 面板在 waiting 那一列要顯示「在等你批准什麼」，只有 `toolName` 不夠
     ///（「等待權限：Bash」看不出在等什麼，而那正是最需要資訊的一列）。
     public let toolDescription: String?
+    /// `PostToolUseFailure` 的錯誤訊息。
+    ///
+    /// 欄位名是 `error`，**不是**文件說的 `tool_error`（spec §2.1.2 曾據一份手寫的
+    /// key 過濾清單錯誤斷言「沒有錯誤欄位」，那份清單裡沒有 `error`）。
+    public let toolError: String?
+    /// `is_interrupt` —— 使用者按 Ctrl+C 中斷，而不是 tool 真的失敗。
+    ///
+    /// 語意差別有後果：中斷是使用者的動作，**不該計入 `tool_failures`**。
+    /// 缺欄位時視為 `false`（絕大多數事件不帶它）。
+    public let isInterrupt: Bool
     public let toolDurationMs: Int?
     /// 只有 `SessionStart` 帶 `model`；`PostModelSwitch` 用 `to_model` 帶新模型。
     /// 少了後者，使用者中途 `/model` 換模型後面板會顯示過時的模型。
@@ -52,6 +62,8 @@ public struct HookPayload: Sendable, Equatable {
         reason           = Self.string(json["reason"]) ?? Self.string(json["end_reason"])
         toolName         = Self.string(json["tool_name"])
         toolDescription  = Self.nonEmpty((json["tool_input"] as? [String: Any])?["description"])
+        toolError        = Self.nonEmpty(json["error"])
+        isInterrupt      = (json["is_interrupt"] as? Bool) ?? false
         toolDurationMs   = json["duration_ms"] as? Int
         model            = Self.nonEmpty(json["model"]) ?? Self.nonEmpty(json["to_model"])
         notificationType = Self.nonEmpty(json["notification_type"])
