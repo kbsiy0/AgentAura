@@ -298,6 +298,7 @@ cp docs/evidence/hook-payloads/round2/log.ndjson     Tests/AuraCoreTests/Fixture
 ```swift
 // Tests/AuraCoreTests/FixtureLoader.swift
 import Foundation
+import Testing        // #require 是 swift-testing 的巨集，helper 檔也要 import
 
 enum Fixtures {
     /// 讀取探針 ndjson，回傳剝開 `_payload` 後的原始 hook JSON 字典陣列。
@@ -305,8 +306,11 @@ enum Fixtures {
         let url = try #require(Bundle.module.url(forResource: "Fixtures/\(name)", withExtension: "ndjson"))
         let text = try String(contentsOf: url, encoding: .utf8)
         return text.split(separator: "\n").compactMap { line -> [String: Any]? in
-            guard !line.trimmingCharacters(in: .whitespaces).isEmpty,
-                  let data = line.data(using: .utf8),
+            // 先轉 String：對 Substring 呼叫 trimmingCharacters(in:) 時
+            // `.whitespaces` 的 contextual base 推不出來（實測 Swift 6.3.3 編譯錯誤）。
+            let text = String(line)
+            guard !text.trimmingCharacters(in: .whitespaces).isEmpty,
+                  let data = text.data(using: .utf8),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { return nil }
             return obj["_payload"] as? [String: Any] ?? obj
@@ -325,7 +329,8 @@ enum Fixtures {
 }
 ```
 
-> 註：`#require` 來自 swift-testing。若在非測試情境需要，改用 `guard let ... else { throw }`。
+> 註：`#require` 是 swift-testing 的巨集，所以這個 helper 檔也必須 `import Testing` ——
+> 少了它會得到 `no macro named 'require'`（實測）。
 
 - [ ] **Step 5: 寫 AppKit 隔離 gate 測試**
 
@@ -1085,7 +1090,9 @@ struct HookPayloadTests {
         let payloads = all.compactMap { HookPayload(json: $0) }
         let ids = Set(payloads.map(\.sessionID))
         #expect(ids.count == 1, "同一 session 內主/subagent 共用 session_id")
-        #expect(payloads.contains(where: \.isSubagent))
+        // 用 closure 而非 `contains(where: \.isSubagent)`：把 key-path 當函式傳進
+        // rethrows 函式時，#expect 的巨集展開會判定「call can throw」而編譯失敗（實測）。
+        #expect(payloads.contains { $0.isSubagent })
         #expect(payloads.contains { !$0.isSubagent })
     }
 
@@ -1171,7 +1178,10 @@ struct HookPayloadTests {
     @Test("SessionStart 的 model 被讀出來，其他 event 沒有")
     func modelFromSessionStart() throws {
         let starts = try Fixtures.events(named: "round2", kind: "SessionStart")
-        let p = try #require(HookPayload(json: try #require(starts.first)))
+        // 刻意分兩行：`#require` 不能嵌在另一個 `#require` 裡
+        //（error: recursive expansion of macro 'require'），實測 Swift 6.3.3。
+        let json = try #require(starts.first)
+        let p = try #require(HookPayload(json: json))
         #expect(p.model?.hasPrefix("claude") == true, "實測值形如 claude-opus-5[1m]")
         let pre = try #require(HookPayload(json: [
             "hook_event_name": "PreToolUse", "session_id": "s1",
@@ -1195,7 +1205,8 @@ struct HookPayloadTests {
     @Test("tool_input.description 被讀出來，缺少或型別錯時回 nil")
     func toolDescriptionExtraction() throws {
         let reqs = try Fixtures.events(named: "round2", kind: "PermissionRequest")
-        let p = try #require(HookPayload(json: try #require(reqs.first)))
+        let first = try #require(reqs.first)
+        let p = try #require(HookPayload(json: first))
         #expect(p.toolDescription?.isEmpty == false,
                 "實測 PermissionRequest 的 tool_input 帶 description")
 
@@ -1229,7 +1240,8 @@ struct HookPayloadTests {
     func sessionEndReason() throws {
         let ends = try Fixtures.events(named: "round2", kind: "SessionEnd")
         #expect(!ends.isEmpty)
-        let p = try #require(HookPayload(json: try #require(ends.first)))
+        let json = try #require(ends.first)
+        let p = try #require(HookPayload(json: json))
         #expect(p.reason == "prompt_input_exit", "實測值")
         #expect(p.effect == .sessionEnded)
     }
@@ -2872,7 +2884,10 @@ struct SnapshotIOTests {
 
     @Test("讀取不存在的 session 回 nil")
     func readMissing() throws {
-        #expect(SnapshotIO.read(sessionID: "nope", root: try makeRoot()) == nil)
+        // try 要在 #expect 之外求值：巨集展開後會把引數包進 autoclosure，
+        // 裡面的 try 變成「call can throw, but it is not marked with 'try'」。
+        let root = try makeRoot()
+        #expect(SnapshotIO.read(sessionID: "nope", root: root) == nil)
     }
 
     // ---- 對抗式：畸形檔案 ----
@@ -3579,7 +3594,8 @@ struct HookFileSourceTests {
 
     @Test("bootstrap 對空目錄回空陣列，不丟錯")
     func bootstrapEmpty() throws {
-        #expect(HookFileSource(root: try makeRoot()).bootstrap().isEmpty)
+        let root = try makeRoot()
+        #expect(HookFileSource(root: root).bootstrap().isEmpty)
     }
 
     @Test("bootstrap 對不存在的目錄回空陣列，不丟錯")
@@ -3648,11 +3664,12 @@ struct HookFileSourceTests {
         source.stop()
         try write("after-stop", .working, to: root)
 
-        // stream 應已結束；收集 1 秒內不得拿到 after-stop
+        // `stop()` 會呼叫 continuation.finish()，所以迭代會立刻結束。
+        // 刻意不開 Task：在 Task 裡 append 到外層的 var 會被 Swift 6 的嚴格併發
+        // 判為 data race（實測 error: sending value of non-Sendable type
+        // '() async -> ()' risks causing data races）。直接迭代既正確又更簡單。
         var got: [SessionSnapshot] = []
-        let task = Task { for await s in source.snapshots { got.append(s) } }
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-        task.cancel()
+        for await s in source.snapshots { got.append(s) }
         #expect(!got.contains { $0.sessionID == "after-stop" })
     }
 
@@ -4531,9 +4548,10 @@ struct InstallLayoutTests {
     @Test("hooks.json 指向的路徑，在 repo 的 plugin 目錄下真的存在且可執行")
     func pluginBinaryIsInPlace() throws {
         let bin = try Self.expectedBinaryPath()
+        // #expect 的訊息參數型別是 `Comment`（ExpressibleByStringInterpolation），
+        // 不能用字串串接 —— `+` 會讓它變成 String，編譯錯誤（實測）。
         #expect(FileManager.default.isExecutableFile(atPath: bin.path),
-                "\(bin.path) 不存在或不可執行。先跑 scripts/build-plugin.sh。"
-                + "這條擋的正是 前一個專案 留下死 hook 的失效方式")
+                "\(bin.path) 不存在或不可執行。先跑 scripts/build-plugin.sh。這條擋的正是 前一個專案 留下死 hook 的失效方式")
     }
 
     @Test("plugin 的 aura-hook 是 universal binary（arm64 + x86_64）")
