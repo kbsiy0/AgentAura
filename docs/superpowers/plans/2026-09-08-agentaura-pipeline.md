@@ -256,7 +256,10 @@ let package = Package(
 
 ```swift
 // Sources/AuraCore/AuraCore.swift
-/// AgentAura 核心邏輯。此 module 不得 import AppKit / SwiftUI —— 由 IsolationTests 強制。
+/// AgentAura 核心邏輯。此 module 不得依賴 AppKit / SwiftUI —— 由 IsolationTests 強制。
+///
+/// 註：此註解刻意避開「import + 框架名」的字面組合 —— IsolationTests 用原始碼
+/// 字串比對，寫成那樣會讓這個檔案誤觸自己的 gate。
 public enum AuraCore {
     public static let schemaVersion = 1
 }
@@ -355,6 +358,8 @@ struct IsolationTests {
         return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
+    /// 注意：此 gate 是純字串比對，會連註解一起掃到。
+    /// 撰寫 AuraCore 的註解時避開「import + 框架名」的字面組合，否則會誤報。
     @Test("AuraCore 不得 import AppKit / SwiftUI")
     func coreHasNoUIImports() throws {
         let banned = ["AppKit", "SwiftUI", "Cocoa"]
