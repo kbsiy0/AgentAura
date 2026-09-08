@@ -358,18 +358,19 @@ struct IsolationTests {
         return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
-    /// 用 regex 而非 `contains("import AppKit")`。
+    /// 禁止 `AuraCore` 依賴 AppKit / SwiftUI / Cocoa。
     ///
-    /// 純字串比對有兩個問題：
-    /// 1. **漏掉 scoped import** —— `import class AppKit.NSWindow` 不含子字串
-    ///    `"import AppKit"`，是真實的繞過路徑。Global Constraint 說這條約束
-    ///    「由測試強制、不靠自律」，有已知繞過路徑的 gate 就不算強制。
-    /// 2. **誤報註解** —— 連散文裡的「import + 框架名」字樣都會判違規。
-    ///    regex 要求行首（允許縮排）才算，註解裡的敘述不會誤觸。
-    static let bannedImportPattern =
-        "(?m)^[ \t]*(@testable[ \t]+)?import[ \t]+" +
-        "((class|struct|enum|protocol|typealias|func|var|let|actor)[ \t]+)?" +
-        "(AppKit|SwiftUI|Cocoa)\\b"
+    /// 必須涵蓋 Swift 完整的 import 語法，而不只是 `import AppKit` 這一種形狀：
+    /// `import` **之前**可以有任意數量的 attribute（`@testable`、`@preconcurrency`、
+    /// `@_exported`、`@_spi(...)` …）與 access-level modifier（Swift 6 的
+    /// `internal import` / `public import` / `package import` …）；**之後**可以有一個
+    /// 宣告關鍵字（scoped import，如 `import class AppKit.NSWindow`）。
+    /// 錨定在行首，所以散文註解與字串字面值不會誤觸。
+    static let bannedImportPattern: String = {
+        let modifiers = #"(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)\n]*\))?|public|package|internal|fileprivate|private)[ \t]+)*"#
+        let kind = #"(?:(?:class|struct|enum|protocol|typealias|func|var|let|actor|inout)[ \t]+)?"#
+        return #"(?m)^[ \t]*"# + modifiers + #"import[ \t]+"# + kind + #"(?:AppKit|SwiftUI|Cocoa)\b"#
+    }()
 
     @Test("AuraCore 不得依賴 AppKit / SwiftUI / Cocoa（含 scoped import）")
     func coreHasNoUIImports() throws {
@@ -381,23 +382,40 @@ struct IsolationTests {
         }
     }
 
-    @Test("regex gate 對各種 import 寫法都有牙齒")
+    @Test("regex gate 涵蓋 Swift 完整的 import 語法")
     func importPatternCoverage() {
         let shouldMatch = [
             "import AppKit",
             "  import AppKit",
             "\timport SwiftUI",
-            "@testable import AppKit",
-            "import class AppKit.NSWindow",     // scoped —— contains 檢查會漏掉
-            "import struct SwiftUI.Color",
             "import Cocoa",
+            "@testable import AppKit",
+            "import class AppKit.NSWindow",            // scoped
+            "import struct SwiftUI.Color",
+            "import AppKit.NSWindow",                  // submodule，無宣告關鍵字
+            "@preconcurrency import AppKit",           // Swift 6 常見
+            "@_exported import AppKit",
+            "@_implementationOnly import AppKit",
+            "@_spi(Private) import AppKit",
+            "internal import AppKit",                  // Swift 6 access-level import
+            "public import AppKit",
+            "package import AppKit",
+            "fileprivate import SwiftUI",
+            "private import Cocoa",
+            "@preconcurrency internal import AppKit",  // 兩者疊加
+            "internal import struct AppKit.NSView",    // modifier + scoped
         ]
         let shouldNotMatch = [
-            "/// 此 module 不得依賴 AppKit",      // 註解敘述
-            "// 說明：不要 import AppKit 進來",   // 註解裡的字面組合
+            "/// 此 module 不得依賴 AppKit",
+            "// 不要 import AppKit 進來",
+            "/// internal import AppKit 是禁止的",
+            "    // import AppKit",
             "import Foundation",
-            "let s = \"import AppKit\"",        // 字串常值
+            "internal import Foundation",
+            "let s = \"import AppKit\"",
             "importAppKit",
+            "public func importAppKitThing() {}",
+            "#if canImport(AppKit)",
         ]
         for line in shouldMatch {
             #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) != nil,
@@ -1920,7 +1938,6 @@ git commit -m "feat(core): Liveness 以 pid + 啟動時戳雙重驗證，防 pid
       public let lastMessage: String?, errorType: String?
       public let liveness: Liveness
       public let updatedAt: Date
-      public var isQuiescent: Bool            // activity ∈ {waiting, done, error}
   }
   public struct IconState: Sendable, Equatable {
       public let activity: Activity
@@ -2024,15 +2041,6 @@ struct SessionReducerTests {
         #expect(SessionReducer.state(from: snapshot { $0.pidStartedAt = nil }, liveness: probe).liveness == .ended)
     }
 
-    @Test("isQuiescent 僅在 waiting / done / error 為真")
-    func quiescence() {
-        #expect(SessionReducer.state(from: snapshot { $0.mainActivity = .waiting }, liveness: probe).isQuiescent)
-        #expect(SessionReducer.state(from: snapshot { $0.mainActivity = .done },    liveness: probe).isQuiescent)
-        #expect(SessionReducer.state(from: snapshot { $0.mainActivity = .error },   liveness: probe).isQuiescent)
-        #expect(!SessionReducer.state(from: snapshot { $0.mainActivity = .working }, liveness: probe).isQuiescent)
-        #expect(!SessionReducer.state(from: snapshot { $0.mainActivity = .idle },    liveness: probe).isQuiescent)
-    }
-
     @Test("errorType 取自 reason 欄位")
     func errorTypeFromReason() {
         let s = snapshot { $0.mainActivity = .error; $0.reason = "overloaded_error" }
@@ -2071,12 +2079,12 @@ public struct SessionState: Sendable, Equatable, Identifiable {
     public let errorType: String?
     public let liveness: Liveness
     public let updatedAt: Date
-
-    /// 靜止態：使用者行動前不會再有新事件覆寫。
-    public var isQuiescent: Bool {
-        activity == .waiting || activity == .done || activity == .error
-    }
 }
+
+// 註：刻意不提供 `SessionState.isQuiescent`。
+// Ruling 10 之後 `SessionRegistry.visible` 改用明確的 `.done || .error`
+// （`waiting` 不算「結果」），使 `SessionState` 層級的 isQuiescent 沒有生產消費者，
+// 且會與 `Activity.isQuiescent` 邏輯重複。需要時寫 `state.activity.isQuiescent`。
 
 public struct IconState: Sendable, Equatable {
     public let activity: Activity
