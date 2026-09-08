@@ -31,7 +31,7 @@ struct IsolationTests {
     /// 宣告關鍵字（scoped import，如 `import class AppKit.NSWindow`）。
     /// 錨定在行首，所以散文註解與字串字面值不會誤觸。
     static let bannedImportPattern: String = {
-        let modifiers = #"(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)\n]*\))?|public|package|internal|fileprivate|private)[ \t]+)*"#
+        let modifiers = #"(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)\n"]*\))?|public|package|internal|fileprivate|private)[ \t]+)*"#
         let kind = #"(?:(?:class|struct|enum|protocol|typealias|func|var|let|actor|inout)[ \t]+)?"#
         return #"(?m)^[ \t]*"# + modifiers + #"import[ \t]+"# + kind + #"(?:AppKit|SwiftUI|Cocoa)\b"#
     }()
@@ -68,6 +68,8 @@ struct IsolationTests {
             "private import Cocoa",
             "@preconcurrency internal import AppKit",  // 兩者疊加
             "internal import struct AppKit.NSView",    // modifier + scoped
+            "@_spi(Private) import AppKit",            // attribute 參數（無引號）仍須正常運作
+            "@_documentation(visibility: internal) import AppKit",
         ]
         let shouldNotMatch = [
             "/// 此 module 不得依賴 AppKit",
@@ -80,6 +82,10 @@ struct IsolationTests {
             "importAppKit",
             "public func importAppKitThing() {}",
             "#if canImport(AppKit)",
+            // round 2 引入的誤攔：attribute 的字串參數裡剛好有右括號，
+            // 導致 `[^)\n]*` 在字串內的 ")" 就提早收尾。
+            "@available(*, deprecated, message: \"(legacy) import SwiftUI wrapper removed\")",
+            "@available(*, deprecated, message: \"(see docs) import AppKit is banned\")",
         ]
         for line in shouldMatch {
             #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) != nil,
