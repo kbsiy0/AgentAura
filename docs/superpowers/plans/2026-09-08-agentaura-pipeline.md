@@ -26,6 +26,24 @@
 - 狀態檔路徑：`~/.agentaura/sessions/<session_id>.json`
 - 已在 branch `change/agentaura-design`；動工前 `git branch --show-current` 確認不在 `main`
 
+## Mutation 驗證的標準程序
+
+關鍵 gate 一律要做，判準是**實際看到 RED**——「相信它會紅」不算通過。
+
+1. `cp <file> /tmp/aura-mut.bak`
+2. **手動編輯**那一處。**不要用 `sed`**：對多行 Swift 的 `sed` 很脆，本計畫已有
+   兩處 sed 指令被實測證實打錯目標或產生不合法的 Swift。各 task 的 mutation
+   說明會指名「把什麼改成什麼」，照著改即可。
+3. `swift test --filter <指定的 suite>` —— 確認**指定的那些測試真的 FAIL**，
+   把真實輸出貼進報告。
+4. `cp /tmp/aura-mut.bak <file>` 還原。**不要用 `git checkout <file>`**：
+   mutation 常發生在該檔第一次 commit 之前，檔案尚未被追蹤，
+   `git checkout` 會回 `pathspec did not match`（實測）。
+5. 再跑一次確認全綠。
+
+若某個 mutation **沒有**讓指定測試變紅，那比實作本身更重要：代表那個測試
+看不見它聲稱要保護的東西。**回報，不要繞過。**
+
 ---
 
 ## 檔案結構
@@ -931,36 +949,30 @@ Expected: 全 PASS
 
 - [ ] **Step 9: Mutation 驗證（關鍵 gate 必做）**
 
-三個驗證都用同一個節奏：**改一處 → 看到指定測試 RED → `git checkout` 還原 → 再跑確認全綠**。
-「相信它會紅」不算通過，必須實際看到 FAIL 輸出。
+三個驗證都照 Global Constraints 的標準程序（`cp` 備份 → 手動編輯 → 看 RED → `cp` 還原 → 看綠）。
 
-```bash
-# 驗證 1：撤掉 D1 優先序
-sed -i '' 's/case .waiting: 3/case .waiting: 1/' Sources/AuraCore/Activity.swift
-swift test --filter ActivityTests 2>&1 | tail -6
-#   Expected: priorityOrder 與 maxPreservesWaiting FAIL
-git checkout Sources/AuraCore/Activity.swift
+**驗證 1 —— 撤掉 D1 優先序**
+`Sources/AuraCore/Activity.swift`：把 `case .waiting: 3` 改成 `case .waiting: 1`。
+Run: `swift test --filter ActivityTests`
+Expected FAIL: `priorityOrder`、`maxPreservesWaiting`（`prioritiesAreDistinct` 也會連帶紅，
+因為 priority 值不再兩兩不同——這是正常的連帶效果，不是額外問題）。
 
-# 驗證 2：PostToolUseFailure 改回 error
-sed -i '' 's/case "PostToolUseFailure",$//; s/case "StopFailure":/case "StopFailure", "PostToolUseFailure":/' \
-    Sources/AuraCore/EventMapping.swift
-swift test --filter EventMappingTests 2>&1 | tail -6
-#   Expected: toolFailureIsNotError FAIL
-git checkout Sources/AuraCore/EventMapping.swift
+**驗證 2 —— `PostToolUseFailure` 改回 error**
+`Sources/AuraCore/EventMapping.swift`：把 `"PostToolUseFailure"` 從 working 那一組的
+字串清單移除，加進 `case "StopFailure":` 那一行變成
+`case "StopFailure", "PostToolUseFailure":`。
+Run: `swift test --filter EventMappingTests`
+Expected FAIL: `toolFailureIsNotError`（其餘測試不受影響）。
 
-# 驗證 3：Notification 未知型別改回 waiting
-sed -i '' 's|^        default:$|        default: return .setActivity(.waiting)\n        case "__never":|' \
-    Sources/AuraCore/EventMapping.swift
-swift test --filter EventMappingTests 2>&1 | tail -6
-#   Expected: notificationNoise 與 notificationUnknown FAIL
-git checkout Sources/AuraCore/EventMapping.swift
-
-swift test 2>&1 | tail -5   # 還原後必須全綠
-```
-
-> 驗證 2 的 `sed` 若因換行位置對不上而無效（先用 `git diff` 確認真的改到了），
-> 改成手動編輯：把 `"PostToolUseFailure"` 從 working 那組移進 `case "StopFailure":`。
-> **關鍵是要看到 RED，不是要 sed 漂亮。**
+**驗證 3 —— `Notification` 未知型別改回 waiting**
+`Sources/AuraCore/EventMapping.swift`，在 `notificationEffect(_:)` 內部：
+把**最後一行**的 `return .noChange` 改成 `return .setActivity(.waiting)`。
+注意是 `notificationEffect` 的結尾那一行，**不是**外層 `effect(forEvent:)` 的
+`default:` 分支——改錯位置會得到不合法的 Swift 而根本編不過。
+Run: `swift test --filter EventMappingTests`
+Expected FAIL: `notificationNoise`（6 個參數化案例全紅）與 `notificationUnknown`。
+`notificationUnknown` 裡 `nil` 的那個子案例會維持綠——那條走的是
+`guard let type else` 分支，本 mutation 不影響它，屬正確行為。
 
 - [ ] **Step 10: Commit**
 
@@ -1880,7 +1892,7 @@ Expected: 全部 PASS（14 個測試）
 執行 `swift test --filter MergeRulesTests`。
 
 Expected: `subagentCannotMaskWaiting` 與 `mainToolNotOverwritten` **必須 FAIL**。
-確認 RED 後 `git checkout Sources/AuraCore/MergeRules.swift` 還原，再跑一次確認全綠。
+確認 RED 後 `cp /tmp/aura-mut.bak Sources/AuraCore/MergeRules.swift   # 見 Global Constraints 的標準程序` 還原，再跑一次確認全綠。
 
 - [ ] **Step 7: 檢查行數**
 
