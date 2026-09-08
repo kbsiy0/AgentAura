@@ -630,8 +630,14 @@ struct IsolationTests {
 
 - [ ] **Step 6: 寫 fixture 完整性測試（確認真實資料真的載進來了）**
 
+放獨立檔，不要附加到 `IsolationTests.swift` —— 隔離約束與 fixture 完整性是
+兩件事，而且合在一起會撞上 `Tests/` ≤ 300 行的上限。
+
 ```swift
-// 附加到 Tests/AuraCoreTests/IsolationTests.swift
+// Tests/AuraCoreTests/FixtureIntegrityTests.swift
+import Testing
+import Foundation
+
 @Suite("Fixture 完整性")
 struct FixtureIntegrityTests {
 
@@ -1420,6 +1426,11 @@ struct HookPayloadTests {
         #expect(p.effect == .sessionEnded)
     }
 
+> **以下兩個系統性掃描放獨立檔 `Tests/AuraCoreTests/HookPayloadToleranceTests.swift`**
+> （需要 `import Testing` / `import Foundation` / `@testable import AuraCore` 與自己的
+> `@Suite`）。理由：`HookPayloadTests.swift` 含它們會到 361 行，超過 `Tests/` ≤ 300
+> 的上限；而且「手工列舉的容錯」與「系統性掃描」本來就是兩種職責。
+
     /// **提取正確性掃描。**
     ///
     /// 對每個欄位問：「當真實 payload 裡有合法值時，屬性有沒有解析出來？」
@@ -1712,19 +1723,24 @@ git commit -m "feat(core): HookPayload 容錯解析，含 effort/reason 型別�
 
 - [ ] **Step 1: 寫失敗測試 —— 分槽與累積**
 
+**測試分三個檔**，因為全部放一起會到 367 行、超過 `Tests/` ≤ 300 的上限，
+而且分槽邏輯（§2.5 / §2.5.1）與累積欄位本來就是兩種職責：
+
+- `MergeRulesTestSupport.swift` —— 共用的 helper（不重複三份）
+- `MergeRulesSlotTests.swift` —— §2.5 / §2.5.1 的分槽規則
+- `MergeRulesTests.swift` —— 累積欄位、terminated、Codable
+
 ```swift
-// Tests/AuraCoreTests/MergeRulesTests.swift
-import Testing
+// Tests/AuraCoreTests/MergeRulesTestSupport.swift
 import Foundation
 @testable import AuraCore
 
-@Suite("MergeRules 分槽與累積（§2.5）")
-struct MergeRulesTests {
+/// 三個 MergeRules 測試檔共用。抽出來而不是複製三份 —— 複製的話改一處要記得改三處。
+enum MergeFixture {
+    static let t0 = Date(timeIntervalSince1970: 1_788_628_000)
 
-    let t0 = Date(timeIntervalSince1970: 1_788_628_000)
-
-    func payload(_ event: String, tool: String? = nil, agent: String? = nil,
-                 agentType: String? = nil, notif: String? = nil) -> HookPayload {
+    static func payload(_ event: String, tool: String? = nil, agent: String? = nil,
+                        agentType: String? = nil, notif: String? = nil) -> HookPayload {
         var json: [String: Any] = ["hook_event_name": event, "session_id": "s1"]
         if let tool { json["tool_name"] = tool }
         if let agent { json["agent_id"] = agent; json["agent_type"] = agentType ?? "implementer" }
@@ -1732,12 +1748,57 @@ struct MergeRulesTests {
         return HookPayload(json: json)!
     }
 
-    func merge(_ p: HookPayload, into s: SessionSnapshot?, at t: Date? = nil) -> SessionSnapshot {
+    static func merge(_ p: HookPayload, into s: SessionSnapshot?,
+                      at t: Date? = nil) -> SessionSnapshot {
         MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111, now: t ?? t0)
+    }
+}
+```
+
+兩個測試檔各自在開頭寫這三行，就能沿用原本的呼叫寫法：
+
+```swift
+    let t0 = MergeFixture.t0
+    func payload(_ e: String, tool: String? = nil, agent: String? = nil,
+                 agentType: String? = nil, notif: String? = nil) -> HookPayload {
+        MergeFixture.payload(e, tool: tool, agent: agent, agentType: agentType, notif: notif)
+    }
+    func merge(_ p: HookPayload, into s: SessionSnapshot?, at t: Date? = nil) -> SessionSnapshot {
+        MergeFixture.merge(p, into: s, at: t)
+    }
+```
+
+**`MergeRulesSlotTests.swift`** 收下面標了「§2.5」與「§2.5.1」的測試
+（`subagentCannotMaskWaiting` 到 `internalSubagentNotCounted`）；
+**`MergeRulesTests.swift`** 收其餘（累積欄位、terminated、Codable round-trip）。
+
+```swift
+// Tests/AuraCoreTests/MergeRulesSlotTests.swift
+import Testing
+import Foundation
+@testable import AuraCore
+
+@Suite("MergeRules 分槽（§2.5 / §2.5.1）")
+struct MergeRulesSlotTests {
+    let t0 = MergeFixture.t0
+    func payload(_ e: String, tool: String? = nil, agent: String? = nil,
+                 agentType: String? = nil, notif: String? = nil) -> HookPayload {
+        MergeFixture.payload(e, tool: tool, agent: agent, agentType: agentType, notif: notif)
+    }
+    func merge(_ p: HookPayload, into s: SessionSnapshot?, at t: Date? = nil) -> SessionSnapshot {
+        MergeFixture.merge(p, into: s, at: t)
     }
 
     // ---- 核心：subagent 不得蓋掉主 agent 的 waiting ----
 
+    /// §2.5 的原始情境。
+    ///
+    /// 注意這裡**沒有**斷言 `subActivity == .working`：§2.5.1 之後，主槽處於靜止態
+    /// （`waiting` 是靜止態）時 subagent 事件被完全忽略，所以 sub 槽保持 nil。
+    /// 這個測試守的是**意圖** —— 橘燈不會因為 subagent 插隊而消失 —— 而 §2.5.1
+    /// 的規則比原本的 `max` 更強地達成同一件事。
+    ///
+    /// sub 槽真的被寫入的情況見 `subagentRecordedWhileWorking`（主槽非靜止）。
     @Test("subagent 的 PostToolUse 不得蓋掉主 agent 的 waiting")
     func subagentCannotMaskWaiting() {
         var s = merge(payload("PermissionRequest", tool: "Bash"), into: nil)
@@ -1748,9 +1809,8 @@ struct MergeRulesTests {
                   into: s, at: t0.addingTimeInterval(0.02))
 
         #expect(s.mainActivity == .waiting, "主槽必須維持 waiting")
-        #expect(s.subActivity == .working, "subagent 寫進自己的槽")
-        #expect(max(s.mainActivity, s.subActivity ?? .idle) == .waiting,
-                "取 max 後仍是 waiting —— 橘燈不會消失")
+        #expect(s.subActivity == nil, "主槽靜止 → subagent 事件被忽略（§2.5.1）")
+        #expect(s.effectiveActivity == .waiting, "橘燈不會消失 —— 這才是這個測試的意圖")
     }
 
     @Test("主 agent 的長 tool 名不被 subagent 覆蓋")
@@ -2479,6 +2539,7 @@ git commit -m "feat(core): Liveness 以 pid + 啟動時戳雙重驗證，防 pid
       public let projectName: String          // cwd 的 basename，nil cwd → "(unknown)"
       public let projectPath: String?
       public let permissionMode: String?, effort: String?
+      public let model: String?               // 只有 SessionStart / PostModelSwitch 提供
       public let activity: Activity           // max(main, sub)
       public let mainActivity: Activity, subActivity: Activity?
       public let currentTool: String?, subagentTool: String?   // subagentTool 形如 "Explore → Grep"
@@ -2486,6 +2547,7 @@ git commit -m "feat(core): Liveness 以 pid + 啟動時戳雙重驗證，防 pid
       public let turnStartedAt: Date?
       public let subagents: [String: Int], toolFailures: Int
       public let lastMessage: String?, errorType: String?
+      public let toolError: String?          // 最後一次真正的 tool 失敗訊息
       public let liveness: Liveness
       public let updatedAt: Date
   }
@@ -2616,6 +2678,13 @@ public struct SessionState: Sendable, Equatable, Identifiable {
     public let projectPath: String?
     public let permissionMode: String?
     public let effort: String?
+    /// 模型名稱。只有 `SessionStart`（與 `PostModelSwitch` 的 `to_model`）提供，
+    /// 由 `MergeRules` 帶過來。
+    ///
+    /// 註：早期版本因為誤判「payload 不帶 model」而移除過這個欄位，後來實測推翻。
+    /// 補回時只補了 `HookPayload` 與 `SessionSnapshot`，忘了輸出端 —— 值存得到卻
+    /// 傳不出去，面板拿不到。修一條資料流要走完 payload → 檔案 → state → UI 四段。
+    public let model: String?
     public let activity: Activity
     public let mainActivity: Activity
     public let subActivity: Activity?
@@ -2627,6 +2696,8 @@ public struct SessionState: Sendable, Equatable, Identifiable {
     public let toolFailures: Int
     public let lastMessage: String?
     public let errorType: String?
+    /// 最後一次真正的 tool 失敗訊息（使用者中斷不算，見 `MergeRules`）。
+    public let toolError: String?
     public let liveness: Liveness
     public let updatedAt: Date
 }
@@ -2671,6 +2742,7 @@ public enum SessionReducer {
             projectPath: s.cwd,
             permissionMode: s.permissionMode,
             effort: s.effort,
+            model: s.model,
             activity: s.effectiveActivity,
             mainActivity: s.mainActivity,
             subActivity: s.subActivity,
@@ -2682,6 +2754,7 @@ public enum SessionReducer {
             toolFailures: s.toolFailures,
             lastMessage: s.lastMessage,
             errorType: s.mainActivity == .error ? s.reason : nil,
+            toolError: s.toolError,
             liveness: Self.resolveLiveness(of: s, probe: probe),
             updatedAt: s.writtenAt
         )
@@ -2767,11 +2840,11 @@ struct SessionRegistryTests {
 
     func state(_ id: String, _ a: Activity, live: Bool = true) -> SessionState {
         SessionState(id: id, projectName: id, projectPath: "/x/\(id)",
-                     permissionMode: nil, effort: nil,
+                     permissionMode: nil, effort: nil, model: nil,
                      activity: a, mainActivity: a, subActivity: nil,
                      currentTool: nil, subagentTool: nil, toolDurationMs: nil,
                      turnStartedAt: nil, subagents: [:], toolFailures: 0,
-                     lastMessage: nil, errorType: nil,
+                     lastMessage: nil, errorType: nil, toolError: nil,
                      liveness: live ? .alive(pid: 1) : .ended,
                      updatedAt: Date(timeIntervalSince1970: 1_788_628_000))
     }
@@ -3028,11 +3101,11 @@ struct AggregatePolicyTests {
 
     func state(_ id: String, _ a: Activity, live: Bool = true) -> SessionState {
         SessionState(id: id, projectName: id, projectPath: nil,
-                     permissionMode: nil, effort: nil,
+                     permissionMode: nil, effort: nil, model: nil,
                      activity: a, mainActivity: a, subActivity: nil,
                      currentTool: nil, subagentTool: nil, toolDurationMs: nil,
                      turnStartedAt: nil, subagents: [:], toolFailures: 0,
-                     lastMessage: nil, errorType: nil,
+                     lastMessage: nil, errorType: nil, toolError: nil,
                      liveness: live ? .alive(pid: 1) : .ended,
                      updatedAt: Date(timeIntervalSince1970: 1_788_628_000))
     }
@@ -3635,15 +3708,27 @@ struct AuraHookCLITests {
         #expect(SysctlLiveness().isAlive(pid: pid, startedAt: started))
     }
 
-    @Test("subagent 事件寫進 sub 槽，不覆蓋主 agent 的 waiting")
-    func subagentGoesToSubSlot() throws {
+    @Test("端到端：主槽 waiting 時 subagent 事件不得改變 activity")
+    func subagentDoesNotMaskWaitingEndToEnd() throws {
         let root = try makeRoot()
         _ = try run(#"{"hook_event_name":"PermissionRequest","session_id":"cli3","tool_name":"Bash"}"#, root: root)
         _ = try run(#"{"hook_event_name":"PostToolUse","session_id":"cli3","tool_name":"Write","agent_id":"a1","agent_type":"Explore"}"#, root: root)
         let s = try #require(SnapshotIO.read(sessionID: "cli3", root: root))
         #expect(s.mainActivity == .waiting, "端到端也必須保住 waiting")
-        #expect(s.subActivity == .working)
+        #expect(s.subActivity == nil, "主槽靜止 → 忽略 subagent（§2.5.1）")
         #expect(s.effectiveActivity == .waiting)
+    }
+
+    @Test("端到端：主槽 working 時 subagent 事件寫進 sub 槽")
+    func subagentGoesToSubSlotWhenWorking() throws {
+        let root = try makeRoot()
+        _ = try run(#"{"hook_event_name":"PreToolUse","session_id":"cli3b","tool_name":"Bash"}"#, root: root)
+        _ = try run(#"{"hook_event_name":"PostToolUse","session_id":"cli3b","tool_name":"Grep","agent_id":"a1","agent_type":"Explore"}"#, root: root)
+        let s = try #require(SnapshotIO.read(sessionID: "cli3b", root: root))
+        #expect(s.mainActivity == .working)
+        #expect(s.subActivity == .working)
+        #expect(s.subTool == "Grep")
+        #expect(s.subAgentType == "Explore")
     }
 
     @Test("累積欄位跨多次呼叫保留")
@@ -6049,6 +6134,727 @@ AppKit callback 裡的 if。幀率一律取自 AppearancePolicy，不另定一�
 
 AppKit 層很薄：LEDStripView 只負責畫（phase 由外部推進，view 不持有計時器），
 AnimationDriver 只負責監聽環境與排程，StatusItemController 只負責 NSStatusItem。
+EOF
+```
+
+---
+
+### Task 17: PanelViewModel + 面板 —— 看得到每個 session
+
+**Files:**
+- Create: `Sources/AuraCore/PanelViewModel.swift`
+- Create: `Sources/AgentAuraApp/PanelView.swift`
+- Modify: `Sources/AgentAuraApp/StatusItemController.swift`（掛上 popover）
+- Modify: `Sources/AgentAuraApp/AppDelegate.swift`（打開面板即 acknowledge）
+- Test: `Tests/AuraCoreTests/PanelViewModelTests.swift`
+
+**Interfaces:**
+- Consumes: `SessionState`、`IconState`、`Activity`
+- Produces:
+  ```swift
+  public struct PanelRow: Equatable, Sendable, Identifiable {
+      public let id: String
+      public let projectName: String
+      public let activity: Activity
+      public let headline: String       // 正在做什麼 / 在等什麼
+      public let detail: String         // 本輪多久 · subagent · 失敗數
+      public let meta: String           // 模型 · effort · permission_mode
+      public let relativeTime: String
+      public let isEnded: Bool
+  }
+  public enum PanelViewModel {
+      public static func rows(from states: [SessionState], now: Date) -> [PanelRow]
+      public static func title(for icon: IconState) -> String
+      public static func relativeTime(from date: Date, now: Date) -> String
+      public static func duration(_ seconds: Double) -> String
+  }
+  ```
+
+- [ ] **Step 1: 寫失敗測試**
+
+```swift
+// Tests/AuraCoreTests/PanelViewModelTests.swift
+import Testing
+import Foundation
+@testable import AuraCore
+
+@Suite("面板呈現")
+struct PanelViewModelTests {
+
+    let now = Date(timeIntervalSince1970: 1_788_700_000)
+
+    func state(_ id: String, _ a: Activity, tool: String? = nil,
+               turnStart: Double? = nil, subagents: [String: Int] = [:],
+               failures: Int = 0, updated: Double = 0, live: Bool = true,
+               model: String? = "claude-opus-5", lastMessage: String? = nil,
+               toolError: String? = nil) -> SessionState {
+        SessionState(id: id, projectName: id, projectPath: "/x/\(id)",
+                     permissionMode: "default", effort: "high", model: model,
+                     activity: a, mainActivity: a, subActivity: nil,
+                     currentTool: tool, subagentTool: nil, toolDurationMs: nil,
+                     turnStartedAt: turnStart.map { now.addingTimeInterval(-$0) },
+                     subagents: subagents, toolFailures: failures,
+                     lastMessage: lastMessage, errorType: nil, toolError: toolError,
+                     liveness: live ? .alive(pid: 1) : .ended,
+                     updatedAt: now.addingTimeInterval(-updated))
+    }
+
+    // ---- 排序：與 D1 優先序一致 ----
+
+    @Test("排序是 error → waiting → working → done")
+    func sortFollowsPriority() {
+        let rows = PanelViewModel.rows(from: [
+            state("w", .working), state("d", .done),
+            state("e", .error), state("a", .waiting),
+        ], now: now)
+        #expect(rows.map { $0.id } == ["e", "a", "w", "d"])
+    }
+
+    @Test("同一組內最近活動優先")
+    func recentFirstWithinGroup() {
+        let rows = PanelViewModel.rows(from: [
+            state("old", .working, updated: 300),
+            state("new", .working, updated: 5),
+            state("mid", .working, updated: 60),
+        ], now: now)
+        #expect(rows.map { $0.id } == ["new", "mid", "old"])
+    }
+
+    @Test("已結束的排在同組下半部")
+    func endedGoesLast() {
+        let rows = PanelViewModel.rows(from: [
+            state("ended", .done, updated: 5, live: false),
+            state("alive", .done, updated: 300, live: true),
+        ], now: now)
+        #expect(rows.map { $0.id } == ["alive", "ended"], "活著的優先，即使它更久沒動")
+    }
+
+    // ---- 內容 ----
+
+    @Test("waiting 的主行說出在等什麼，不只是 tool 名")
+    func waitingHeadlineNamesWhatIsAsked() {
+        let rows = PanelViewModel.rows(from: [state("p", .waiting, tool: "Bash")], now: now)
+        let h = rows[0].headline
+        #expect(h.contains("Bash"))
+        #expect(h.contains("等") || h.contains("批准"), "要看得出是在等你，實際：\(h)")
+    }
+
+    @Test("working 的主行顯示目前的 tool")
+    func workingHeadlineShowsTool() {
+        let rows = PanelViewModel.rows(from: [state("p", .working, tool: "Edit")], now: now)
+        #expect(rows[0].headline.contains("Edit"))
+    }
+
+    @Test("done 的主行顯示完成訊息的摘要")
+    func doneHeadlineShowsMessage() {
+        let long = String(repeating: "完成了很多事情。", count: 40)
+        let rows = PanelViewModel.rows(from: [state("p", .done, lastMessage: long)], now: now)
+        #expect(rows[0].headline.count <= 90, "摘要要截斷，實際 \(rows[0].headline.count) 字")
+        #expect(!rows[0].headline.isEmpty)
+    }
+
+    @Test("error 的主行顯示錯誤訊息")
+    func errorHeadlineShowsError() {
+        let rows = PanelViewModel.rows(from: [
+            state("p", .error, toolError: "overloaded_error"),
+        ], now: now)
+        #expect(rows[0].headline.contains("overloaded_error"))
+    }
+
+    @Test("副行含本輪時長、subagent 數、失敗數")
+    func detailHasCounters() {
+        let rows = PanelViewModel.rows(from: [
+            state("p", .working, turnStart: 487, subagents: ["Explore": 2, "implementer": 1], failures: 3),
+        ], now: now)
+        let d = rows[0].detail
+        #expect(d.contains("8m") || d.contains("8 m") || d.contains("487"), "要有本輪時長，實際：\(d)")
+        #expect(d.contains("3"), "要有 subagent 總數 3，實際：\(d)")
+        #expect(d.contains("失敗") || d.contains("fail"), "要有失敗數，實際：\(d)")
+    }
+
+    @Test("沒有計數時副行不顯示 0，避免視覺噪音")
+    func detailOmitsZeros() {
+        let rows = PanelViewModel.rows(from: [state("p", .working)], now: now)
+        #expect(!rows[0].detail.contains("0 subagent"))
+        #expect(!rows[0].detail.contains("0 失敗"))
+    }
+
+    @Test("meta 含模型與 permission_mode")
+    func metaHasModelAndMode() {
+        let rows = PanelViewModel.rows(from: [state("p", .working)], now: now)
+        #expect(rows[0].meta.contains("opus"))
+        #expect(rows[0].meta.contains("default"))
+    }
+
+    @Test("模型缺失時 meta 不顯示空白欄位")
+    func metaHandlesMissingModel() {
+        let rows = PanelViewModel.rows(from: [state("p", .working, model: nil)], now: now)
+        #expect(!rows[0].meta.hasPrefix(" ·"), "不得留下懸空的分隔符，實際：\(rows[0].meta)")
+        #expect(rows[0].meta.contains("default"))
+    }
+
+    // ---- 時間格式化與時鐘倒退 ----
+
+    @Test("時鐘倒退時不顯示負數")
+    func clockSkewClampsToZero() {
+        // updatedAt 在未來
+        let s = state("p", .working, updated: -600)
+        let rows = PanelViewModel.rows(from: [s], now: now)
+        #expect(!rows[0].relativeTime.contains("-"), "實際：\(rows[0].relativeTime)")
+    }
+
+    @Test("turnStartedAt 在未來時，本輪時長不是負數")
+    func futureTurnStartClamps() {
+        let s = state("p", .working, turnStart: -300)
+        let rows = PanelViewModel.rows(from: [s], now: now)
+        #expect(!rows[0].detail.contains("-"), "實際：\(rows[0].detail)")
+    }
+
+    @Test("時長格式在各量級都可讀")
+    func durationFormatting() {
+        #expect(PanelViewModel.duration(0) == "0s")
+        #expect(PanelViewModel.duration(45).contains("45"))
+        #expect(PanelViewModel.duration(90).contains("1m"))
+        #expect(PanelViewModel.duration(3_700).contains("1h"))
+        #expect(PanelViewModel.duration(-5) == "0s", "負數 clamp 到 0")
+    }
+
+    // ---- 標題 ----
+
+    @Test("標題把「有人在等你」放在最前面")
+    func titleLeadsWithAttention() {
+        let icon = IconState(activity: .waiting,
+                             counts: [.waiting: 1, .working: 2], liveCount: 3)
+        let t = PanelViewModel.title(for: icon)
+        #expect(t.contains("1"))
+        #expect(t.contains("等"), "實際：\(t)")
+    }
+
+    @Test("沒有 session 時標題明確說沒有，不留空白")
+    func titleWhenEmpty() {
+        #expect(!PanelViewModel.title(for: .empty).isEmpty)
+    }
+}
+```
+
+- [ ] **Step 2: 執行確認失敗**
+
+Run: `swift test --filter PanelViewModelTests`
+Expected: FAIL — `cannot find 'PanelViewModel' in scope`（以及 `SessionState` 缺 `toolError` 參數）
+
+- [ ] **Step 3: 確認 `SessionState.toolError` 已存在**
+
+Task 07 就宣告了它，`SessionReducer` 也已帶過來。本 task 不需要改那兩個檔。
+
+Run: `grep -n toolError Sources/AuraCore/SessionState.swift Sources/AuraCore/SessionReducer.swift`
+Expected: 各一行
+
+- [ ] **Step 4: 實作 PanelViewModel**
+
+```swift
+// Sources/AuraCore/PanelViewModel.swift
+import Foundation
+
+public struct PanelRow: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let projectName: String
+    public let activity: Activity
+    public let headline: String
+    public let detail: String
+    public let meta: String
+    public let relativeTime: String
+    public let isEnded: Bool
+}
+
+/// 面板的呈現邏輯。純函數，所以排序、截斷、時間格式化都可測 ——
+/// 這些是最容易在 UI 層被寫成「看起來對」但邊界錯的東西（負數時長、懸空分隔符、
+/// 未截斷的長訊息把面板撐爆）。
+public enum PanelViewModel {
+
+    public static func rows(from states: [SessionState], now: Date = Date()) -> [PanelRow] {
+        states
+            .sorted { a, b in
+                // 與 D1 一致：優先序高的在前
+                if a.activity != b.activity { return a.activity > b.activity }
+                // 活著的優先於已結束的
+                let aEnded = a.liveness == .ended, bEnded = b.liveness == .ended
+                if aEnded != bEnded { return !aEnded }
+                // 同組內最近活動優先
+                return a.updatedAt > b.updatedAt
+            }
+            .map { row(for: $0, now: now) }
+    }
+
+    static func row(for s: SessionState, now: Date) -> PanelRow {
+        PanelRow(id: s.id,
+                 projectName: s.projectName,
+                 activity: s.activity,
+                 headline: headline(for: s),
+                 detail: detail(for: s, now: now),
+                 meta: meta(for: s),
+                 relativeTime: relativeTime(from: s.updatedAt, now: now),
+                 isEnded: s.liveness == .ended)
+    }
+
+    static func headline(for s: SessionState) -> String {
+        switch s.activity {
+        case .waiting:
+            let what = s.currentTool ?? "輸入"
+            return "等你批准：\(what)"
+        case .error:
+            return s.toolError ?? s.errorType ?? "執行失敗"
+        case .done:
+            return summarise(s.lastMessage) ?? "已完成"
+        case .working:
+            if let sub = s.subagentTool { return sub }
+            return s.currentTool ?? "執行中"
+        case .idle:
+            return "等你下指令"
+        }
+    }
+
+    /// 完成訊息可能很長（實測有數千字），面板不能被它撐爆。
+    static func summarise(_ text: String?, limit: Int = 80) -> String? {
+        guard let text, !text.isEmpty else { return nil }
+        let flat = text.split(whereSeparator: \.isNewline)
+            .first?.trimmingCharacters(in: .whitespaces) ?? ""
+        guard !flat.isEmpty else { return nil }
+        return flat.count <= limit ? flat : String(flat.prefix(limit)) + "…"
+    }
+
+    static func detail(for s: SessionState, now: Date) -> String {
+        var parts: [String] = []
+        if let start = s.turnStartedAt {
+            parts.append("本輪 " + duration(now.timeIntervalSince(start)))
+        }
+        let subs = s.subagents.values.reduce(0, +)
+        if subs > 0 { parts.append("\(subs) subagents") }
+        if s.toolFailures > 0 { parts.append("\(s.toolFailures) tool 失敗") }
+        return parts.joined(separator: " · ")
+    }
+
+    static func meta(for s: SessionState) -> String {
+        [s.model, s.effort, s.permissionMode]
+            .compactMap { $0 }                 // 缺值就整段省略，不留懸空分隔符
+            .joined(separator: " · ")
+    }
+
+    public static func duration(_ seconds: Double) -> String {
+        let t = Int(max(0, seconds))           // 時鐘倒退 clamp 到 0
+        if t < 60 { return "\(t)s" }
+        if t < 3_600 { return "\(t / 60)m \(t % 60)s" }
+        return "\(t / 3_600)h \((t % 3_600) / 60)m"
+    }
+
+    public static func relativeTime(from date: Date, now: Date = Date()) -> String {
+        let t = max(0, now.timeIntervalSince(date))
+        if t < 5 { return "剛剛" }
+        return duration(t) + "前"
+    }
+
+    public static func title(for icon: IconState) -> String {
+        let attention = icon.attentionCount
+        if attention > 0 {
+            let live = icon.liveCount
+            return live > attention
+                ? "\(attention) 個在等你 · \(live - attention) 個在跑"
+                : "\(attention) 個在等你"
+        }
+        if icon.liveCount > 0 { return "\(icon.liveCount) 個 session 在跑" }
+        let done = icon.counts[.done] ?? 0
+        return done > 0 ? "\(done) 個已完成" : "沒有活著的 session"
+    }
+}
+```
+
+- [ ] **Step 5: 執行確認通過**
+
+Run: `swift test --filter PanelViewModelTests`
+Expected: 全部 PASS（16 個測試）
+
+- [ ] **Step 6: 實作 SwiftUI 面板**
+
+```swift
+// Sources/AgentAuraApp/PanelView.swift
+import SwiftUI
+import AuraCore
+
+struct PanelView: View {
+    let title: String
+    let rows: [PanelRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.4))
+
+            if rows.isEmpty {
+                Text("沒有活著的 session")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(rows) { row in
+                            PanelRowView(row: row)
+                            Divider()
+                        }
+                    }
+                }
+                .frame(maxHeight: 420)
+            }
+        }
+        .frame(width: 380)
+    }
+}
+
+struct PanelRowView: View {
+    let row: PanelRow
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Circle().fill(Self.color(row.activity))
+                .frame(width: 8, height: 8).padding(.top, 5)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(row.projectName).font(.system(size: 12, weight: .semibold))
+                    Text(row.meta).font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Text(row.headline)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(row.activity == .error ? .red : .primary)
+                    .lineLimit(1).truncationMode(.middle)
+                if !row.detail.isEmpty || row.isEnded {
+                    Text([row.detail, row.isEnded ? "已結束 · \(row.relativeTime)" : row.relativeTime]
+                            .filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 7)
+    }
+
+    static func color(_ a: Activity) -> Color {
+        switch a {
+        case .idle:    return .secondary
+        case .working: return .blue
+        case .waiting: return .orange
+        case .done:    return .green
+        case .error:   return .red
+        }
+    }
+}
+```
+
+- [ ] **Step 7: 掛上 popover 並讓開啟即 acknowledge**
+
+```swift
+// Sources/AgentAuraApp/StatusItemController.swift —— 在 init 之後加入
+    private let popover = NSPopover()
+    var onOpen: (() -> Void)?
+
+    func attachPopover() {
+        popover.behavior = .transient
+        item.button?.target = self
+        item.button?.action = #selector(togglePopover)
+    }
+
+    func setPanel(title: String, rows: [PanelRow]) {
+        popover.contentViewController = NSHostingController(
+            rootView: PanelView(title: title, rows: rows))
+    }
+
+    @objc private func togglePopover() {
+        guard let button = item.button else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            // 開啟即 acknowledge（D2）—— 面板是唯一互動，用它當確認手勢
+            onOpen?()
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+    }
+```
+
+`StatusItemController` 需要 `import SwiftUI`（`NSHostingController`）。
+
+```swift
+// Sources/AgentAuraApp/AppDelegate.swift —— applicationDidFinishLaunching 內，graph.start() 之前
+        status.attachPopover()
+        status.onOpen = { [weak self] in
+            guard let self else { return }
+            self.graph.acknowledgeAll()
+            self.refreshPanel()
+        }
+```
+
+```swift
+// AppDelegate 新增方法
+    private func refreshPanel() {
+        let icon = graph.iconState
+        let rows = PanelViewModel.rows(from: graph.registry.visible)
+        status.setPanel(title: PanelViewModel.title(for: icon), rows: rows)
+    }
+```
+
+並在 `onIconStateChange` 的 main-actor block 裡一併呼叫 `refreshPanel()`。
+
+- [ ] **Step 8: 建置 + 手動確認**
+
+```bash
+swift build 2>&1 | tail -3
+swift test 2>&1 | grep -E "Test run with"
+```
+
+造幾個假狀態（含 waiting / done / error 各一）再跑 app，點 menu bar icon：
+面板應列出三列、排序為 error → waiting → done，且**點開之後 icon 的橘/紅燈消失**
+（acknowledge 生效）。
+
+- [ ] **Step 9: Mutation 驗證**
+
+依標準程序，三個：
+
+1. `rows` 的排序改成只按 `updatedAt`（拿掉 activity 比較）→ `sortFollowsPriority` 必須 RED
+2. `duration` 的 `max(0, seconds)` 改成 `seconds` → `clockSkewClampsToZero`、
+   `futureTurnStartClamps`、`durationFormatting` 必須 RED
+3. `meta` 的 `compactMap { $0 }` 改成 `map { $0 ?? "" }` → `metaHandlesMissingModel` 必須 RED
+
+第 3 個守的是「缺值不留懸空分隔符」—— 那是 UI 最典型的「看起來對，直到某個欄位缺值」。
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add Sources/AuraCore/PanelViewModel.swift Sources/AuraCore/SessionState.swift \
+        Sources/AuraCore/SessionReducer.swift Sources/AgentAuraApp \
+        Tests/AuraCoreTests/PanelViewModelTests.swift
+git commit -F - <<'EOF'
+feat(app): 面板 —— 排序、截斷、時間格式化都是可測的純函數
+
+PanelViewModel 放 AuraCore：排序（與 D1 優先序一致）、完成訊息截斷、
+時長格式化與時鐘倒退 clamp、缺值不留懸空分隔符 —— 這些是 UI 層最容易寫成
+「看起來對，直到某個欄位缺值」的東西，所以放在可測的地方。
+
+打開面板即 acknowledge（D2）：面板是唯一互動，用它當確認手勢摩擦最低。
+EOF
+```
+
+---
+
+### Task 18: .app bundle + 實機啟動驗收
+
+**這個 task 結束時有一個可以雙擊執行的 AgentAura.app。**
+
+**Files:**
+- Create: `scripts/build-app.sh`
+- Create: `Resources/Info.plist`
+- Create: `scripts/verify-app.sh`
+- Modify: `docs/INSTALL.md`
+
+- [ ] **Step 1: Info.plist**
+
+`LSUIElement` 是 menu bar app 的關鍵 —— 沒有它會出現 dock icon 與主視窗。
+
+```bash
+mkdir -p Resources
+cat > Resources/Info.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>AgentAura</string>
+    <key>CFBundleDisplayName</key><string>AgentAura</string>
+    <key>CFBundleIdentifier</key><string>io.agentaura.app</string>
+    <key>CFBundleExecutable</key><string>AgentAuraApp</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <!-- menu bar app：不要 dock icon、不要主視窗 -->
+    <key>LSUIElement</key><true/>
+</dict>
+</plist>
+EOF
+```
+
+- [ ] **Step 2: 組 bundle 的腳本**
+
+```bash
+cat > scripts/build-app.sh <<'EOF'
+#!/usr/bin/env bash
+# 組出 AgentAura.app（universal），並驗證 bundle 結構與 LSUIElement。
+set -euo pipefail
+cd "$(dirname "$0")/.."
+APP=build/AgentAura.app
+
+echo "==> 建置 universal 執行檔"
+swift build -c release --arch arm64   --product AgentAuraApp
+swift build -c release --arch x86_64  --product AgentAuraApp
+
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+lipo -create -output "$APP/Contents/MacOS/AgentAuraApp" \
+  .build/arm64-apple-macosx/release/AgentAuraApp \
+  .build/x86_64-apple-macosx/release/AgentAuraApp
+cp Resources/Info.plist "$APP/Contents/Info.plist"
+
+echo "==> 驗證"
+lipo -archs "$APP/Contents/MacOS/AgentAuraApp"
+/usr/libexec/PlistBuddy -c "Print :LSUIElement" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist"
+test -x "$APP/Contents/MacOS/AgentAuraApp"
+
+echo "==> ad-hoc 簽章（未簽章的 bundle 在部分系統設定下無法啟動）"
+codesign --force --deep --sign - "$APP"
+codesign --verify --verbose "$APP" 2>&1 | tail -2
+
+echo "==> $APP 就緒"
+EOF
+chmod +x scripts/build-app.sh
+./scripts/build-app.sh
+```
+
+Expected: `lipo -archs` 含 `arm64` 與 `x86_64`；`LSUIElement` 為 `true`；簽章驗證通過。
+
+- [ ] **Step 3: 實機啟動驗收腳本**
+
+```bash
+cat > scripts/verify-app.sh <<'EOF'
+#!/usr/bin/env bash
+# 實機驗收：造假狀態 → 啟動 app → 確認它活著且真的讀到狀態 → 收工。
+set -uo pipefail
+cd "$(dirname "$0")/.."
+APP=build/AgentAura.app
+ROOT="$HOME/.agentaura/sessions"
+FAIL=0
+ok()  { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+bad() { printf '  \033[31m✗\033[0m %s\n' "$1"; FAIL=1; }
+
+[ -d "$APP" ] || { bad "$APP 不存在 —— 先跑 scripts/build-app.sh"; exit 1; }
+
+echo "== 1. 造三個假狀態（waiting / working / error）=="
+mkdir -p "$ROOT"
+python3 - <<'PY'
+import json, pathlib, datetime
+root = pathlib.Path.home()/".agentaura/sessions"
+now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z")
+for sid, act in [("verify-waiting","waiting"), ("verify-working","working"), ("verify-error","error")]:
+    (root/f"{sid}.json").write_text(json.dumps({
+        "schema": 1, "session_id": sid, "hook_event_name": "PreToolUse",
+        "written_at": now, "turn_started_at": now,
+        "cwd": f"/Users/you/Code/Vibe/{sid}", "model": "claude-opus-5[1m]",
+        "permission_mode": "default", "effort": "high",
+        "main_activity": act, "main_tool": "Bash",
+        "subagents": {}, "tool_failures": 0, "terminated": False,
+    }, ensure_ascii=False))
+print("  已造 3 個")
+PY
+
+echo "== 2. 啟動 app =="
+open "$APP"
+sleep 4
+if pgrep -f "AgentAura.app/Contents/MacOS/AgentAuraApp" >/dev/null; then
+  ok "app 在跑"
+else
+  bad "app 沒起來或已退出"
+fi
+
+echo "== 3. 確認沒有 dock icon（LSUIElement 生效）=="
+# LSUIElement 的 app 不會出現在 Dock 的執行中清單
+if osascript -e 'tell application "System Events" to get name of every process whose background only is false' 2>/dev/null | grep -q AgentAura; then
+  bad "出現在前景 process 清單 —— LSUIElement 沒生效"
+else
+  ok "沒有 dock icon"
+fi
+
+echo "== 4. app 真的讀到狀態了嗎 =="
+# 刪掉一個狀態檔，refreshLiveness 應在 5s 內移除它；用「app 沒 crash」當代理指標
+rm -f "$ROOT/verify-working.json"
+sleep 7
+if pgrep -f "AgentAura.app/Contents/MacOS/AgentAuraApp" >/dev/null; then
+  ok "狀態檔被外部刪除後 app 仍存活（refreshLiveness 沒炸）"
+else
+  bad "app 在狀態檔被刪後掛掉"
+fi
+
+echo "== 5. 收工 =="
+pkill -f "AgentAura.app/Contents/MacOS/AgentAuraApp" 2>/dev/null && ok "已關閉" || ok "已不在執行"
+rm -f "$ROOT"/verify-*.json
+ok "假狀態已清除"
+
+echo
+[ "$FAIL" -eq 0 ] && echo "實機驗收 PASS" || echo "實機驗收 FAIL"
+exit "$FAIL"
+EOF
+chmod +x scripts/verify-app.sh
+./scripts/verify-app.sh
+```
+
+Expected: 五項全 ✓，最後印 `實機驗收 PASS`。
+
+**肉眼確認（腳本無法代替）**：app 跑起來時看 menu bar 右側 ——
+應出現**紅色 double blink 的燈條**（三個假狀態裡有一個 error，D1 優先序取最大），
+點一下應開出面板列出三列、排序 error → waiting → working。
+
+- [ ] **Step 4: 更新 INSTALL.md**
+
+```bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path("docs/INSTALL.md"); s = p.read_text()
+s = s.replace("""```bash
+git clone <repo> && cd AgentAura
+./scripts/build-plugin.sh          # 建置 universal aura-hook 到 plugin/bin/
+claude plugin install ./plugin     # 註冊 hooks（不會修改 ~/.claude/settings.json）
+./scripts/verify-install.sh        # 驗證整條鏈路
+```""",
+"""```bash
+git clone <repo> && cd AgentAura
+./scripts/build-plugin.sh          # 建置 universal aura-hook 到 plugin/bin/
+claude plugin install ./plugin     # 註冊 hooks（不會修改 ~/.claude/settings.json）
+./scripts/verify-install.sh        # 驗證 hook 鏈路
+
+./scripts/build-app.sh             # 組出 build/AgentAura.app（universal + ad-hoc 簽章）
+./scripts/verify-app.sh            # 實機啟動驗收
+open build/AgentAura.app           # 開始使用
+```
+
+要開機自動啟動：把 `build/AgentAura.app` 拖進「系統設定 → 一般 → 登入項目」。""")
+s += """
+## 移除 app
+
+```bash
+pkill -f AgentAura.app          # 關掉
+rm -rf build/AgentAura.app      # 刪掉 bundle
+```
+
+app 不寫任何設定到 `~/Library`，狀態全在 `~/.agentaura/`，刪掉即乾淨。
+"""
+p.write_text(s); print("INSTALL.md 已更新")
+PY
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Resources/Info.plist scripts/build-app.sh scripts/verify-app.sh docs/INSTALL.md
+git commit -F - <<'EOF'
+feat(app): .app bundle + 實機啟動驗收 —— 第一個可雙擊執行的版本
+
+LSUIElement 是關鍵：沒有它 menu bar app 會出現 dock icon 與主視窗。
+verify-app.sh 的第 3 項就是驗這件事（查前景 process 清單裡沒有 AgentAura），
+因為那是「看起來能跑但形態錯了」最容易漏掉的一項。
+
+第 4 項刻意刪掉一個狀態檔再等 7 秒：refreshLiveness 每 5s 跑一次，
+這驗的是「外部刪檔不會讓 app 掛掉」——那條路徑在 spec §4 有，但只有實機
+啟動才驗得到。
 EOF
 ```
 
