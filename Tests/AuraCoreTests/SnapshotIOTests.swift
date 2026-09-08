@@ -1,3 +1,4 @@
+// Tests/AuraCoreTests/SnapshotIOTests.swift
 import Testing
 import Foundation
 @testable import AuraCore
@@ -90,6 +91,22 @@ struct SnapshotIOTests {
                    "a\u{0}b", "a\nb", "~/x", "/abs", String(repeating: "x", count: 200)] {
             #expect(!SnapshotIO.isSafeSessionID(id), "\(id.debugDescription) 應被拒絕")
         }
+    }
+
+    /// `HookFileSource.emit` 依賴這個契約 —— 它不再自己重驗 `isSafeSessionID`，
+    /// 因為那份重複的守衛永遠不會觸發（實測移除後零測試變紅）。
+    /// 這條測試就是那份依賴的釘子：檔案**真的存在**時 `read` 仍必須拒絕。
+    @Test("不安全的 session_id 即使檔案真的存在，read 仍回 nil")
+    func readRejectsUnsafeIDEvenIfFileExists() throws {
+        let root = try makeRoot()
+        // 直接寫一個合法檔名、但 stem 不是合法 session id 的檔
+        let payload = try SnapshotIO.encoder.encode(snap("bad name", .error))
+        try payload.write(to: root.appendingPathComponent("bad name.json"))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("bad name.json").path))
+
+        #expect(SnapshotIO.read(sessionID: "bad name", root: root) == nil,
+                "檔案存在也不能讀 —— 這是 HookFileSource.emit 依賴的那一層防護")
+        #expect(SnapshotIO.read(sessionID: "../escaped", root: root) == nil)
     }
 
     @Test("不安全的 session_id 讓 url(for:) 丟錯，不得寫到目錄外")

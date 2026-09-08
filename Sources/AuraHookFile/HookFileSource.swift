@@ -1,3 +1,4 @@
+// Sources/AuraHookFile/HookFileSource.swift
 import Foundation
 import AuraCore
 
@@ -88,8 +89,12 @@ public final class HookFileSource: EventSource, @unchecked Sendable {
     /// 讀不到（半截 JSON、剛被刪）就跳過 —— 呼叫端保留上次已知狀態。
     private func emit(sessionIDs: Set<String>) {
         for id in sessionIDs {
-            guard SnapshotIO.isSafeSessionID(id),
-                  let snap = SnapshotIO.read(sessionID: id, root: root) else { continue }
+            // 不在這裡再驗一次 `isSafeSessionID`：`SnapshotIO.read` 內部呼叫
+            // `url(for:)`，那裡本來就會驗、不安全時回 nil。重複的守衛在這裡
+            // **永遠不會觸發**，移除它任何測試都不會紅（實測），
+            // 而一個測不到的守衛會讓讀者誤以為 `read` 不驗 —— 反而更危險。
+            // 契約由 `SnapshotIOTests.readRejectsUnsafeIDEvenIfFileExists` 釘住。
+            guard let snap = SnapshotIO.read(sessionID: id, root: root) else { continue }
             continuation?.yield(snap)
         }
     }

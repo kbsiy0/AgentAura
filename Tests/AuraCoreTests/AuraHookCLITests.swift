@@ -1,3 +1,4 @@
+// Tests/AuraCoreTests/AuraHookCLITests.swift
 import Testing
 import Foundation
 @testable import AuraCore
@@ -158,7 +159,8 @@ struct AuraHookCLITests {
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path) }
         let r = try run(#"{"hook_event_name":"Stop","session_id":"ro1"}"#, root: root)
         #expect(r.exitCode == 0)
-        #expect(r.stderr.isEmpty)
+        #expect(r.stdout.isEmpty, "有 stdout：\(r.stdout.prefix(120))")
+        #expect(r.stderr.isEmpty, "有 stderr：\(r.stderr.prefix(120))")
     }
 
     @Test("stdin 直接關閉（沒有任何輸入）仍 exit 0")
@@ -191,7 +193,36 @@ struct AuraHookCLITests {
         let reals = try Fixtures.rawEvents(named: "round2")
         var cases: [(String, Data)] = []
 
-        for (i, json) in reals.enumerated() where i % 4 == 0 {   // 取樣，控制測試時間
+        // **分層取樣**，不是對時間序列做 modulo。
+        //
+        // 前一版寫 `where i % 4 == 0`，實測讓四種事件
+        //（`SessionStart`、`UserPromptSubmit`、`PostToolUseFailure`、`Notification`）
+        // 與七個欄位（`message`、`model`、`error`、`source`、`notification_type`、
+        // `prompt`、`is_interrupt`）**完全不入選** —— 稀有事件在時間序列上分布不均，
+        // modulo 會系統性地漏掉它們。其中 `PostToolUseFailure.error` 在本專案
+        // 先前真的出過 bug（見 commit 7ab82bc）。
+        //
+        // 改成：每一種 event、每一個新出現的欄位都保證至少入選一筆，
+        // 其餘同類事件再用 modulo 縮減數量。下面兩條 source-derived 斷言
+        // 會在覆蓋被掏空時指名漏掉的是什麼。
+        var seenEvent: Set<String> = []
+        var seenKey: Set<String> = []
+        var picked: [(Int, [String: Any])] = []
+        for (i, json) in reals.enumerated() {
+            let isNewEvent = seenEvent.insert((json["hook_event_name"] as? String) ?? "?").inserted
+            let isNewKey = !Set(json.keys).subtracting(seenKey).isEmpty
+            if isNewEvent || isNewKey || i % 4 == 0 {
+                seenKey.formUnion(json.keys)
+                picked.append((i, json))
+            }
+        }
+        let allEvents = Set(reals.compactMap { $0["hook_event_name"] as? String })
+        #expect(seenEvent.subtracting(["?"]) == allEvents,
+                "漏掉的 event：\(allEvents.subtracting(seenEvent).sorted())")
+        let allKeys = Set(reals.flatMap { $0.keys })
+        #expect(seenKey == allKeys, "漏掉的欄位：\(allKeys.subtracting(seenKey).sorted())")
+
+        for (i, json) in picked {
             let full = try Fixtures.jsonData(json)
 
             // (1) 在多個比例處截斷
