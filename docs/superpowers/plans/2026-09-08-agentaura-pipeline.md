@@ -761,6 +761,30 @@ struct EventMappingTests {
         #expect(effect("Notification", "") == .noChange)
     }
 
+    // ---- handledEvents 與 switch 必須一致（防兩者 drift）----
+
+    @Test("handledEvents 裡除了刻意不改 activity 的，其餘都必須有映射")
+    func handledEventsAllMapped() {
+        for e in EventMapping.handledEvents
+            where !EventMapping.registeredButNoActivityChange.contains(e) {
+            let r = EventMapping.effect(forEvent: e,
+                                        notificationType: e == "Notification" ? "idle_prompt" : nil)
+            #expect(r != .noChange, "\(e) 在 handledEvents 裡卻落到 default")
+        }
+    }
+
+    @Test("registeredButNoActivityChange 必須是 handledEvents 的子集")
+    func noChangeSetIsSubset() {
+        #expect(EventMapping.registeredButNoActivityChange
+                    .isSubset(of: EventMapping.handledEvents))
+    }
+
+    @Test("PostModelSwitch 不改 activity 但仍在 handledEvents 裡（因為帶 to_model）")
+    func postModelSwitchIsRegisteredButInert() {
+        #expect(EventMapping.handledEvents.contains("PostModelSwitch"))
+        #expect(EventMapping.effect(forEvent: "PostModelSwitch") == .noChange)
+    }
+
     // ---- 真實 fixture 回歸：每一筆實測 event 都必須被明確處理 ----
 
     @Test("round1 的每個真實 event 都不落到 noChange")
@@ -797,6 +821,32 @@ public enum EventEffect: Equatable, Sendable {
 }
 
 public enum EventMapping {
+
+    /// 本模組明確處理的 event —— **`plugin/hooks/hooks.json` 必須註冊且僅註冊這些**。
+    ///
+    /// 跨層一致性 gate（Task 13）從這個集合推導，不用手維護第二份清單。
+    /// 手維護的清單會 drift：本專案已實際發生過 —— `Elicitation`（映射到 `waiting`，
+    /// 代表「MCP server 在等你輸入」）有映射卻沒註冊，那個狀態永遠收不到，
+    /// 而單元測試照樣全綠。
+    public static let handledEvents: Set<String> = [
+        "SessionStart", "UserPromptSubmit",
+        "PreToolUse", "PostToolUse", "PostToolUseFailure", "PostToolBatch",
+        "SubagentStart", "SubagentStop",
+        "PreCompact", "PostCompact",
+        "PermissionRequest", "PermissionDenied",
+        "Elicitation", "ElicitationResult",
+        "Notification",
+        "Stop", "StopFailure", "SessionEnd",
+        "PostModelSwitch",
+    ]
+
+    /// `handledEvents` 中刻意不改變 activity 的 event。
+    ///
+    /// 它們仍必須註冊，因為帶了別的必要資訊：`PostModelSwitch` 帶 `to_model`
+    /// （使用者中途 `/model` 換模型後，面板不得顯示舊模型）。
+    public static let registeredButNoActivityChange: Set<String> = [
+        "PostModelSwitch",
+    ]
 
     /// hook event（必要時加上 `notification_type`）→ 效果。
     ///
@@ -3645,6 +3695,10 @@ cat > plugin/hooks/hooks.json <<'EOF'
   "StopFailure":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
   "SessionEnd":         [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
   "PostModelSwitch":    [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
+  "Elicitation":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
+  "ElicitationResult":  [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
+  "PreCompact":         [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
+  "PostCompact":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
   "Notification": [
     { "matcher": "permission_prompt|idle_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog|agent_completed",
       "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }
@@ -3719,17 +3773,28 @@ struct PluginWiringTests {
         }
     }
 
-    @Test("hooks.json 涵蓋 EventMapping 會處理的每一個 event")
-    func coversAllMappedEvents() throws {
+    /// **source-derived 跨層一致性 gate。**
+    ///
+    /// 來源集合從 `EventMapping.handledEvents`（生產碼）推導，不是手維護的第二份清單。
+    /// user CLAUDE.md Lessons Learned #9：hand-maintained 清單自己會 drift ——
+    /// 本專案已實際發生過：`Elicitation` 映射到 `waiting` 卻沒註冊，那個「MCP server
+    /// 在等你輸入」的狀態永遠收不到，而單元測試照樣全綠。
+    ///
+    /// 斷言是**雙向等式**，兩個方向都有代價：
+    /// - 有映射沒註冊 → 對照表是死碼，該狀態永遠收不到（tested≠wired）
+    /// - 有註冊沒映射 → 每個事件白付一次 hook 呼叫，卻不影響任何狀態
+    @Test("hooks.json 註冊的 event 集合必須等於 EventMapping.handledEvents")
+    func registeredEventsMatchHandledEvents() throws {
         let registered = Set(try Self.hooksJSON().keys)
-        let needed = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
-                      "PostToolUseFailure", "PostToolBatch", "PermissionRequest",
-                      "PermissionDenied", "SubagentStart", "SubagentStop",
-                      "Stop", "StopFailure", "SessionEnd", "Notification",
-                      "PostModelSwitch"]
-        for e in needed {
-            #expect(registered.contains(e), "\(e) 有對照規則卻沒有註冊 hook —— tested≠wired")
-        }
+        let handled = EventMapping.handledEvents
+
+        let mappedNotRegistered = handled.subtracting(registered)
+        let registeredNotMapped = registered.subtracting(handled)
+
+        #expect(mappedNotRegistered.isEmpty,
+                "有映射卻沒註冊（對照表是死碼）：\(mappedNotRegistered.sorted())")
+        #expect(registeredNotMapped.isEmpty,
+                "有註冊卻沒映射（白付 hook 呼叫）：\(registeredNotMapped.sorted())")
     }
 
     @Test("Notification 的 matcher 涵蓋全部 6 種需要使用者的型別")
