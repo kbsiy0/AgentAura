@@ -22,78 +22,247 @@ struct IsolationTests {
         return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
+    // MARK: - Stage 1：把註解與字串字面值中性化
+
+    /// Swift 詞法層的行終止符。中性化時原樣保留，`(?m)^` 的行首錨定與行號才不位移。
+    static let lineTerminators: Set<Unicode.Scalar> = ["\n", "\r", "\u{0B}", "\u{0C}", "\u{85}", "\u{2028}", "\u{2029}"]
+
+    /// 把註解與字串字面值的**內容**換成空白（換行原樣保留），其餘字元不動。
+    ///
+    /// 為什麼要分兩段做，而不是把 pattern 再改一次：單一 regex 沒辦法同時
+    /// (a) 描述 Swift 宣告前綴的文法（attribute 參數可為任意內容）與
+    /// (b) 判斷某個位置是不是落在字串／註解裡。兩個目標會互相拉扯，這也是
+    /// 前三輪的實際失敗方式——放寬括號內容就誤攔 `@available(…, message: "(x) import …")`；
+    /// 為了堵那個誤攔而排除引號，就漏放 `@_documentation(metadata: "foo") import AppKit`
+    /// （真的會編譯、真的違規）。詞法層先掃掉字面值，(a) 與 (b) 就解耦了。
+    ///
+    /// 掃描順序即 Swift lexer 的順序：註解與字串都只能從「正常碼」位置進入，
+    /// 所以字串裡的 `//`、`/*` 不會被當成註解，註解裡的引號也不會開啟字串。
+    /// 未收尾的單行字串止於行尾（Swift 不允許裸換行），因此掃描狀態在每個換行
+    /// 都會回到正常碼——插值裡的巢狀字串最壞只會讓同一行的真實碼露出來，
+    /// 不會把後面幾行的真 import 藏起來。
+    ///
+    /// 輸出與輸入的 scalar 數、行終止符位置完全相同（`neutralizedPreservesLayout` 釘住）。
+    static func neutralized(_ source: String) -> String {
+        let c = Array(source.unicodeScalars)
+        var out = String.UnicodeScalarView()
+        out.reserveCapacity(c.count)
+        var i = 0
+        func at(_ j: Int, _ s: Unicode.Scalar) -> Bool { j < c.count && c[j] == s }
+        func hide(_ s: Unicode.Scalar) -> Unicode.Scalar { lineTerminators.contains(s) ? s : " " }
+
+        while i < c.count {
+            if c[i] == "/", at(i + 1, "/") {                                  // 行註解：吃到行尾
+                while i < c.count, !lineTerminators.contains(c[i]) { out.append(" "); i += 1 }
+                continue
+            }
+            if c[i] == "/", at(i + 1, "*") {                                  // 區塊註解：Swift 可巢狀
+                var depth = 0
+                repeat {
+                    if c[i] == "/", at(i + 1, "*") { depth += 1; out.append(" "); out.append(" "); i += 2 }
+                    else if c[i] == "*", at(i + 1, "/") { depth -= 1; out.append(" "); out.append(" "); i += 2 }
+                    else { out.append(hide(c[i])); i += 1 }
+                } while i < c.count && depth > 0                              // 未收尾就吃到 EOF
+                continue
+            }
+            var hashes = 0                                                    // raw string 的 # 前綴
+            while at(i + hashes, "#") { hashes += 1 }
+            guard at(i + hashes, "\"") else {                                 // 只有後面接引號才是字串
+                out.append(c[i]); i += 1                                      // 否則 # 是 #if / #filePath…
+                continue
+            }
+            let q = i + hashes
+            let quoteLen = (at(q + 1, "\"") && at(q + 2, "\"")) ? 3 : 1       // """ 為多行字串
+            func closes(at j: Int) -> Bool {                                  // 收尾 = 引號 + 同量的 #
+                guard j + quoteLen + hashes <= c.count else { return false }
+                for k in 0..<quoteLen where c[j + k] != "\"" { return false }
+                for k in 0..<hashes where c[j + quoteLen + k] != "#" { return false }
+                return true
+            }
+            func escapes(at j: Int) -> Bool {                                 // raw string 的跳脫是 \ + 同量的 #
+                guard c[j] == "\\", j + hashes + 1 < c.count else { return false }
+                for k in 0..<hashes where c[j + 1 + k] != "#" { return false }
+                return true
+            }
+            while i < q + quoteLen { out.append(c[i]); i += 1 }               // 開頭 delimiter 原樣保留
+            while i < c.count {
+                if quoteLen == 1, lineTerminators.contains(c[i]) { break }    // 未收尾的單行字串止於行尾
+                if closes(at: i) {
+                    for _ in 0..<(quoteLen + hashes) { out.append(c[i]); i += 1 }
+                    break
+                }
+                if escapes(at: i) {                                           // 跳脫序列整段隱掉，
+                    for _ in 0..<(hashes + 2) { out.append(hide(c[i])); i += 1 }  // 才不會把 \" 誤判成收尾
+                    continue
+                }
+                out.append(hide(c[i])); i += 1
+            }
+        }
+        return String(out)
+    }
+
+    // MARK: - Stage 2：對中性化後的文字比對宣告前綴
+
     /// 禁止 `AuraCore` 依賴 AppKit / SwiftUI / Cocoa。
     ///
-    /// 必須涵蓋 Swift 完整的 import 語法，而不只是 `import AppKit` 這一種形狀：
-    /// `import` **之前**可以有任意數量的 attribute（`@testable`、`@preconcurrency`、
-    /// `@_exported`、`@_spi(...)` …）與 access-level modifier（Swift 6 的
-    /// `internal import` / `public import` / `package import` …）；**之後**可以有一個
+    /// 字面值已由 stage 1 清掉，所以這裡只需描述 Swift 的 import 宣告前綴：
+    /// `import` **之前**可有任意數量的 attribute（`@testable`、`@preconcurrency`、
+    /// `@_spi(...)`、`@_documentation(...)` …）與 access-level modifier（Swift 6 的
+    /// `internal import` / `public import` / `package import` …）；**之後**可有一個
     /// 宣告關鍵字（scoped import，如 `import class AppKit.NSWindow`）。
-    /// 錨定在行首，所以散文註解與字串字面值不會誤觸。
     static let bannedImportPattern: String = {
-        let modifiers = #"(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)\n"]*\))?|public|package|internal|fileprivate|private)[ \t]+)*"#
+        let modifiers = #"(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)\n]*\))?|public|package|internal|fileprivate|private)[ \t]+)*"#
         let kind = #"(?:(?:class|struct|enum|protocol|typealias|func|var|let|actor|inout)[ \t]+)?"#
         return #"(?m)^[ \t]*"# + modifiers + #"import[ \t]+"# + kind + #"(?:AppKit|SwiftUI|Cocoa)\b"#
     }()
+
+    /// 第一個違規 import 的行號與該行原始文字（行號取自原始碼，靠 stage 1 的位置不變性）。
+    static func firstBannedImport(in source: String) -> (line: Int, text: String)? {
+        let cleaned = neutralized(source)
+        guard let hit = cleaned.range(of: bannedImportPattern, options: .regularExpression) else { return nil }
+        let index = cleaned[..<hit.lowerBound].reduce(into: 0) { n, ch in if ch == "\n" { n += 1 } }
+        let lines = source.split(separator: "\n", omittingEmptySubsequences: false)
+        let text = index < lines.count ? String(lines[index]) : String(cleaned[hit])
+        return (index + 1, text.trimmingCharacters(in: .whitespaces))
+    }
+
+    static func isBannedImport(_ source: String) -> Bool { firstBannedImport(in: source) != nil }
 
     @Test("AuraCore 不得依賴 AppKit / SwiftUI / Cocoa（含 scoped import）")
     func coreHasNoUIImports() throws {
         for file in Self.swiftFiles(under: "Sources/AuraCore") {
             let src = try String(contentsOf: file, encoding: .utf8)
-            let hit = src.range(of: Self.bannedImportPattern, options: .regularExpression)
+            let hit = Self.firstBannedImport(in: src)
             #expect(hit == nil,
-                    "\(file.lastPathComponent) 出現禁止的 import：\(hit.map { String(src[$0]) } ?? "")")
+                    "\(file.lastPathComponent):\(hit?.line ?? 0) 出現禁止的 import：\(hit?.text ?? "")")
         }
     }
 
-    @Test("regex gate 涵蓋 Swift 完整的 import 語法")
+    @Test("gate 涵蓋 Swift 完整的 import 語法")
     func importPatternCoverage() {
+        // 全部以 swiftc -typecheck 確認是「真的會編譯」的形狀。
         let shouldMatch = [
             "import AppKit",
             "  import AppKit",
             "\timport SwiftUI",
             "import Cocoa",
             "@testable import AppKit",
-            "import class AppKit.NSWindow",            // scoped
+            "import class AppKit.NSWindow",                     // scoped
             "import struct SwiftUI.Color",
-            "import AppKit.NSWindow",                  // submodule，無宣告關鍵字
-            "@preconcurrency import AppKit",           // Swift 6 常見
+            "import AppKit.NSWindow",                           // submodule，無宣告關鍵字
+            "@preconcurrency import AppKit",
             "@_exported import AppKit",
             "@_implementationOnly import AppKit",
-            "@_spi(Private) import AppKit",
-            "internal import AppKit",                  // Swift 6 access-level import
+            "@_spi(Private) import AppKit",                     // attribute 參數為 identifier
+            // 前三輪的漏放與誤攔都出在這一族：attribute 參數可以是字串，字串裡
+            // 可以有右括號、跳脫引號，甚至整個是 raw string。四者皆經 typecheck。
+            #"@_documentation(metadata: "foo") import AppKit"#,
+            #"@_documentation(metadata: "a ) b") import AppKit"#,
+            #"@_documentation(metadata: "a\"b") import AppKit"#,
+            ##"@_documentation(metadata: #"a"#) import AppKit"##,
+            "@_documentation(metadata: foo) import AppKit",
+            "@_documentation(visibility: private) import AppKit",
+            "@_documentation(visibility: internal) import AppKit",
+            "internal import AppKit",                           // Swift 6 access-level import
             "public import AppKit",
             "package import AppKit",
             "fileprivate import SwiftUI",
             "private import Cocoa",
-            "@preconcurrency internal import AppKit",  // 兩者疊加
-            "internal import struct AppKit.NSView",    // modifier + scoped
-            "@_spi(Private) import AppKit",            // attribute 參數（無引號）仍須正常運作
-            "@_documentation(visibility: internal) import AppKit",
+            "@preconcurrency internal import AppKit",           // attribute + modifier 疊加
+            "internal import struct AppKit.NSView",             // modifier + scoped
+            "@_spi(Private) internal import class AppKit.NSView", // 三者疊加
+            "import AppKit // 尾隨註解",
+            "/* 註解 */ import AppKit",                          // 註解在前，import 仍在
         ]
         let shouldNotMatch = [
+            // round 2 的誤攔：attribute 的字串參數裡剛好有右括號與 import 字樣。
+            #"@available(*, deprecated, message: "(legacy) import SwiftUI wrapper removed")"#,
+            #"@available(*, deprecated, message: "(see docs) import AppKit is banned")"#,
             "/// 此 module 不得依賴 AppKit",
             "// 不要 import AppKit 進來",
             "/// internal import AppKit 是禁止的",
             "    // import AppKit",
             "import Foundation",
             "internal import Foundation",
-            "let s = \"import AppKit\"",
+            #"let s = "import AppKit""#,
             "importAppKit",
             "public func importAppKitThing() {}",
             "#if canImport(AppKit)",
-            // round 2 引入的誤攔：attribute 的字串參數裡剛好有右括號，
-            // 導致 `[^)\n]*` 在字串內的 ")" 就提早收尾。
-            "@available(*, deprecated, message: \"(legacy) import SwiftUI wrapper removed\")",
-            "@available(*, deprecated, message: \"(see docs) import AppKit is banned\")",
+            #"let url = "https://example.com/import%20AppKit""#,  // 字串裡的 // 不是註解
+            ##"let s = #"import AppKit"#"##,                       // raw string
+            ###"let s = ##"internal import AppKit"##"###,          // 兩個 # 的 raw string
+            #"let s = "\(x) import AppKit""#,                      // 插值
+            // 以下三個曾被記為「要 parse Swift 才修得動」的已知限制，stage 1 一併解決。
+            """
+            /* 說明
+            internal import AppKit
+            */
+            """,
+            """
+            /* 外層 /* 內層
+            internal import AppKit
+            */ 仍在外層註解裡
+            */
+            """,
+            #"""
+            let doc = """
+            internal import AppKit
+            """
+            """#,
+            ##"""
+            let doc = #"""
+            import AppKit
+            """#
+            """##,
         ]
-        for line in shouldMatch {
-            #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) != nil,
-                    "應攔下：\(line)")
+        // 釘住 corpus 規模：案例只能加不能減（Lessons Learned #3，防止日後「弱化讓它過」）。
+        #expect(shouldMatch.count == 29)
+        #expect(shouldNotMatch.count == 20)
+        for source in shouldMatch {
+            #expect(Self.isBannedImport(source), "應攔下：\(source)")
         }
-        for line in shouldNotMatch {
-            #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) == nil,
-                    "不該攔：\(line)")
+        for source in shouldNotMatch {
+            #expect(!Self.isBannedImport(source), "不該攔：\(source)")
+        }
+    }
+
+    @Test("中性化正確處理每一種註解與字串字面值")
+    func neutralizerHandlesEveryLiteralForm() {
+        #expect(Self.neutralized("a // x\nb") == "a     \nb", "行註解")
+        #expect(Self.neutralized("a /* x /* y */ z */ b") == "a                   b", "巢狀區塊註解")
+        #expect(Self.neutralized("let s = \"\"\"\nimport AppKit\n\"\"\"\n")
+                == "let s = \"\"\"\n             \n\"\"\"\n", "多行字串")
+        #expect(Self.neutralized(#""a\"b" x"#) == #""    " x"#, "單行字串裡的跳脫引號")
+        #expect(Self.neutralized(##"#"a\"b"# x"##) == ##"#"    "# x"##, "raw string 裡的 \\\" 不是跳脫")
+        #expect(Self.neutralized(###"##"a"# b"## c"###) == ###"##"     "## c"###, "兩個 # 的 raw string")
+        #expect(Self.neutralized("a /* x\ny") == "a     \n ", "未收尾的區塊註解吃到 EOF")
+        #expect(Self.neutralized("\"abc\nimport AppKit") == "\"   \nimport AppKit",
+                "未收尾的單行字串止於行尾——後面幾行的真 import 不能被藏起來")
+        #expect(Self.neutralized("// a\n// b\n") == "    \n    \n", "連續行註解")
+    }
+
+    @Test("中性化不改變長度與行終止符位置")
+    func neutralizedPreservesLayout() throws {
+        func terminators(_ text: String) -> [Int] {
+            text.unicodeScalars.enumerated()
+                .filter { Self.lineTerminators.contains($0.element) }
+                .map(\.offset)
+        }
+        var samples = [
+            "", "\n", "a", "// x", "/* x", "\"", "#\"", "\"\"\"", "a\r\nb\r\n",
+            "/* a\n/* b\n*/\n*/\n", "let s = \"\"\"\nx\n\"\"\"\n", "#\"\"\"\nx\n\"\"\"#\n",
+        ]
+        for dir in ["Sources/AuraCore", "Sources/AuraHookFile", "Sources/aura-hook", "Tests/AuraCoreTests"] {
+            for file in Self.swiftFiles(under: dir) {
+                samples.append(try String(contentsOf: file, encoding: .utf8))
+            }
+        }
+        for source in samples {
+            let cleaned = Self.neutralized(source)
+            #expect(cleaned.unicodeScalars.count == source.unicodeScalars.count,
+                    "長度必須不變，否則行首錨定與行號都會位移：\(source.debugDescription)")
+            #expect(terminators(cleaned) == terminators(source),
+                    "行終止符位置必須不變：\(source.debugDescription)")
         }
     }
 
