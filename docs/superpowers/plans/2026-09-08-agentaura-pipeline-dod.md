@@ -19,7 +19,41 @@
 | 單檔行數 | ≤ 200 | Sources 最大 107 行（`EventMapping.swift`）；Tests 最大 292 行（`CompositionRootTests.swift`），皆達標 |
 | agent 減速 | 0 ms（async） | `hooks.json` 19 個事件皆 `"async": true`，由 `PluginWiringTests.allHooksAreAsync` 釘死 |
 
-## Known gap：hook 延遲 p95 超標
+## 後續量測：spawn 地板（controller 補做，2026-09-09）
+
+原本的 known gap 假設「python `subprocess.run` 的開銷可能是量測工具的固定成本」。
+這個假設可以直接驗，不必等 hyperfine —— **用同一套 harness 量一個什麼都不做的
+執行檔**，得到的就是地板：
+
+| 受測對象 | median | p95 | max |
+|---|---|---|---|
+| `/usr/bin/true`（spawn 地板） | 2.17ms | **2.24ms** | 3.73ms |
+| `./.build/release/aura-hook` | 5.29ms | **5.54ms** | 5.89ms |
+
+所以 harness ＋ 一個 trivial 執行檔的 fork/exec 佔 2.24ms，
+`aura-hook` 自己貢獻約 **3.3ms**。那 3.3ms 的主要成分是 Swift 執行檔
+（392KB，動態連結 Foundation）的 **dyld 載入**，不是 `flock` 或 JSON 的成本 ——
+`SnapshotIOTests` 量到 1032 次建構只花 0.014s，邏輯本身是微秒等級。
+
+### 這改變了對這個 gap 的判讀
+
+`< 5ms` 這個門檻的**目的**是「不要拖慢 agent」。而那件事的實際保證不是這個數字，
+是 `async: true` —— Claude Code 根本不等 hook 回來。
+`PluginWiringTests.allHooksAreAsync` 把 19 個事件全部釘死在 `async: true`，
+且 `claude plugin validate` 會對 `async` 型別錯誤發出
+「entry ignored at runtime」警告，兩層都擋著。
+
+所以 **`agent 減速 = 0ms` 這一項（真正的驗收條件）是達標的**，
+`hook 延遲 p95 < 5ms` 是它的代理指標，而代理指標量到的多半是 spawn + dyld。
+
+**維持記為 known gap，但改為低優先**：要壓下去只能減少 dyld 成本
+（例如不連結 Foundation、手寫 JSON 解析），那是一次大改寫，
+換來的是使用者感受不到的 3ms —— 不划算。若未來要做，
+先裝 hyperfine 取得更乾淨的基準再決定。
+
+---
+
+## Known gap（原始記錄）：hook 延遲 p95 超標
 
 三次量測 p95 落在 5.64ms–6.19ms，皆略高於 < 5ms 門檻。分析：
 

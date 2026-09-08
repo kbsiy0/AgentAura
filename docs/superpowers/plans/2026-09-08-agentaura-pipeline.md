@@ -4471,7 +4471,8 @@ git commit -m "feat(io): HookFileSource 以 FSEvents 監看狀態目錄，bootst
 - Create: `plugin/hooks/hooks.json`
 - Create: `.claude-plugin/marketplace.json`（本地安裝用；`claude plugin install` 只吃 marketplace）
 - Create: `Sources/AuraHookFile/PipelineGraph.swift`（composition root，無 UI）
-- Test: `Tests/AuraCoreTests/CompositionRootTests.swift`
+- Test: `Tests/AuraCoreTests/PluginWiringTests.swift`（plugin 設定與平台契約）
+- Test: `Tests/AuraCoreTests/CompositionRootTests.swift`（物件圖接線）
 - Test: `Tests/AuraCoreTests/EndToEndWiredGateTests.swift`
 
 **Interfaces:**
@@ -4481,7 +4482,8 @@ git commit -m "feat(io): HookFileSource 以 FSEvents 監看狀態目錄，bootst
   public final class PipelineGraph: @unchecked Sendable {
       public init(root: URL, liveness: LivenessProbing, policy: AggregatePolicy, source: EventSource)
       public static func production(root: URL = SnapshotIO.defaultRoot) -> PipelineGraph
-      public private(set) var registry: SessionRegistry
+      private(set) var registry: SessionRegistry   // **internal** —— 外部讀取繞過 lock
+      public var visibleSessions: [SessionState] { get }   // 上鎖，對外唯一途徑
       public var iconState: IconState { get }
       public var onIconStateChange: ((IconState) -> Void)?
       public func start()          // bootstrap + 開始消費 snapshots
@@ -4772,10 +4774,18 @@ EOF
 
 - [ ] **Step 2: 寫 plugin 設定的 wired-gate 測試（先寫、必失敗）**
 
+> 這一段獨立成 `Tests/AuraCoreTests/PluginWiringTests.swift`。與 Step 4 合在同一個檔
+> 會是 321 行、超過測試檔 300 行上限（那個上限正是 `IsolationTests.fileLengthLimit`
+> 在把關的）。責任本來就不同：這一份驗**平台契約**，Step 4 那份驗**物件圖接線**。
+
 這組測試把 `hooks.json` 當**生產設定**驗，不是當文件看。
 
 ```swift
-// Tests/AuraCoreTests/CompositionRootTests.swift
+// Tests/AuraCoreTests/PluginWiringTests.swift
+//
+// 從 CompositionRootTests.swift 拆出來 —— 合併後 321 行，超過測試檔 300 行上限，
+// 而那個上限正是 IsolationTests.fileLengthLimit 在把關的。責任也本來就不同：
+// 這一份驗的是 **plugin 設定與平台契約**，那一份驗的是 **物件圖的接線**。
 import Testing
 import Foundation
 @testable import AuraCore
@@ -4842,7 +4852,9 @@ struct PluginWiringTests {
 
     @Test("每一個 hook 的 command 都指向同一個 aura-hook 相對路徑")
     func allHooksPointAtAuraHook() throws {
-        for (event, h) in try Self.entries() {
+        let all = try Self.entries()
+        #expect(!all.isEmpty)
+        for (event, h) in all {
             let cmd = try #require(h["command"] as? String)
             // 官方 plugin 的慣例是把路徑加引號 —— $HOME 含空白時才不會裂開。
             #expect(cmd == "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
@@ -4881,6 +4893,8 @@ struct PluginWiringTests {
     @Test("Notification matcher 必須等於 EventMapping.notificationMatcherTypes")
     func notificationMatcherMatchesMapping() throws {
         let notif = try #require(try Self.hooksJSON()["Notification"] as? [[String: Any]])
+        // 只取 `.first` 而不驗長度，等於對「未來多加一個 matcher 區塊」視而不見。
+        #expect(notif.count == 1, "Notification 有 \(notif.count) 個 matcher 區塊，這條測試只驗第一個")
         let matcher = try #require(notif.first?["matcher"] as? String)
         let inMatcher = Set(matcher.split(separator: "|").map(String.init))
         let expected = EventMapping.notificationMatcherTypes
@@ -4919,12 +4933,25 @@ struct PluginWiringTests {
     /// 「unknown hook event」、「no type」、「async 型別錯」都只給 **warning**
     /// 並仍然 `exit 0`，而每一個 warning 都寫著 **entry ignored at runtime** ——
     /// 也就是一個靜默的死 hook。實測確認 exit code 在有 warning 時仍是 0。
-    @Test("claude plugin validate 對 plugin 與 marketplace 都零錯誤零警告")
+    /// **平台契約 gate —— 用官方 validator，而且用官方的 `--strict`。**
+    ///
+    /// 手寫的檢查只能驗我以為的契約；`claude plugin validate` 驗的是平台真正的契約。
+    /// 這個 gate 抓到過兩個手寫檢查完全看不見的錯：`author` 必須是物件而非字串，
+    /// 以及事件必須包在 `"hooks"` 物件裡（否則整個 plugin 的 hook 都不載入）。
+    ///
+    /// **為什麼是 `--strict` 而不是自己比對輸出文字**：validator 對
+    /// 「unknown hook event」、「no type」、「async 型別錯」只給 **warning** 並仍然
+    /// `exit 0`，而每個 warning 都寫著 **entry ignored at runtime** —— 一個靜默的死 hook。
+    /// 這裡原本寫 `!out.contains("warning")`，功能上碰巧對，但比對的是**人類可讀文字**：
+    /// CLI 改個措辭、加個色碼、做在地化，這條檢查就會悄悄失真而測試不知情。
+    /// 官方提供了 `--strict`（"Treat warnings as errors (exit 1)"），那是穩定契約。
+    /// `--json` 只是為了讓失敗訊息能指名是哪個檔、哪一條。
+    @Test("claude plugin validate --strict 對 plugin 與 marketplace 都通過")
     func officialValidatorIsClean() throws {
         for target in ["plugin", "."] {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            task.arguments = ["claude", "plugin", "validate", target]
+            task.arguments = ["claude", "plugin", "validate", "--strict", "--json", target]
             task.currentDirectoryURL = Self.repoRoot()
             let pipe = Pipe()
             task.standardOutput = pipe; task.standardError = pipe
@@ -4932,13 +4959,27 @@ struct PluginWiringTests {
             let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             task.waitUntilExit()
 
-            #expect(task.terminationStatus == 0, "validate \(target) 失敗：\(out)")
-            #expect(!out.contains("warning"), """
-                validate \(target) 有 warning —— 每個 warning 都代表一個
-                「entry ignored at runtime」的死 hook：
-                \(out)
+            // 從 JSON 撈出所有 errors / warnings，讓失敗訊息可讀
+            var problems: [String] = []
+            if let data = out.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                var buckets: [[String: Any]] = []
+                if let m = obj["manifest"] as? [String: Any] { buckets.append(m) }
+                buckets += (obj["contents"] as? [[String: Any]]) ?? []
+                for b in buckets {
+                    for kind in ["errors", "warnings"] {
+                        for item in (b[kind] as? [[String: Any]]) ?? [] {
+                            problems.append("\(kind): \(item["message"] as? String ?? "\(item)")")
+                        }
+                    }
+                }
+            }
+            #expect(task.terminationStatus == 0, """
+                claude plugin validate --strict \(target) 失敗（exit \(task.terminationStatus)）。
+                每個 warning 都代表一個「entry ignored at runtime」的死 hook：
+                \(problems.isEmpty ? out : problems.joined(separator: "\n"))
                 """)
-            #expect(out.contains("Validation passed"), "validate \(target) 沒有印出通過：\(out)")
+            #expect(problems.isEmpty, "validate \(target) 有問題：\(problems.joined(separator: "\n"))")
         }
     }
 
@@ -4964,6 +5005,8 @@ Expected: 若 Step 1 已建檔則多數 PASS；`auraHookBinaryExists` 需先 `sw
 
 ```swift
 // 附加到 Tests/AuraCoreTests/CompositionRootTests.swift
+@testable import AuraHookFile
+
 @Suite("PipelineGraph composition root", .serialized)
 struct CompositionRootTests {
 
@@ -5083,7 +5126,6 @@ struct CompositionRootTests {
 - [ ] **Step 5: 實作 PipelineGraph**
 
 ```swift
-// Sources/AuraHookFile/PipelineGraph.swift
 import Foundation
 import AuraCore
 
@@ -5098,7 +5140,20 @@ public final class PipelineGraph: @unchecked Sendable {
     public let source: EventSource
     public let root: URL
 
-    public private(set) var registry = SessionRegistry()
+    /// **刻意不是 `public`。**
+    ///
+    /// 所有寫入都在 `lock` 下，但一個 `public` 的裸屬性讓外部可以**繞過 lock 直接讀**，
+    /// 與 `ingest()` 的鎖內寫入形成未同步的並發存取 —— `@unchecked Sendable` 的承諾
+    /// 就只兌現了一半。實證：面板的 `refreshPanel()` 原本寫 `graph.registry.visible`，
+    /// 正是這種讀取。收成 `internal` 之後，App target（只 `import AuraHookFile`）
+    /// 拿不到它，被迫走下面那個上鎖的 `visibleSessions`；測試用 `@testable` 仍可存取。
+    private(set) var registry = SessionRegistry()
+
+    /// 面板要列的 session。**上鎖**讀取 —— 這是外部取得 registry 內容的唯一途徑。
+    public var visibleSessions: [SessionState] {
+        lock.lock(); defer { lock.unlock() }
+        return registry.visible
+    }
     public var onIconStateChange: ((IconState) -> Void)?
 
     private var consumeTask: Task<Void, Never>?
@@ -5189,12 +5244,11 @@ public final class PipelineGraph: @unchecked Sendable {
 - [ ] **Step 6: 執行測試**
 
 Run: `swift build && swift test --filter CompositionRootTests 2>&1 | tail -12`
-Expected: 全部 PASS（5 個測試）
+Expected: 全部 PASS（**7 個測試**）　<!-- 原寫 5；清點 @Test 實為 7 -->
 
 - [ ] **Step 7: 寫端到端 wired-gate（不 mock 任何一層）**
 
 ```swift
-// Tests/AuraCoreTests/EndToEndWiredGateTests.swift
 import Testing
 import Foundation
 @testable import AuraCore
@@ -5259,9 +5313,17 @@ struct EndToEndWiredGateTests {
         let graph = PipelineGraph.production(root: root)
         graph.start(); defer { graph.stop() }
 
+        // `error` 刻意**先發**，不放在最後。
+        //
+        // 原本的順序是 working、working、error —— error 剛好是最後一個事件，
+        // 所以「last-write-wins」的錯誤實作在這個順序下也會給出 `.error`，
+        // 這條端到端測試因此無法單獨排除那個替代假說。
+        // 把 error 移到最前面，last-write-wins 會得到 `.working`，測試就有鑑別力了。
+        // （同一招在 T09 的 `twoWorkingOneErrorIsError` 用過 —— 固定測資的
+        // 元素位置會決定一個 mutation 是否可觀察。）
+        try fireHook(#"{"hook_event_name":"StopFailure","session_id":"e1","reason":"overloaded_error"}"#, root: root)
         try fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w1","tool_name":"Bash"}"#, root: root)
         try fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w2","tool_name":"Read"}"#, root: root)
-        try fireHook(#"{"hook_event_name":"StopFailure","session_id":"e1","reason":"overloaded_error"}"#, root: root)
 
         let final = await wait(for: graph) { $0.activity == .error && $0.counts.values.reduce(0,+) >= 3 }
         #expect(final.activity == .error, "使用者原始舉例，端到端驗證")
@@ -5296,8 +5358,15 @@ struct EndToEndWiredGateTests {
         try fireHook(#"{"hook_event_name":"Stop","session_id":"tail1","last_assistant_message":"全部完成"}"#, root: root)
         try fireHook(#"{"hook_event_name":"SessionEnd","session_id":"tail1","reason":"exit"}"#, root: root)
 
-        let afterEnd = await wait(for: graph) { $0.activity == .done }
+        // 必須等到 SessionEnd 真的處理完（liveCount 歸零），不能只等 activity == .done：
+        // Stop 本身就已經把 activity 設成 .done，但那時 liveness 仍是 .alive
+        // （pid 是這個測試行程本身，一直活著）。在高併發下（跑整個 suite 而非只跑
+        // 這一條）FSEvents 會把 Stop / SessionEnd 兩次寫入拆成兩個獨立事件，
+        // 只等 activity == .done 會在 SessionEnd 事件抵達前提早返回，導致下面的
+        // acknowledgeAll 抓不到「已結束」而不會刪檔——實測重現過這個 flake。
+        let afterEnd = await wait(for: graph) { $0.activity == .done && $0.liveCount == 0 }
         #expect(afterEnd.activity == .done, "整夜 pipeline 跑完、terminal 收掉，早上仍看得到綠燈")
+        #expect(afterEnd.liveCount == 0, "SessionEnd 必須被處理過，session 才算真正結束")
 
         graph.acknowledgeAll()
         #expect(graph.iconState.activity == .idle)
@@ -5421,7 +5490,7 @@ find Sources -name '*.swift' -exec wc -l {} + | sort -rn | head -10
 - [ ] **Step 11: Commit**
 
 ```bash
-git add plugin Sources/AuraHookFile/PipelineGraph.swift \
+git add .claude-plugin/marketplace.json plugin Sources/AuraHookFile/PipelineGraph.swift \
         Tests/AuraCoreTests/CompositionRootTests.swift \
         Tests/AuraCoreTests/EndToEndWiredGateTests.swift \
         docs/superpowers/plans/2026-09-08-agentaura-pipeline-dod.md
@@ -5482,21 +5551,19 @@ struct InstallLayoutTests {
     /// `${CLAUDE_PLUGIN_ROOT}/exec/aura-hook` 並同步改掉 Task 13 的字面值時，
     /// 這條測試仍會檢查舊路徑 —— 全綠但產品靜默失效。這正是 前一個專案 的失效方式。
     static func expectedBinaryPath() throws -> URL {
-        let url = repoRoot().appendingPathComponent("plugin/hooks/hooks.json")
-        let obj = try JSONSerialization.jsonObject(with: try Data(contentsOf: url))
-        let dict = try #require(obj as? [String: Any])
-        var commands: Set<String> = []
-        for (_, v) in dict {
-            for matcher in (v as? [[String: Any]]) ?? [] {
-                for h in (matcher["hooks"] as? [[String: Any]]) ?? [] {
-                    if let c = h["command"] as? String { commands.insert(c) }
-                }
-            }
-        }
+        // **不在這裡再解析一次 `hooks.json`。**
+        //
+        // 這裡原本有第二份解析器，於是 T13 把事件包進 `"hooks"` 物件時它沒同步，
+        // 四條測試裡三條變紅。紅是好事，但代價是兩份程式碼要靠人記得一起改 ——
+        // 那正是「接縫」的定義。改成直接用 `PluginWiringTests.entries()`，
+        // 全 repo 只留一份 hooks.json 解析器。
+        let commands = Set(try PluginWiringTests.entries().compactMap { $0.entry["command"] as? String })
         #expect(commands.count == 1, "全部 hook 應指向同一個 command：\(commands.sorted())")
         let command = try #require(commands.first)
+        // command 是加了引號的（官方慣例，$HOME 含空白才不會裂開），先剝掉
+        let unquoted = command.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
         // 安裝後 plugin 根目錄就是 repo 的 plugin/
-        let relative = command.replacingOccurrences(of: "${CLAUDE_PLUGIN_ROOT}/", with: "plugin/")
+        let relative = unquoted.replacingOccurrences(of: "${CLAUDE_PLUGIN_ROOT}/", with: "plugin/")
         return repoRoot().appendingPathComponent(relative)
     }
 
@@ -6377,13 +6444,30 @@ public enum AnimationSchedule {
 Run: `swift test --filter AnimationScheduleTests`
 Expected: 全部 PASS（6 個測試）
 
-- [ ] **Step 5: 確認 app target 已存在**
+- [ ] **Step 5: 在 `Package.swift` 新增 app target**
 
-`Package.swift` 從 Task 02 起就宣告了 `AgentAuraApp`（當時只有一個佔位 `main.swift`）。
-本 task 是把佔位換成實際內容，不需要改 `Package.swift`。
+> 這裡原本寫「`Package.swift` 從 Task 02 起就宣告了 `AgentAuraApp`，不需要改」——
+> **那是錯的**（我在派工前實查）。實際的 `Package.swift` 只有四個 target
+> （`AuraCore`、`AuraHookFile`、`aura-hook`、`AuraCoreTests`），
+> `Sources/AgentAuraApp/` 也不存在。照原文跑，`grep` 會回空、implementer 會卡住。
 
-Run: `grep -n AgentAuraApp Package.swift`
-Expected: 一行 `.executableTarget(name: "AgentAuraApp", dependencies: ["AuraCore", "AuraHookFile"]),`
+在 `.executableTarget(name: "aura-hook", ...)` 那一行**之後**插入：
+
+```swift
+        .executableTarget(name: "AgentAuraApp", dependencies: ["AuraCore", "AuraHookFile"]),
+```
+
+Run: `grep -n AgentAuraApp Package.swift && swift build 2>&1 | tail -3`
+Expected: 找得到那一行；`swift build` 成功。
+
+> **對隔離 gate 的影響（已實測，不需額外處理）**：`IsolationTests` 的
+> `nonUITargetsLoadNoUIModules` 用「`Sources/` 下的目錄 − `uiTargets` 允許清單」
+> 決定要 gate 誰，而 `uiTargets` 已經是 `["AgentAuraApp"]`，所以新增這個 target
+> 不會讓那條測試變紅。
+>
+> 反過來，`uiExemptionsAreEarned`（豁免必須被賺到 —— 被豁免的 target 必須**真的**
+> 載入 AppKit）在此之前因為目錄不存在而**跳過**，從這個 task 起會真的開始執行。
+> 若它變紅，代表 `AgentAuraApp` 沒有載入任何 UI module —— 那它就不該被豁免。
 
 - [ ] **Step 6: 實作 AppKit 層**
 
@@ -7171,7 +7255,9 @@ struct PanelRowView: View {
 // AppDelegate 新增方法
     private func refreshPanel() {
         let icon = graph.iconState
-        let rows = PanelViewModel.rows(from: graph.registry.visible)
+        // `graph.registry` 是 internal 且未加鎖 —— 走上鎖的 `visibleSessions`。
+        // 這個 callback 會從 FSEvents 的背景 queue 觸發，直接讀 registry 就是 data race。
+        let rows = PanelViewModel.rows(from: graph.visibleSessions)
         status.setPanel(title: PanelViewModel.title(for: icon), rows: rows)
     }
 ```
