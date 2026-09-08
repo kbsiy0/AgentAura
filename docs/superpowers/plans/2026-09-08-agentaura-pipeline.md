@@ -1617,8 +1617,62 @@ struct MergeRulesTests {
 
     // ---- Codable round-trip ----
 
-    @Test("JSON round-trip 保留全部欄位")
-    func codableRoundTrip() throws {
+    /// **CodingKeys 完整性 gate。**
+    ///
+    /// 刻意把**每一個** stored property 都填上與預設值不同的值再 round-trip。
+    /// 若只靠幾次 merge 產生的 snapshot（原本的寫法），沒被填到的欄位即使從
+    /// `CodingKeys` 漏掉，round-trip 仍會相等 —— 測不出來。這是 optional 欄位
+    /// 特別危險的地方：漏掉的 key 解碼成 nil，而原值本來就是 nil。
+    @Test("JSON round-trip 保留每一個 stored property")
+    func codableRoundTripCoversEveryField() throws {
+        var s = SessionSnapshot(sessionID: "round-trip-1")
+        s.hookEventName       = "PermissionRequest"
+        s.writtenAt           = Date(timeIntervalSince1970: 1_788_628_111)
+        s.pid                 = 4242
+        s.pidStartedAt        = 1_757_352_011
+        s.cwd                 = "/Users/you/專案 🚀/payments-api"
+        s.permissionMode      = "default"
+        s.effort              = "xhigh"
+        s.model               = "claude-opus-5[1m]"
+        s.source              = "startup"
+        s.reason              = "prompt_input_exit"
+        s.mainActivity        = .waiting
+        s.mainTool            = "Bash"
+        s.subActivity         = .working
+        s.subTool             = "Grep"
+        s.subAgentType        = "Explore"
+        s.notificationType    = "idle_prompt"
+        s.notificationMessage = "Claude is waiting for your input"
+        s.lastMessage         = "全部完成"
+        s.toolDescription     = "Download example.com to dl2.html"
+        s.toolDurationMs      = 12_403
+        s.turnStartedAt       = Date(timeIntervalSince1970: 1_788_628_000)
+        s.subagents           = ["Explore": 2, "implementer": 1]
+        s.toolFailures        = 3
+        s.terminated          = true
+
+        // 每個欄位都不是預設值 —— 任何從 CodingKeys 漏掉的 key 都會讓下面的等式失敗
+        let blank = SessionSnapshot(sessionID: "round-trip-1")
+        #expect(s != blank, "測試資料必須與空白初始狀態不同，否則這個 gate 沒有意義")
+
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let back = try dec.decode(SessionSnapshot.self, from: try enc.encode(s))
+        #expect(back == s)
+
+        // 額外確認：JSON 的 key 名都是 snake_case（檔案是人會讀的）
+        let obj = try JSONSerialization.jsonObject(with: try enc.encode(s)) as? [String: Any]
+        let keys = Set((obj ?? [:]).keys)
+        for k in keys {
+            #expect(k == k.lowercased(), "JSON key 應為 snake_case，但出現 \(k)")
+        }
+        #expect(keys.contains("main_activity") && keys.contains("tool_description")
+                && keys.contains("notification_message") && keys.contains("pid_started_at"),
+                "抽查幾個 snake_case key 確實存在")
+    }
+
+    @Test("merge 產生的 snapshot 也能 round-trip")
+    func codableRoundTripFromMerge() throws {
         var s = merge(payload("UserPromptSubmit"), into: nil)
         s = merge(payload("PermissionRequest", tool: "Bash"), into: s)
         s = merge(payload("PostToolUse", tool: "Write", agent: "a1", agentType: "Explore"), into: s)
