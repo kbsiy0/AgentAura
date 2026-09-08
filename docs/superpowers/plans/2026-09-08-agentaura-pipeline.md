@@ -4574,7 +4574,12 @@ struct PluginWiringTests {
 
     @Test("每一個 hook 的 command 都指向同一個 aura-hook 相對路徑")
     func allHooksPointAtAuraHook() throws {
-        for (event, h) in try Self.entries() {
+        let all = try Self.entries()
+        // 零樣本恆綠：`for` 迴圈跑零次的話下面的斷言一次都不執行，測試照樣通過。
+        // 實測過 —— 把 `entries()` 改成 `return []`，這條測試變綠、只有
+        // `allHooksAreAsync`（它有這行護欄）變紅。
+        #expect(!all.isEmpty, "hooks.json 解析不出任何 hook entry —— 這條測試會空轉")
+        for (event, h) in all {
             let cmd = try #require(h["command"] as? String)
             #expect(cmd == "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "\(event) 的 command 不一致：\(cmd)")
         }
@@ -5012,18 +5017,38 @@ Expected: 全部 PASS（5 個測試）
 
 - [ ] **Step 9: Mutation 驗證 —— wired-gate 是否真的有牙齒**
 
+> 用 Global Constraints 的標準程序（`cp` 備份 → 手動編輯 → 看紅 → `cp` 還原），
+> **不要用 `sed`**。這一段先前寫成 `sed -i.bak` + `mv`，與 Global Constraints
+> 自相矛盾；已改正。
+
+**9a — command 路徑打錯**（`/bin/aura-hook` → `/bin/aura-hook-typo`，共 **19 處**）
+Expected: `allHooksPointAtAuraHook` **必須 FAIL**。
+這一條擋的是 前一個專案 留下 7 個死 hook 的失效方式：路徑錯一個字，整個產品
+靜默失效而所有單元測試照樣全綠。
+
+**9b — 把任一個 hook 的 `async` 改成 `false`**
+Expected: `allHooksAreAsync` **必須 FAIL**，訊息指名是哪個 event。
+實測輸出：`↳ SessionStart 的 hook 缺少 async: true`。
+
+**9c — 從 `hooks.json` 刪掉 `"Elicitation"` 這一整個 key**
+Expected: `registeredEventsMatchHandledEvents` **必須 FAIL**，
+訊息為 `↳ 有映射卻沒註冊（對照表是死碼）：["Elicitation"]`。
+
+> **這是三個裡最重要的一個，因為它是實證發生過的 bug**：`Elicitation` 映射到
+> `waiting` 卻沒註冊，「MCP server 在等你輸入」那個狀態永遠收不到，而所有
+> 單元測試全綠。source-derived 雙向等式就是為這件事存在的 —— 9c 驗的是
+> 那個 gate 真的會咬，不只是寫得漂亮。
+
+**9d — `entries()` 改成 `return []`**
+Expected: `allHooksAreAsync` 與 `allHooksPointAtAuraHook` **兩條都必須 FAIL**
+（兩者都有 `#expect(!all.isEmpty)` 護欄）。
+
+> 實測記錄：`allHooksPointAtAuraHook` 原本**沒有**那行護欄，於是這個 mutation 下
+> 它**空轉通過** —— 一個 `for` 迴圈跑零次，裡面的斷言一次都不執行。
+> 已在 Step 2 的測試碼補上護欄。這種「零樣本恆綠」是本專案已中過七次的那族缺陷。
+
 ```bash
-# 把 plugin 的 command 路徑改成不存在的檔案
-sed -i.bak 's|/bin/aura-hook|/bin/aura-hook-typo|g' plugin/hooks/hooks.json
-swift test --filter PluginWiringTests 2>&1 | tail -5    # allHooksPointAtAuraHook 必須 FAIL
-mv plugin/hooks/hooks.json.bak plugin/hooks/hooks.json
-
-# 把某個 hook 的 async 拿掉
-sed -i.bak '0,/"async": true/s//"async": false/' plugin/hooks/hooks.json
-swift test --filter PluginWiringTests 2>&1 | tail -5    # allHooksAreAsync 必須 FAIL
-mv plugin/hooks/hooks.json.bak plugin/hooks/hooks.json
-
-swift test 2>&1 | tail -5                                # 還原後全綠
+swift test 2>&1 | tail -5    # 四個 mutation 全部還原後，必須全綠
 ```
 
 另外手動驗一次：把 `PipelineGraph.production` 的 `liveness:` 改成 `StubLiveness(table: [:])`，
@@ -5032,10 +5057,32 @@ swift test 2>&1 | tail -5                                # 還原後全綠
 - [ ] **Step 10: 量測 DoD**
 
 ```bash
-# hook 延遲 p95（需要 hyperfine：brew install hyperfine）
+# hook 延遲 p95
+#
+# 本機**沒有裝 hyperfine**（已實測 `which hyperfine` → not found），所以不要
+# 把 DoD 量測綁在它上面 —— 缺工具就量不到，等於這個 DoD 從沒被驗過。
+# 下面是零依賴的等價量測；若你確實裝了 hyperfine，用它更精準。
 export AGENTAURA_ROOT=$(mktemp -d)/sessions
 echo '{"hook_event_name":"PreToolUse","session_id":"bench","tool_name":"Bash"}' > /tmp/aura-bench.json
-hyperfine --warmup 20 --min-runs 200 './.build/release/aura-hook < /tmp/aura-bench.json'
+swift build -c release
+python3 - <<'BENCH'
+import subprocess, time, statistics, os
+os.environ.setdefault("AGENTAURA_ROOT", os.environ["AGENTAURA_ROOT"])
+payload = open("/tmp/aura-bench.json","rb").read()
+for _ in range(20):                                  # warmup
+    subprocess.run(["./.build/release/aura-hook"], input=payload, capture_output=True)
+ts = []
+for _ in range(200):
+    t = time.perf_counter()
+    subprocess.run(["./.build/release/aura-hook"], input=payload, capture_output=True)
+    ts.append((time.perf_counter() - t) * 1000)
+ts.sort()
+print(f"n=200  median={statistics.median(ts):.2f}ms  "
+      f"p95={ts[int(.95*len(ts))]:.2f}ms  max={max(ts):.2f}ms")
+BENCH
+
+# 若有 hyperfine 才跑這一行（沒有就跳過，上面的 python 已給出數字）
+command -v hyperfine >/dev/null && hyperfine --warmup 20 --min-runs 200 './.build/release/aura-hook < /tmp/aura-bench.json'
 
 # 覆蓋率
 swift test --enable-code-coverage 2>&1 | tail -3
@@ -5053,6 +5100,7 @@ find Sources -name '*.swift' -exec wc -l {} + | sort -rn | head -10
 | 項目 | 門檻 | 實測 |
 |---|---|---|
 | hook 延遲 p95 | < 5ms | |
+| ↑ 量測工具 | 零依賴 python（不要求 hyperfine） | |
 | 端到端反應 p95 | < 250ms | |
 | `AuraCore` 覆蓋率 | ≥ 90% | |
 | 單檔行數 | ≤ 200 | |
