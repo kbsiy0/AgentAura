@@ -989,6 +989,7 @@ git commit -m "feat(core): Activity 優先序與 event→activity 對照，含 N
       public let source: String?
       public let reason: String?
       public let toolName: String?
+      public let toolDescription: String?   // tool_input.description，面板顯示「在等你批准什麼」
       public let toolDurationMs: Int?
       public let model: String?
       public let notificationType: String?
@@ -1191,6 +1192,26 @@ struct HookPayloadTests {
         #expect(p.effortLevel == nil)
     }
 
+    @Test("tool_input.description 被讀出來，缺少或型別錯時回 nil")
+    func toolDescriptionExtraction() throws {
+        let reqs = try Fixtures.events(named: "round2", kind: "PermissionRequest")
+        let p = try #require(HookPayload(json: try #require(reqs.first)))
+        #expect(p.toolDescription?.isEmpty == false,
+                "實測 PermissionRequest 的 tool_input 帶 description")
+
+        // tool_input 缺失、非物件、description 缺失、description 非字串 —— 都不得 crash
+        for weird: Any in [NSNull(), "not a dict", 42, [1, 2], ["other": "x"], ["description": 7]] {
+            let q = try #require(HookPayload(json: [
+                "hook_event_name": "PreToolUse", "session_id": "s1", "tool_input": weird,
+            ]))
+            #expect(q.toolDescription == nil)
+        }
+        let r = try #require(HookPayload(json: [
+            "hook_event_name": "PreToolUse", "session_id": "s1",
+        ]))
+        #expect(r.toolDescription == nil, "完全沒有 tool_input")
+    }
+
     @Test("PermissionRequest 的實測欄位（含 permission_suggestions）")
     func permissionRequestFields() throws {
         let reqs = try Fixtures.events(named: "round2", kind: "PermissionRequest")
@@ -1281,6 +1302,10 @@ public struct HookPayload: Sendable, Equatable {
         // 文件寫 end_reason，實測是 reason —— 兩者都讀。
         reason           = Self.string(json["reason"]) ?? Self.string(json["end_reason"])
         toolName         = Self.string(json["tool_name"])
+        // tool_input.description —— Claude Code 為 Bash 等 tool 產生的人可讀說明。
+        // 面板在 waiting 那一列要顯示「在等你批准什麼」，只有 tool_name 不夠
+        //（「等待權限：Bash」看不出在等什麼，而那正是最需要資訊的一列）。
+        toolDescription  = Self.nonEmpty((json["tool_input"] as? [String: Any])?["description"])
         toolDurationMs   = json["duration_ms"] as? Int
         notificationType = Self.nonEmpty(json["notification_type"])
         notificationMessage = Self.nonEmpty(json["message"])
@@ -1651,7 +1676,9 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
     public var subAgentType: String?
 
     public var notificationType: String?
+    public var notificationMessage: String?
     public var lastMessage: String?
+    public var toolDescription: String?
     public var toolDurationMs: Int?
 
     public var turnStartedAt: Date?
@@ -1677,9 +1704,11 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
         case subActivity     = "sub_activity"
         case subTool         = "sub_tool"
         case subAgentType    = "sub_agent_type"
-        case notificationType = "notification_type"
-        case lastMessage     = "last_message"
-        case toolDurationMs  = "tool_duration_ms"
+        case notificationType    = "notification_type"
+        case notificationMessage = "notification_message"
+        case lastMessage         = "last_message"
+        case toolDescription     = "tool_description"
+        case toolDurationMs      = "tool_duration_ms"
         case turnStartedAt   = "turn_started_at"
         case subagents, toolFailures = "tool_failures", terminated
     }
@@ -1717,6 +1746,8 @@ public enum MergeRules {
         if let src = p.source   { s.source = src }
         if let r   = p.reason   { s.reason = r }
         if let n   = p.notificationType { s.notificationType = n }
+        if let nm  = p.notificationMessage { s.notificationMessage = nm }
+        if let td  = p.toolDescription  { s.toolDescription = td }
         if let m   = p.lastMessage      { s.lastMessage = m }
         if let d   = p.toolDurationMs   { s.toolDurationMs = d }
 

@@ -114,6 +114,8 @@ app 啟動掃一次目錄即得正確現況。整個設計因此塌縮成很小�
   "sub_agent_type": "Explore",
 
   "notification_type": null,
+  "notification_message": null,
+  "tool_description": "Download example.com to dl2.html",
   "last_message": null,
   "tool_duration_ms": 12403,
 
