@@ -358,25 +358,83 @@ struct IsolationTests {
         return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
-    /// 注意：此 gate 是純字串比對，會連註解一起掃到。
-    /// 撰寫 AuraCore 的註解時避開「import + 框架名」的字面組合，否則會誤報。
-    @Test("AuraCore 不得 import AppKit / SwiftUI")
+    /// 用 regex 而非 `contains("import AppKit")`。
+    ///
+    /// 純字串比對有兩個問題：
+    /// 1. **漏掉 scoped import** —— `import class AppKit.NSWindow` 不含子字串
+    ///    `"import AppKit"`，是真實的繞過路徑。Global Constraint 說這條約束
+    ///    「由測試強制、不靠自律」，有已知繞過路徑的 gate 就不算強制。
+    /// 2. **誤報註解** —— 連散文裡的「import + 框架名」字樣都會判違規。
+    ///    regex 要求行首（允許縮排）才算，註解裡的敘述不會誤觸。
+    static let bannedImportPattern =
+        "(?m)^[ \t]*(@testable[ \t]+)?import[ \t]+" +
+        "((class|struct|enum|protocol|typealias|func|var|let|actor)[ \t]+)?" +
+        "(AppKit|SwiftUI|Cocoa)\\b"
+
+    @Test("AuraCore 不得依賴 AppKit / SwiftUI / Cocoa（含 scoped import）")
     func coreHasNoUIImports() throws {
-        let banned = ["AppKit", "SwiftUI", "Cocoa"]
         for file in Self.swiftFiles(under: "Sources/AuraCore") {
             let src = try String(contentsOf: file, encoding: .utf8)
-            for framework in banned {
-                #expect(!src.contains("import \(framework)"),
-                        "\(file.lastPathComponent) 不該 import \(framework)")
-            }
+            let hit = src.range(of: Self.bannedImportPattern, options: .regularExpression)
+            #expect(hit == nil,
+                    "\(file.lastPathComponent) 出現禁止的 import：\(hit.map { String(src[$0]) } ?? "")")
         }
+    }
+
+    @Test("regex gate 對各種 import 寫法都有牙齒")
+    func importPatternCoverage() {
+        let shouldMatch = [
+            "import AppKit",
+            "  import AppKit",
+            "\timport SwiftUI",
+            "@testable import AppKit",
+            "import class AppKit.NSWindow",     // scoped —— contains 檢查會漏掉
+            "import struct SwiftUI.Color",
+            "import Cocoa",
+        ]
+        let shouldNotMatch = [
+            "/// 此 module 不得依賴 AppKit",      // 註解敘述
+            "// 說明：不要 import AppKit 進來",   // 註解裡的字面組合
+            "import Foundation",
+            "let s = \"import AppKit\"",        // 字串常值
+            "importAppKit",
+        ]
+        for line in shouldMatch {
+            #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) != nil,
+                    "應攔下：\(line)")
+        }
+        for line in shouldNotMatch {
+            #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) == nil,
+                    "不該攔：\(line)")
+        }
+    }
+
+    /// 正確算行數。
+    ///
+    /// `split(separator: "\n", omittingEmptySubsequences: false).count` 對結尾有換行的
+    /// 檔案會多算 1（`"a\nb\n"` → 3），使「≤200」實際擋在 199 —— 恰好 200 行的合法檔案
+    /// 會被誤判成 201 行。改成數換行字元。
+    static func lineCount(of text: String) -> Int {
+        guard !text.isEmpty else { return 0 }
+        let newlines = text.reduce(into: 0) { acc, ch in if ch == "\n" { acc += 1 } }
+        return text.hasSuffix("\n") ? newlines : newlines + 1
+    }
+
+    @Test("lineCount 對結尾有／無換行都正確")
+    func lineCountIsExact() {
+        #expect(Self.lineCount(of: "") == 0)
+        #expect(Self.lineCount(of: "a") == 1)
+        #expect(Self.lineCount(of: "a\n") == 1)
+        #expect(Self.lineCount(of: "a\nb") == 2)
+        #expect(Self.lineCount(of: "a\nb\n") == 2, "結尾換行不得多算一行")
+        #expect(Self.lineCount(of: String(repeating: "x\n", count: 200)) == 200)
     }
 
     @Test("每個原始檔不得超過 200 行")
     func fileLengthLimit() throws {
         for dir in ["Sources/AuraCore", "Sources/AuraHookFile", "Sources/aura-hook"] {
             for file in Self.swiftFiles(under: dir) {
-                let lines = try String(contentsOf: file, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false).count
+                let lines = Self.lineCount(of: try String(contentsOf: file, encoding: .utf8))
                 #expect(lines <= 200, "\(file.lastPathComponent) 有 \(lines) 行，超過 200 行上限")
             }
         }
