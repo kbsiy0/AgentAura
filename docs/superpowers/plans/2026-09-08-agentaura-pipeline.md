@@ -886,23 +886,35 @@ public enum EventMapping {
         }
     }
 
+    /// `Notification` 中代表「需要使用者」的型別 —— **`hooks.json` 的 matcher
+    /// 必須等於這個集合**（加上 `agent_completed`，它是 `done` 不是 waiting）。
+    ///
+    /// 與 `handledEvents` 同理：跨層 gate 從生產碼推導，不留第二份手寫清單。
+    public static let notificationTypesNeedingUser: Set<String> = [
+        "permission_prompt", "idle_prompt", "agent_needs_input",
+        "elicitation_dialog", "elicitation_url_dialog",
+    ]
+
+    /// `Notification` 中代表「有結果可看」的型別。
+    public static let notificationTypesMeaningDone: Set<String> = [
+        "agent_completed",
+    ]
+
+    /// `hooks.json` 的 `Notification` matcher 應涵蓋的全部型別。
+    public static var notificationMatcherTypes: Set<String> {
+        notificationTypesNeedingUser.union(notificationTypesMeaningDone)
+    }
+
     /// `Notification` 的型別分流（§2.2.1）。
     ///
     /// 未知型別一律 `.noChange`。理由：未知空間裡佔多數的是雜訊（auth、quota），
     /// 誤報會讓 icon 無故亮橘；而「有人在等你」已由獨立的 `PermissionRequest`
     /// event 直接覆蓋，不需要靠 `Notification` 兜底。
     static func notificationEffect(_ type: String?) -> EventEffect {
-        switch type {
-        case "permission_prompt", "idle_prompt", "agent_needs_input",
-             "elicitation_dialog", "elicitation_url_dialog":
-            return .setActivity(.waiting)
-
-        case "agent_completed":
-            return .setActivity(.done)
-
-        default:
-            return .noChange
-        }
+        guard let type else { return .noChange }
+        if notificationTypesNeedingUser.contains(type) { return .setActivity(.waiting) }
+        if notificationTypesMeaningDone.contains(type) { return .setActivity(.done) }
+        return .noChange
     }
 }
 ```
@@ -3797,23 +3809,26 @@ struct PluginWiringTests {
                 "有註冊卻沒映射（白付 hook 呼叫）：\(registeredNotMapped.sorted())")
     }
 
-    @Test("Notification 的 matcher 涵蓋全部 6 種需要使用者的型別")
-    func notificationMatcherCoversNeedUserTypes() throws {
+    /// source-derived 雙向等式，與 `registeredEventsMatchHandledEvents` 同一個理由。
+    ///
+    /// - matcher 少收 → 該型別的 `Notification` 永遠不會抵達，對照表是死碼
+    /// - matcher 多收 → 收了卻被當雜訊，白付 hook 呼叫
+    @Test("Notification matcher 必須等於 EventMapping.notificationMatcherTypes")
+    func notificationMatcherMatchesMapping() throws {
         let notif = try #require(try Self.hooksJSON()["Notification"] as? [[String: Any]])
         let matcher = try #require(notif.first?["matcher"] as? String)
-        for t in ["permission_prompt", "idle_prompt", "agent_needs_input",
-                  "elicitation_dialog", "elicitation_url_dialog", "agent_completed"] {
-            #expect(matcher.contains(t), "matcher 漏了 \(t)")
-        }
-    }
+        let inMatcher = Set(matcher.split(separator: "|").map(String.init))
+        let expected = EventMapping.notificationMatcherTypes
 
-    @Test("matcher 裡的每一個型別，EventMapping 都不回 noChange")
-    func matcherTypesAreAllHandled() throws {
-        let notif = try #require(try Self.hooksJSON()["Notification"] as? [[String: Any]])
-        let matcher = try #require(notif.first?["matcher"] as? String)
-        for t in matcher.split(separator: "|").map(String.init) {
+        #expect(expected.subtracting(inMatcher).isEmpty,
+                "matcher 漏收（對照表是死碼）：\(expected.subtracting(inMatcher).sorted())")
+        #expect(inMatcher.subtracting(expected).isEmpty,
+                "matcher 多收（白付 hook 呼叫）：\(inMatcher.subtracting(expected).sorted())")
+
+        // 再確認 matcher 收的每一個型別實際上真的會改變狀態
+        for t in inMatcher {
             #expect(EventMapping.effect(forEvent: "Notification", notificationType: t) != .noChange,
-                    "matcher 收了 \(t) 但對照表把它當雜訊 —— 兩邊契約不一致")
+                    "matcher 收了 \(t) 但對照表把它當雜訊")
         }
     }
 
@@ -4267,18 +4282,41 @@ struct InstallLayoutTests {
         fatalError("找不到 Package.swift")
     }
 
-    @Test("hooks.json 指向的相對路徑，在 plugin 目錄下真的存在且可執行")
-    func pluginBinaryIsInPlace() throws {
-        // hooks.json 用 ${CLAUDE_PLUGIN_ROOT}/bin/aura-hook
-        // → 安裝後 plugin 根目錄就是 plugin/，故必須有 plugin/bin/aura-hook
-        let bin = Self.repoRoot().appendingPathComponent("plugin/bin/aura-hook")
-        #expect(FileManager.default.isExecutableFile(atPath: bin.path),
-                "先跑 scripts/build-plugin.sh。這條擋的正是 前一個專案 留下死 hook 的失效方式")
+    /// 從 `hooks.json` 的 command 字串**推導**出應存在的路徑，不寫死。
+    ///
+    /// 若寫死 `plugin/bin/aura-hook`，有人把 hooks.json 改成
+    /// `${CLAUDE_PLUGIN_ROOT}/exec/aura-hook` 並同步改掉 Task 13 的字面值時，
+    /// 這條測試仍會檢查舊路徑 —— 全綠但產品靜默失效。這正是 前一個專案 的失效方式。
+    static func expectedBinaryPath() throws -> URL {
+        let url = repoRoot().appendingPathComponent("plugin/hooks/hooks.json")
+        let obj = try JSONSerialization.jsonObject(with: try Data(contentsOf: url))
+        let dict = try #require(obj as? [String: Any])
+        var commands: Set<String> = []
+        for (_, v) in dict {
+            for matcher in (v as? [[String: Any]]) ?? [] {
+                for h in (matcher["hooks"] as? [[String: Any]]) ?? [] {
+                    if let c = h["command"] as? String { commands.insert(c) }
+                }
+            }
+        }
+        #expect(commands.count == 1, "全部 hook 應指向同一個 command：\(commands.sorted())")
+        let command = try #require(commands.first)
+        // 安裝後 plugin 根目錄就是 repo 的 plugin/
+        let relative = command.replacingOccurrences(of: "${CLAUDE_PLUGIN_ROOT}/", with: "plugin/")
+        return repoRoot().appendingPathComponent(relative)
     }
 
-    @Test("plugin/bin/aura-hook 是 universal binary（arm64 + x86_64）")
+    @Test("hooks.json 指向的路徑，在 repo 的 plugin 目錄下真的存在且可執行")
+    func pluginBinaryIsInPlace() throws {
+        let bin = try Self.expectedBinaryPath()
+        #expect(FileManager.default.isExecutableFile(atPath: bin.path),
+                "\(bin.path) 不存在或不可執行。先跑 scripts/build-plugin.sh。"
+                + "這條擋的正是 前一個專案 留下死 hook 的失效方式")
+    }
+
+    @Test("plugin 的 aura-hook 是 universal binary（arm64 + x86_64）")
     func binaryIsUniversal() throws {
-        let bin = Self.repoRoot().appendingPathComponent("plugin/bin/aura-hook")
+        let bin = try Self.expectedBinaryPath()
         try #require(FileManager.default.isExecutableFile(atPath: bin.path))
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/lipo")
@@ -4290,9 +4328,9 @@ struct InstallLayoutTests {
         #expect(archs.contains("x86_64"), "開源給別人用，Intel Mac 也要能跑。archs=\(archs)")
     }
 
-    @Test("plugin/bin/aura-hook 真的能處理 payload")
+    @Test("plugin 的 aura-hook 真的能處理 payload")
     func pluginBinaryWorks() throws {
-        let bin = Self.repoRoot().appendingPathComponent("plugin/bin/aura-hook")
+        let bin = try Self.expectedBinaryPath()
         try #require(FileManager.default.isExecutableFile(atPath: bin.path))
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("aura-install-\(UUID().uuidString)/sessions")
