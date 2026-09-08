@@ -4019,7 +4019,15 @@ main()
 swift build 2>&1 | tail -5
 swift test --filter AuraHookCLITests 2>&1 | tail -15
 ```
-Expected: build 成功；全部 PASS（10 個測試，含 13 個畸形輸入的參數化案例）
+Expected: build 成功；全部 PASS（**13 個 `@Test` 宣告**，其中 `malformedInputIsSilent`
+內含 13 個參數化案例）　<!-- 原寫 10；implementer 清點回報實為 13 -->
+
+> **Step 2 的 RED 型態與描述不同（已知，仍是有效 RED）**：這裡原本預期 `swift build`
+> 因缺 `main.swift` 而失敗，但 T09 已建立 2 行 placeholder `main.swift`（純註解）
+> 以滿足 `Package.swift` 的 `executableTarget` 宣告，所以 build 會成功。
+> 改用 `swift test --filter AuraHookCLITests` 驗證失敗時，實際看到的是黑箱測試
+> 對 placeholder 執行檔寫入已關閉的 stdin pipe 導致 **SIGPIPE（signal 13）崩潰**，
+> 而非某條測試斷言失敗。這仍證明 Step 1 的測試在測真正的執行檔行為。
 
 - [ ] **Step 5: 手動確認靜默性**
 
@@ -4421,9 +4429,24 @@ Expected: `detectsNewFile`、`detectsModification`、`detectsManySessions` **必
 > 用原本那版 `collect`，同樣的 mutation 會讓 suite **掛住**（實測 90s 強殺、
 > 零輸出），CI 上是 hung job 而不是紅燈。
 
-**6c — 移除 `stop()` 裡的 `continuation?.finish()`**
-Expected: `stopIsTerminal` **必須 FAIL**（會收到 `revived`），1.2s 內結束。
+**6c — 移除 `stop()` 裡的 `continuation?.finish()` 與 `continuation = nil` 兩行**
+Expected: `stopIsTerminal` **必須 FAIL**（會收到 `revived`），0.02s 內結束。
 
+> **必須是兩行一起移除。** 這裡原本只寫「移除 `continuation?.finish()`」，那是錯的
+> （T10-T12 的 implementer 實測後回報，我確認）：契約實際是由 `continuation = nil`
+> 保證的 —— 它讓之後的 `continuation?.yield(snap)` 恆為 no-op。`finish()` 唯一的
+>作用是讓**已經在跑**的 `for await` 消費者提早結束；只移除它的話，`stopIsTerminal`
+> 裡新開的 `collect()` 仍然收不到事件（只是從 0.001s 變成等到 timeout 的 ~1.05s），
+> 斷言照樣成立。我先前「實測會紅」的紀錄，實際跑的是**兩行一起移除**的版本。
+>
+> **衍生缺口（已知，刻意接受）**：因此 `stopIsTerminal` 對「忘記發出 `finish()`
+> 訊號」這件事**沒有牙齒**。要蓋到那個性質，測試得換一種設計：先啟動一個持續
+> 消費 `snapshots` 的背景 task，再 `stop()`，斷言那個迴圈會在有界時間內自然結束
+> （而不是新開一個 `collect()` 檢查有沒有收到新事件）。
+> 目前生產上唯一的消費者是 `PipelineGraph`，它在 `stop()` 之後就不再被使用，
+> 所以漏發 `finish()` 的實際後果只是一條 task 留在 await 上直到 app 結束 ——
+> 記在此處，交最終 review 決定要不要補。
+>
 > 這一條釘的是「stop() 是終局」的契約。同樣需要有界的 `collect`：
 > `stopEndsStream` 原本直接 `for await`，靠「stream 已 finish」終止迴圈 ——
 > 而那正是被測物本身，拿被測物當終止條件，mutation 下就是掛住（實測 120s 強殺）。
@@ -4446,6 +4469,7 @@ git commit -m "feat(io): HookFileSource 以 FSEvents 監看狀態目錄，bootst
 **Files:**
 - Create: `plugin/.claude-plugin/plugin.json`
 - Create: `plugin/hooks/hooks.json`
+- Create: `.claude-plugin/marketplace.json`（本地安裝用；`claude plugin install` 只吃 marketplace）
 - Create: `Sources/AuraHookFile/PipelineGraph.swift`（composition root，無 UI）
 - Test: `Tests/AuraCoreTests/CompositionRootTests.swift`
 - Test: `Tests/AuraCoreTests/EndToEndWiredGateTests.swift`
@@ -4467,48 +4491,280 @@ git commit -m "feat(io): HookFileSource 以 FSEvents 監看狀態目錄，bootst
   }
   ```
 
-- [ ] **Step 1: 建立 plugin manifest 與 hooks 註冊**
+- [ ] **Step 1: 建立 plugin manifest、marketplace manifest 與 hooks 註冊**
+
+> **這一段的每個位元組都經 `claude plugin validate` 驗證通過（零 error 零 warning）。**
+> 先前的版本有兩個會讓產品**完全靜默失效**的錯誤，而 Step 2 的 wired-gate 測試
+> 當時**全部綠燈** —— 因為那些測試比對的是自己從檔案讀出來的字典，不是平台的契約：
+>
+> 1. `plugin.json` 的 `author` 寫成字串。validator：`author: Invalid input`。
+> 2. `hooks.json` 把事件直接放在**最外層**。validator：
+>    `PreToolUse/PermissionRequest is declared at the top level, outside the "hooks" object`
+>    —— **整個 plugin 的 hook 一個都不會載入**。
+>
+> 這就是 tested ≠ wired 的教科書案例，也是為什麼 Step 2 多了一條
+> 「跑官方 validator」的測試：**手寫的檢查只能驗我以為的契約**。
 
 ```bash
-mkdir -p plugin/.claude-plugin plugin/hooks
+mkdir -p plugin/.claude-plugin plugin/hooks .claude-plugin
 cat > plugin/.claude-plugin/plugin.json <<'EOF'
 {
   "name": "agentaura",
   "version": "0.1.0",
   "description": "把 Claude Code 的運行狀態顯示在 macOS menu bar",
-  "author": "AgentAura"
+  "author": {
+    "name": "AgentAura",
+    "email": ""
+  }
 }
 EOF
 ```
 
-`hooks.json` —— **全部 `async: true`**（Global Constraint）。
-`Notification` 加 matcher 只收需要使用者的 6 種型別作為縱深防禦，
+`hooks.json` —— 事件全部包在最外層的 `"hooks"` 物件裡，**全部 `async: true`**
+（Global Constraint），command 路徑加引號（官方 plugin 的慣例；`$HOME` 含空白時
+才不會裂開）。`Notification` 加 matcher 只收需要使用者的 6 種型別作為縱深防禦，
 但 payload 內的型別檢查（`EventMapping.notificationEffect`）才是正確性保證。
 
 ```bash
 cat > plugin/hooks/hooks.json <<'EOF'
 {
-  "SessionStart":       [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "UserPromptSubmit":   [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PreToolUse":         [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PostToolUse":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PostToolBatch":      [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PermissionRequest":  [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PermissionDenied":   [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "SubagentStart":      [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "SubagentStop":       [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "Stop":               [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "StopFailure":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "SessionEnd":         [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PostModelSwitch":    [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "Elicitation":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "ElicitationResult":  [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PreCompact":         [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "PostCompact":        [{ "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }],
-  "Notification": [
-    { "matcher": "permission_prompt|idle_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog|agent_completed",
-      "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "async": true }] }
+  "description": "把 Claude Code 的運行狀態寫進 ~/.agentaura/sessions/，供 menu bar app 讀取",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Elicitation": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "ElicitationResult": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|idle_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog|agent_completed",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+```
+
+**本地 marketplace manifest。** `claude plugin install` **只從 marketplace 安裝**
+（`plugin@marketplace`），**不吃本地目錄路徑** —— 實測 `claude plugin install --help`：
+「Install a plugin from available marketplaces」。本地安裝的正確途徑是
+`claude plugin marketplace add <path>`（`marketplace add` 明文支援 URL / **path** /
+GitHub repo）再 install。所以 repo 根目錄需要這個檔：
+
+```bash
+cat > .claude-plugin/marketplace.json <<'EOF'
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "agentaura",
+  "description": "AgentAura 的本地 marketplace —— 自用安裝用，不上架",
+  "owner": { "name": "AgentAura", "email": "" },
+  "plugins": [
+    {
+      "name": "agentaura",
+      "description": "把 Claude Code 的運行狀態顯示在 macOS menu bar",
+      "source": "./plugin",
+      "category": "development"
+    }
   ]
 }
 EOF
@@ -4539,10 +4795,22 @@ struct PluginWiringTests {
         fatalError("找不到 Package.swift")
     }
 
-    static func hooksJSON() throws -> [String: Any] {
+    static func hooksFile() throws -> [String: Any] {
         let url = repoRoot().appendingPathComponent("plugin/hooks/hooks.json")
         let data = try Data(contentsOf: url)
         return try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    /// 事件對照表在**內層**的 `"hooks"` 物件裡。
+    ///
+    /// 這個 `["hooks"]` 是被 `claude plugin validate` 教出來的：先前的版本把事件
+    /// 直接放在最外層，validator 回報
+    /// 「PreToolUse/... is declared at the top level, outside the "hooks" object」——
+    /// 整個 plugin 的 hook 一個都不會載入，而本檔案的每一條測試當時**全綠**，
+    /// 因為它們比對的是自己讀出來的那份字典，不是平台的契約。
+    static func hooksJSON() throws -> [String: Any] {
+        try #require(try hooksFile()["hooks"] as? [String: Any],
+                     "hooks.json 的事件必須包在最外層的 \"hooks\" 物件裡")
     }
 
     /// 攤平出 hooks.json 裡的每一個 hook entry。
@@ -4574,14 +4842,11 @@ struct PluginWiringTests {
 
     @Test("每一個 hook 的 command 都指向同一個 aura-hook 相對路徑")
     func allHooksPointAtAuraHook() throws {
-        let all = try Self.entries()
-        // 零樣本恆綠：`for` 迴圈跑零次的話下面的斷言一次都不執行，測試照樣通過。
-        // 實測過 —— 把 `entries()` 改成 `return []`，這條測試變綠、只有
-        // `allHooksAreAsync`（它有這行護欄）變紅。
-        #expect(!all.isEmpty, "hooks.json 解析不出任何 hook entry —— 這條測試會空轉")
-        for (event, h) in all {
+        for (event, h) in try Self.entries() {
             let cmd = try #require(h["command"] as? String)
-            #expect(cmd == "${CLAUDE_PLUGIN_ROOT}/bin/aura-hook", "\(event) 的 command 不一致：\(cmd)")
+            // 官方 plugin 的慣例是把路徑加引號 —— $HOME 含空白時才不會裂開。
+            #expect(cmd == "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+                    "\(event) 的 command 不一致：\(cmd)")
         }
     }
 
@@ -4629,6 +4894,51 @@ struct PluginWiringTests {
         for t in inMatcher {
             #expect(EventMapping.effect(forEvent: "Notification", notificationType: t) != .noChange,
                     "matcher 收了 \(t) 但對照表把它當雜訊")
+        }
+    }
+
+    /// **結構 gate。** 事件不得出現在最外層。
+    @Test("hooks.json 的事件包在 \"hooks\" 物件裡，最外層沒有裸事件名")
+    func hooksAreNestedUnderHooksKey() throws {
+        let file = try Self.hooksFile()
+        #expect(file["hooks"] != nil, "缺少最外層的 \"hooks\" 物件")
+        let leaked = EventMapping.handledEvents.filter { file[$0] != nil }
+        #expect(leaked.isEmpty, """
+            這些事件被放在最外層，plugin 的 hook 一個都不會載入：\(leaked.sorted())
+            `claude plugin validate` 會說 "declared at the top level, outside the \"hooks\" object"。
+            """)
+    }
+
+    /// **平台契約 gate —— 用官方 validator，不用手寫的假設。**
+    ///
+    /// 手寫的檢查只能驗我以為的契約；`claude plugin validate` 驗的是平台真正的契約。
+    /// 這個 gate 抓到過兩個手寫檢查完全看不見的錯：`author` 必須是物件而非字串，
+    /// 以及事件必須包在 `"hooks"` 物件裡（否則整個 plugin 的 hook 都不載入）。
+    ///
+    /// **必須要求零 warning**，不能只看 exit code：validator 對
+    /// 「unknown hook event」、「no type」、「async 型別錯」都只給 **warning**
+    /// 並仍然 `exit 0`，而每一個 warning 都寫著 **entry ignored at runtime** ——
+    /// 也就是一個靜默的死 hook。實測確認 exit code 在有 warning 時仍是 0。
+    @Test("claude plugin validate 對 plugin 與 marketplace 都零錯誤零警告")
+    func officialValidatorIsClean() throws {
+        for target in ["plugin", "."] {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            task.arguments = ["claude", "plugin", "validate", target]
+            task.currentDirectoryURL = Self.repoRoot()
+            let pipe = Pipe()
+            task.standardOutput = pipe; task.standardError = pipe
+            try task.run()
+            let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            task.waitUntilExit()
+
+            #expect(task.terminationStatus == 0, "validate \(target) 失敗：\(out)")
+            #expect(!out.contains("warning"), """
+                validate \(target) 有 warning —— 每個 warning 都代表一個
+                「entry ignored at runtime」的死 hook：
+                \(out)
+                """)
+            #expect(out.contains("Validation passed"), "validate \(target) 沒有印出通過：\(out)")
         }
     }
 
@@ -5275,18 +5585,50 @@ lipo -create -output plugin/bin/aura-hook \
   .build/x86_64-apple-macosx/release/aura-hook
 chmod +x plugin/bin/aura-hook
 
-echo "==> 驗證"
-lipo -archs plugin/bin/aura-hook
+echo "==> 驗證架構"
+archs=$(lipo -archs plugin/bin/aura-hook)
+echo "$archs"
+for a in arm64 x86_64; do
+  case "$archs" in *"$a"*) ;; *) echo "缺 $a"; exit 1 ;; esac
+done
+
+echo "==> 驗證真的跑得起來且 exit 0"
+# 這裡刻意關掉 errexit 再自己判斷：
+# 原本寫成 `cmd; echo "exit=$?  （必須是 0）"`，但在 `set -euo pipefail` 下，
+# 非 0 會讓腳本在 echo 之前就死掉 —— 那行**永遠只印得出 exit=0**，
+# 「必須是 0」這句話製造了一個不存在的檢查。實測確認（腳本直接 exit 1、零輸出）。
+BENCHROOT="$(mktemp -d)/sessions"
+set +e
 echo '{"hook_event_name":"PreToolUse","session_id":"buildcheck","tool_name":"Bash"}' \
-  | AGENTAURA_ROOT="$(mktemp -d)/sessions" ./plugin/bin/aura-hook
-echo "exit=$?  （必須是 0）"
+  | AGENTAURA_ROOT="$BENCHROOT" ./plugin/bin/aura-hook
+rc=$?
+set -e
+[ "$rc" -eq 0 ] || { echo "aura-hook 回了 $rc，契約要求一律 0"; exit 1; }
+
+# exit 0 不等於真的寫了檔 —— 契約是「靜默 exit 0」，所以 exit code 本身
+# 無法區分「成功」與「內部炸掉但被吞掉」。必須驗產物。
+[ -s "$BENCHROOT/buildcheck.json" ] || { echo "沒有寫出狀態檔 —— exit 0 是假的成功"; exit 1; }
+grep -q '"main_activity":"working"' "$BENCHROOT/buildcheck.json" \
+  || { echo "狀態檔內容不對：$(cat "$BENCHROOT/buildcheck.json")"; exit 1; }
+
 echo "==> plugin/bin/aura-hook 就緒"
 EOF
 chmod +x scripts/build-plugin.sh
-mkdir -p scripts && ./scripts/build-plugin.sh
+./scripts/build-plugin.sh
 ```
 
-Expected: `lipo -archs` 輸出含 `arm64` 與 `x86_64`；最後的 `exit=0`
+Expected（已實測全部通過）：
+- `lipo -archs plugin/bin/aura-hook` → `x86_64 arm64`
+- `aura-hook` exit 0
+- 狀態檔內容為
+  `{"hook_event_name":"PreToolUse","main_activity":"working","main_tool":"Bash","pid":...,"pid_started_at":...,"schema":1,"session_id":"buildcheck",...}`
+
+> `swift build -c release --arch arm64` / `--arch x86_64` 兩者都可用，
+> 產物在 `.build/<arch>-apple-macosx/release/aura-hook`（已實測）。
+>
+> **為什麼要驗產物而不只驗 exit code**：`aura-hook` 的契約是「任何錯誤都靜默
+> exit 0」，所以 exit code 本身**無法區分成功與失敗** —— 這是刻意的設計
+> （觀測性絕不可干擾 agent），代價就是驗收不能靠它。
 
 - [ ] **Step 4: 執行測試確認通過**
 
@@ -5309,18 +5651,38 @@ cat > docs/INSTALL.md <<'EOF'
 
 ```bash
 git clone <repo> && cd AgentAura
-./scripts/build-plugin.sh          # 建置 universal aura-hook 到 plugin/bin/
-claude plugin install ./plugin     # 註冊 hooks（不會修改 ~/.claude/settings.json）
-./scripts/verify-install.sh        # 驗證整條鏈路
+./scripts/build-plugin.sh                    # 建置 universal aura-hook 到 plugin/bin/
+claude plugin validate ./plugin              # 官方 validator，必須零 error 零 warning
+claude plugin marketplace add .              # 把這個 repo 註冊成本地 marketplace
+claude plugin install agentaura@agentaura -y # 註冊 hooks（不會修改 ~/.claude/settings.json）
+./scripts/verify-install.sh                  # 驗證整條鏈路
 ```
+
+> **為什麼要先 `marketplace add`：** `claude plugin install` **只從 marketplace 安裝**
+> （`claude plugin install --help`：「Install a plugin from available marketplaces」），
+> **不吃本地目錄路徑** —— `claude plugin install ./plugin` 不會生效。
+> 本地安裝的正確途徑是 `claude plugin marketplace add <path>`
+> （`marketplace add` 明文支援 URL / **path** / GitHub repo），
+> 這也是 repo 根目錄需要 `.claude-plugin/marketplace.json` 的原因。
+>
+> `-y` 是必要的：非 TTY 環境（腳本、CI）下 install 會等一個確認提示。
 
 **不需要重啟 Claude Code** —— hook 設定變更會立即對執行中的 session 生效（已實測確認）。
 
 ## 完整移除
 
 ```bash
-claude plugin uninstall agentaura
-rm -rf ~/.agentaura                # 狀態目錄，可安全刪除
+claude plugin uninstall agentaura             # 移除 plugin（hooks 隨之失效）
+claude plugin marketplace remove agentaura    # 移除本地 marketplace 註冊
+rm -rf ~/.agentaura                           # 狀態目錄，可安全刪除
+```
+
+驗證移除乾淨（三者都該是 0）：
+
+```bash
+claude plugin list | grep -c agentaura              # → 0
+claude plugin marketplace list | grep -c agentaura  # → 0
+grep -c -i agentaura ~/.claude/settings.json        # → 0
 ```
 
 移除後 `~/.claude/settings.json` **不會留下任何 AgentAura 引用** ——
@@ -5338,6 +5700,7 @@ rm -rf ~/.agentaura                # 狀態目錄，可安全刪除
 ```bash
 ls -la ~/.agentaura/sessions/                        # 有檔案嗎？
 claude plugin list | grep agentaura                  # plugin 裝了嗎？
+claude plugin validate ./plugin                      # manifest 有 error / warning 嗎？
 lipo -archs plugin/bin/aura-hook                     # 二進位在嗎、架構對嗎？
 echo '{"hook_event_name":"Stop","session_id":"t1"}' | ./plugin/bin/aura-hook; echo $?
 ```
@@ -5368,7 +5731,25 @@ lipo -archs plugin/bin/aura-hook 2>/dev/null | grep -q arm64 \
 
 echo "== 2. plugin 已註冊 =="
 claude plugin list 2>/dev/null | grep -q agentaura \
-  && ok "agentaura plugin 已安裝" || bad "未安裝 —— claude plugin install ./plugin"
+  && ok "agentaura plugin 已安裝" \
+  || bad "未安裝 —— claude plugin marketplace add . && claude plugin install agentaura@agentaura -y"
+
+echo "== 2b. 官方 validator 零 error 零警告 =="
+# 只看 exit code 是空轉的：validator 對「unknown hook event」、「no type」、
+# 「async 型別錯」都只給 **warning** 並仍然 exit 0，而每個 warning 都寫著
+# **entry ignored at runtime** —— 也就是一個靜默的死 hook。
+# 實測確認 exit code 在有 warning 時仍是 0，所以這裡必須看輸出文字。
+for target in ./plugin .; do
+  out=$(claude plugin validate "$target" 2>&1)
+  if echo "$out" | grep -qi "warning\|✘"; then
+    bad "validate $target 有 error/warning："
+    echo "$out" | sed 's/^/      /'
+  elif echo "$out" | grep -q "Validation passed"; then
+    ok "validate $target 乾淨"
+  else
+    bad "validate $target 沒有印出通過：$out"
+  fi
+done
 
 echo "== 3. settings.json 未被污染（R6）=="
 python3 -c "
@@ -5418,9 +5799,15 @@ chmod +x scripts/verify-install.sh
 - [ ] **Step 7: 實機執行驗收**
 
 ```bash
-claude plugin install ./plugin
+claude plugin validate ./plugin                 # 先驗 manifest，零 error 零 warning
+claude plugin marketplace add .                 # 本地 marketplace（實測：add 支援 path）
+claude plugin install agentaura@agentaura -y    # -y：非 TTY 下不會卡在確認提示
 ./scripts/verify-install.sh
 ```
+
+> **這一步會真的動到使用者的 `~/.claude/`**（新增一個 marketplace 註冊與一個已安裝
+> plugin）。兩者都可逆，逆操作寫在 `docs/INSTALL.md` 的「完整移除」。
+> `~/.claude/settings.json` 全程不被修改（D3/R6），verify 腳本第 3 項就在驗這件事。
 
 Expected: 全部 ✓，最後印出 `實機驗收 PASS`
 
@@ -6993,17 +7380,26 @@ Expected: 五項全 ✓，最後印 `實機驗收 PASS`。
 python3 - <<'PY'
 import pathlib
 p = pathlib.Path("docs/INSTALL.md"); s = p.read_text()
-s = s.replace("""```bash
+# `str.replace` 找不到目標時會**靜默什麼都不做** —— 這個編輯的目標字串必須與
+# T14 寫進 INSTALL.md 的內容逐字相符，所以先 assert 再改。
+# （T14 的安裝流程改過一次；這裡若沒同步，就會變成一個看不見的 no-op。）
+OLD = """```bash
 git clone <repo> && cd AgentAura
-./scripts/build-plugin.sh          # 建置 universal aura-hook 到 plugin/bin/
-claude plugin install ./plugin     # 註冊 hooks（不會修改 ~/.claude/settings.json）
-./scripts/verify-install.sh        # 驗證整條鏈路
-```""",
+./scripts/build-plugin.sh                    # 建置 universal aura-hook 到 plugin/bin/
+claude plugin validate ./plugin              # 官方 validator，必須零 error 零 warning
+claude plugin marketplace add .              # 把這個 repo 註冊成本地 marketplace
+claude plugin install agentaura@agentaura -y # 註冊 hooks（不會修改 ~/.claude/settings.json）
+./scripts/verify-install.sh                  # 驗證整條鏈路
+```"""
+assert s.count(OLD) == 1, f"INSTALL.md 的安裝段找不到或不唯一（{s.count(OLD)}）—— T14 的內容變了？"
+s = s.replace(OLD,
 """```bash
 git clone <repo> && cd AgentAura
-./scripts/build-plugin.sh          # 建置 universal aura-hook 到 plugin/bin/
-claude plugin install ./plugin     # 註冊 hooks（不會修改 ~/.claude/settings.json）
-./scripts/verify-install.sh        # 驗證 hook 鏈路
+./scripts/build-plugin.sh                    # 建置 universal aura-hook 到 plugin/bin/
+claude plugin validate ./plugin              # 官方 validator，必須零 error 零 warning
+claude plugin marketplace add .              # 把這個 repo 註冊成本地 marketplace
+claude plugin install agentaura@agentaura -y # 註冊 hooks（不會修改 ~/.claude/settings.json）
+./scripts/verify-install.sh                  # 驗證 hook 鏈路
 
 ./scripts/build-app.sh             # 組出 build/AgentAura.app（universal + ad-hoc 簽章）
 ./scripts/verify-app.sh            # 實機啟動驗收
