@@ -537,6 +537,8 @@ AgentAura 的對應要求：
 | Claude Code 新增 hook event | 解析爆掉 | 未知 event 不改變 activity，只更新時戳；`schema` 欄位擋不相容 |
 | app 未運行時累積事件 | 啟動後畫面空白 | `bootstrap()` 掃目錄；靜止態天生在檔案裡 |
 | 殘留檔案（機器重開） | 幽靈 session | 啟動時 pid 一律驗證；已死且已確認者刪檔 |
+| **狀態檔被外部刪除**（使用者手動 `rm`） | 面板永遠顯示已不存在的幽靈 session，且無任何路徑可清除 | `refreshLiveness` 讀不到檔案即從 registry 移除 —— 檔案是狀態的唯一真實來源。若該 session 其實還活著，下一個 hook 事件會重建它 |
+| **狀態目錄被整個刪除** | 後續所有 hook 寫入失敗（`aura-hook` 靜默 exit 0），面板永久凍結在刪除前的狀態且無任何錯誤跡象 | `refreshLiveness` 每輪確保目錄存在 |
 | 磁碟滿 / 目錄不可寫 | hook 錯誤噴到 agent 畫面 | `aura-hook` 任何錯誤靜默 `exit 0` |
 | session 數量爆掉（50+） | menu bar 卡頓 | 聚合為 O(n) 純函數；重繪節流 ≥ 100ms；面板列表虛擬化 |
 | 螢幕睡眠 / menu bar 被遮蔽 | 白吃電池 | `AnimationDriver` 停止重繪（§3.6） |

@@ -2300,6 +2300,7 @@ git commit -m "feat(core): SessionState / IconState 與 SessionReducer"
       public private(set) var states: [String: SessionState]
       public private(set) var acknowledged: Set<String>
       public mutating func upsert(_ s: SessionState)
+      public mutating func remove(_ id: String)          // 檔案消失時移除
       /// 打開面板：所有未確認一律標為已確認，已結束且已確認者移出並回傳其 id（供刪檔）
       public mutating func acknowledgeAll() -> [String]
       /// 參與 icon 聚合的 session：活著的，加上已結束但未確認**結果**（done/error）的
@@ -2433,6 +2434,18 @@ struct SessionRegistryTests {
         #expect(!r.isAcknowledged("a"), "新一輪的結果需要重新被看過")
     }
 
+    @Test("remove 移除 session 與其確認狀態")
+    func removeClearsBoth() {
+        var r = SessionRegistry()
+        r.upsert(state("a", .done, live: false))
+        _ = r.acknowledgeAll()
+        r.upsert(state("a", .working))
+        r.remove("a")
+        #expect(r.states["a"] == nil)
+        #expect(!r.isAcknowledged("a"), "確認狀態也要清掉，否則同 id 重建後會被誤判為已看過")
+        #expect(r.visible.isEmpty)
+    }
+
     @Test("同一 session 重複 upsert 只保留最新")
     func upsertReplaces() {
         var r = SessionRegistry()
@@ -2484,6 +2497,15 @@ public struct SessionRegistry: Sendable {
         if s.liveness == .ended, acknowledged.contains(s.id) {
             states[s.id] = nil                  // 已看過又已結束 → 直接清掉
         }
+    }
+
+    /// 移除一個 session。
+    ///
+    /// 用於「狀態檔已不存在」的情況：檔案是狀態的唯一真實來源，沒有檔案就沒有 session。
+    /// 若該 session 其實還活著，下一個 hook 事件會把它重建回來。
+    public mutating func remove(_ id: String) {
+        states[id] = nil
+        acknowledged.remove(id)
     }
 
     /// 面板開啟：所有未確認一律標為已確認（不論是否捲動到、是否可見）。
@@ -4021,6 +4043,37 @@ struct CompositionRootTests {
         #expect(SnapshotIO.allSessionIDs(root: root).isEmpty, "已結束且已確認 → 檔案刪除")
     }
 
+    @Test("狀態檔被外部刪除後，refreshLiveness 移除該 session")
+    func refreshLivenessDropsDeletedFiles() throws {
+        let root = try makeRoot()
+        try SnapshotIO.update(sessionID: "gone1", root: root) { _ in
+            var s = SessionSnapshot(sessionID: "gone1")
+            s.mainActivity = .waiting
+            s.pid = getpid(); s.pidStartedAt = SysctlLiveness().startTime(ofPID: getpid())
+            s.writtenAt = Date(); return s
+        }
+        let g = PipelineGraph.production(root: root)
+        g.start(); defer { g.stop() }
+        #expect(g.iconState.activity == .waiting)
+
+        // 模擬使用者手動清理：rm ~/.agentaura/sessions/*
+        try SnapshotIO.delete(sessionID: "gone1", root: root)
+        g.refreshLiveness()
+        #expect(g.iconState.activity == .idle, "檔案消失 → 不得留下幽靈 session")
+    }
+
+    @Test("狀態目錄被整個刪除後，refreshLiveness 重建它")
+    func refreshLivenessRecreatesRoot() throws {
+        let root = try makeRoot()
+        let g = PipelineGraph.production(root: root)
+        g.start(); defer { g.stop() }
+        try FileManager.default.removeItem(at: root)
+        #expect(!FileManager.default.fileExists(atPath: root.path))
+        g.refreshLiveness()
+        #expect(FileManager.default.fileExists(atPath: root.path),
+                "目錄不存在會讓後續 hook 寫入失敗（aura-hook 會靜默放棄）")
+    }
+
     @Test("refreshLiveness 會把 pid 已死的 working session 移出")
     func refreshLivenessDropsDeadSessions() throws {
         let root = try makeRoot()
@@ -4107,8 +4160,18 @@ public final class PipelineGraph: @unchecked Sendable {
         lock.lock()
         let ids = Array(registry.states.keys)
         lock.unlock()
+        // 目錄若被整個刪掉（例如使用者手動清理），重建它 —— 否則後續 hook 寫入會失敗。
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
         for id in ids {
-            guard let snap = SnapshotIO.read(sessionID: id, root: root) else { continue }
+            guard let snap = SnapshotIO.read(sessionID: id, root: root) else {
+                // 檔案已不存在。檔案是狀態的唯一真實來源，沒有檔案就沒有 session。
+                // 若該 session 其實還活著，下一個 hook 事件會重建它。
+                // 不處理這條會讓外部刪檔（rm ~/.agentaura/sessions/*）後
+                // 面板永遠顯示那些幽靈 session。
+                lock.lock(); registry.remove(id); lock.unlock()
+                continue
+            }
             ingest(snap)
         }
         notifyChange()
