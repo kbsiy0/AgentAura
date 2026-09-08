@@ -389,72 +389,177 @@ struct IsolationTests {
     /// `internal import` / `public import` / `package import` …）；**之後**可以有一個
     /// 宣告關鍵字（scoped import，如 `import class AppKit.NSWindow`）。
     /// 錨定在行首，所以散文註解與字串字面值不會誤觸。
-    static let bannedImportPattern: String = {
-        let modifiers = #"(?:(?:@[A-Za-z_][A-Za-z0-9_]*(?:\([^)\n]*\))?|public|package|internal|fileprivate|private)[ \t]+)*"#
-        let kind = #"(?:(?:class|struct|enum|protocol|typealias|func|var|let|actor|inout)[ \t]+)?"#
-        return #"(?m)^[ \t]*"# + modifiers + #"import[ \t]+"# + kind + #"(?:AppKit|SwiftUI|Cocoa)\b"#
-    }()
+    // ─────────────────────────────────────────────────────────────────────
+    // 這道 gate 走過五輪。前四輪都在同一個 regex 上打補丁，每一輪都綠燈交付、
+    // 每一輪都還藏著一個漏放：
+    //   1. contains("import AppKit")      漏 import class AppKit.NSWindow
+    //   2. 行首錨定 regex                  漏 9 種 attribute / access-level 形狀
+    //   3. 前綴放寬到任意 attribute        誤攔 @available(..., message: "(x) import ...")
+    //   4. 括號內容排除引號                漏 @_documentation(metadata: "foo") import AppKit
+    //   5. 兩段式：先中性化字面值再比對    19 個漏放 / 4 個根因（regex literal 狀態、
+    //                                      插值近似、lineTerminators 超集、5 種宣告前綴）
+    //
+    // 結構性結論：**單一 regex 沒辦法同時描述 Swift 的宣告前綴文法、又判斷某個位置
+    // 是否落在字面值裡。** 補到底就是在寫一個 Swift lexer。
+    //
+    // 所以第五輪換問題：不問「這些檔案的文字裡有沒有寫 import AppKit」，
+    // 改問「AuraCore 編出來的時候有沒有載入 AppKit」——後者才是 Global Constraint
+    // 真正要求的（「不得依賴」），用的是編譯 module 的同一個 lexer，任何語法都騙不過，
+    // 而且能抓到源碼掃描**結構上抓不到**的遞移依賴（實測：檔案裡 AppKit 出現 0 次，
+    // 只寫 import Mid，仍被攔下）。
+    // ─────────────────────────────────────────────────────────────────────
 
-    @Test("AuraCore 不得依賴 AppKit / SwiftUI / Cocoa（含 scoped import）")
-    func coreHasNoUIImports() throws {
-        for file in Self.swiftFiles(under: "Sources/AuraCore") {
-            let src = try String(contentsOf: file, encoding: .utf8)
-            let hit = src.range(of: Self.bannedImportPattern, options: .regularExpression)
-            #expect(hit == nil,
-                    "\(file.lastPathComponent) 出現禁止的 import：\(hit.map { String(src[$0]) } ?? "")")
+    struct GateFailure: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
+    }
+
+    /// 全新的暫存目錄。每次都要新的：`-emit-loaded-module-trace-path` 是**附加**寫入
+    /// （實測路徑已存在會再接一個 JSON 物件），沿用固定路徑會讀到上一輪的殘留。
+    static func withTemporaryDirectory<T>(_ body: (URL) throws -> T) throws -> T {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aura-isolation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        return try body(dir)
+    }
+
+    /// 問編譯器：把這些檔案編起來會載入哪些 module？任何前提壞掉（沒有輸入檔、swiftc
+    /// 失敗、trace 沒寫出來、解析不出 module）一律 throw —— 不准因此變成「乾淨」。
+    static func loadedModules(compiling files: [URL], searchPaths: [String] = [],
+                              tracePathOverride: String? = nil) throws -> Set<String> {
+        guard !files.isEmpty else {
+            throw GateFailure("沒有可編譯的原始檔 —— gate 不能空跑")
+        }
+        return try withTemporaryDirectory { dir in
+            let trace = tracePathOverride ?? dir.appendingPathComponent("trace.json").path
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            task.arguments = ["swiftc", "-typecheck", "-target", gateTarget,
+                              "-emit-loaded-module-trace", "-emit-loaded-module-trace-path", trace]
+                + searchPaths.flatMap { ["-I", $0] } + files.map(\.path)
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = pipe
+            try task.run()
+            let log = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            task.waitUntilExit()                       // 先讀完再等，pipe 才不會塞滿卡死
+
+            guard task.terminationStatus == 0 else {
+                throw GateFailure("""
+                    swiftc 編譯失敗（exit \(task.terminationStatus)），gate 無法作答。
+                    這必須是紅燈：前提壞掉時放行，等於把 gate 關掉。
+                    指令：swiftc \(task.arguments!.dropFirst().joined(separator: " "))
+                    編譯器輸出：
+                    \(log)
+                    """)
+            }
+            guard FileManager.default.fileExists(atPath: trace) else {
+                throw GateFailure("swiftc 沒有產出 module trace（\(trace)）。編譯器輸出：\n\(log)")
+            }
+            let text = try String(contentsOfFile: trace, encoding: .utf8)
+            var modules: Set<String> = []
+            for line in text.split(separator: "\n") where !line.isEmpty {
+                guard let data = String(line).data(using: .utf8),
+                      let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let infos = object["swiftmodulesDetailedInfo"] as? [[String: Any]]
+                else { throw GateFailure("module trace 解析失敗：\(line)") }
+                modules.formUnion(infos.compactMap { $0["name"] as? String })
+            }
+            guard !modules.isEmpty else {
+                throw GateFailure("module trace 解析出 0 個 module —— 空 trace 不能讀成「乾淨」（\(trace)）")
+            }
+            return modules
         }
     }
 
-    @Test("regex gate 涵蓋 Swift 完整的 import 語法")
-    func importPatternCoverage() {
-        let shouldMatch = [
-            "import AppKit",
-            "  import AppKit",
-            "\timport SwiftUI",
-            "import Cocoa",
-            "@testable import AppKit",
-            "import class AppKit.NSWindow",            // scoped
-            "import struct SwiftUI.Color",
-            "import AppKit.NSWindow",                  // submodule，無宣告關鍵字
-            "@preconcurrency import AppKit",           // Swift 6 常見
-            "@_exported import AppKit",
-            "@_implementationOnly import AppKit",
-            "@_spi(Private) import AppKit",
-            "internal import AppKit",                  // Swift 6 access-level import
-            "public import AppKit",
-            "package import AppKit",
-            "fileprivate import SwiftUI",
-            "private import Cocoa",
-            "@preconcurrency internal import AppKit",  // 兩者疊加
-            "internal import struct AppKit.NSView",    // modifier + scoped
-        ]
-        let shouldNotMatch = [
-            "/// 此 module 不得依賴 AppKit",
-            "// 不要 import AppKit 進來",
-            "/// internal import AppKit 是禁止的",
-            "    // import AppKit",
-            "import Foundation",
-            "internal import Foundation",
-            "let s = \"import AppKit\"",
-            "importAppKit",
-            "public func importAppKitThing() {}",
-            "#if canImport(AppKit)",
-        ]
-        for line in shouldMatch {
-            #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) != nil,
-                    "應攔下：\(line)")
-        }
-        for line in shouldNotMatch {
-            #expect(line.range(of: Self.bannedImportPattern, options: .regularExpression) == nil,
-                    "不該攔：\(line)")
+    @Test("AuraCore 編譯時不得載入 AppKit / SwiftUI / Cocoa")
+    func coreLoadsNoUIModules() throws {
+        let files = Self.swiftFiles(under: "Sources/AuraCore")   // 掃磁碟，不用手寫清單
+        #expect(!files.isEmpty, "掃不到 AuraCore 的原始檔 —— gate 不能空跑")
+        let loaded = try Self.loadedModules(compiling: files)
+        let banned = loaded.intersection(Self.bannedModules)
+        #expect(banned.isEmpty, """
+            AuraCore 編譯時載入了禁止的 module：\(banned.sorted().joined(separator: ", "))
+            （這次共載入 \(loaded.count) 個 module）
+            """)
+    }
+
+    /// 正向對照：gate 真的抓得到違規，而不是永遠回報「乾淨」。`import Cocoa` 這個
+    /// probe 順便釘住一件容易誤會的事——module trace **不會**出現 `Cocoa` 這個名字
+    /// （它是 re-export AppKit 的 Clang module），是靠 `AppKit` 被攔下來的。
+    @Test("編譯器 gate 對真違規會紅（正向對照）")
+    func compilerGateCatchesViolations() throws {
+        for line in ["import AppKit", "import Cocoa", "import SwiftUI"] {
+            let loaded = try Self.withTemporaryDirectory { dir -> Set<String> in
+                let probe = dir.appendingPathComponent("Probe.swift")
+                try "\(line)\npublic enum Probe { public static let v = 1 }\n"
+                    .write(to: probe, atomically: true, encoding: .utf8)
+                return try Self.loadedModules(compiling: [probe])
+            }
+            let banned = loaded.intersection(Self.bannedModules)
+            #expect(!banned.isEmpty, "gate 沒抓到 `\(line)` —— 解析壞了會讓所有東西看起來都乾淨")
         }
     }
 
-    /// 正確算行數。
-    ///
-    /// `split(separator: "\n", omittingEmptySubsequences: false).count` 對結尾有換行的
-    /// 檔案會多算 1（`"a\nb\n"` → 3），使「≤200」實際擋在 199 —— 恰好 200 行的合法檔案
-    /// 會被誤判成 201 行。改成數換行字元。
+    /// 釘住這個機制**唯一**做得到、掃文字永遠做不到的事：transitive 依賴。
+    /// probe 的原始碼全文沒有「AppKit」字樣，只 `import Mid`，而 Mid 內部
+    /// `@_exported import AppKit` —— 任何文字 gate 對它必然是綠的。
+    @Test("gate 抓得到 transitive 依賴（文字裡沒有 AppKit 也算）")
+    func compilerGateCatchesTransitiveDependency() throws {
+        let loaded = try Self.withTemporaryDirectory { dir -> Set<String> in
+            let mid = dir.appendingPathComponent("Mid.swift")
+            try "@_exported import AppKit\npublic enum Mid { public static let v = 1 }\n"
+                .write(to: mid, atomically: true, encoding: .utf8)
+            let build = Process()
+            build.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            build.arguments = ["swiftc", "-emit-module", "-module-name", "Mid",
+                               "-target", Self.gateTarget, "-emit-module-path",
+                               dir.appendingPathComponent("Mid.swiftmodule").path, mid.path]
+            try build.run()
+            build.waitUntilExit()
+            try #require(build.terminationStatus == 0, "建不出 Mid.swiftmodule，這個對照組就失效了")
+            let source = "import Mid\npublic enum Probe { public static let v = Mid.v }\n"
+            #expect(!source.contains("AppKit"), "probe 原始碼必須不含 AppKit 字樣，否則證明不了 transitive")
+            let probe = dir.appendingPathComponent("Probe.swift")
+            try source.write(to: probe, atomically: true, encoding: .utf8)
+            return try Self.loadedModules(compiling: [probe], searchPaths: [dir.path])
+        }
+        #expect(loaded.contains("AppKit"), "transitive 依賴沒被抓到 —— 這是換掉文字 gate 的主要理由")
+    }
+
+    /// 反向對照：gate 自己的前提壞掉時必須紅，不准讀成「乾淨」—— 這條 task 反覆
+    /// 產生的失敗模式正是 silent degradation。trace 寫不出去（實測 swiftc exit 1）
+    /// 與完全沒有輸入檔，兩種前提破壞都必須 throw。
+    @Test("gate 前提壞掉時必須紅，不准安靜放行（反向對照）")
+    func compilerGateFailsLoudlyWhenBroken() {
+        #expect(throws: GateFailure.self, "trace 寫不出來時不能回報乾淨") {
+            _ = try Self.loadedModules(compiling: Self.swiftFiles(under: "Sources/AuraCore"),
+                                       tracePathOverride: "/nonexistent-\(UUID().uuidString)/trace.json")
+        }
+        #expect(throws: GateFailure.self, "沒有輸入檔時不能回報乾淨") {
+            _ = try Self.loadedModules(compiling: [])
+        }
+    }
+
+    /// 編譯器 gate 用單獨的 `swiftc` 跑，前提是 AuraCore 沒有 target dependency（否則
+    /// 要補 `-I`）。把前提釘在 manifest 上：一旦長出依賴或平台版本調動，這個測試要紅在
+    /// 「請補 -I／同步 triple」，而不是讓 gate 安靜地編不動。字串比對對排版敏感，但
+    /// 敏感的方向是安全的（改格式會紅，不會靜默放行）。
+    @Test("Package.swift 仍撐得住編譯器 gate 的假設")
+    func manifestPinsGateAssumptions() throws {
+        let manifest = try String(contentsOf: Self.repoRoot().appendingPathComponent("Package.swift"),
+                                  encoding: .utf8)
+        #expect(manifest.contains(#".target(name: "AuraCore"),"#),
+                "AuraCore 有了 target dependency：gate 的 swiftc 需要對應的 -I 路徑")
+        #expect(manifest.contains(".macOS(.v13)"),
+                "平台最低版本變了：請同步 IsolationTests.gateTarget")
+    }
+
+    // MARK: - 檔案長度
+
+    /// 正確算行數：`split(separator: "\n", omittingEmptySubsequences: false).count` 對
+    /// 結尾有換行的檔案會多算 1（`"a\nb\n"` → 3），使「≤200」實際擋在 199。改成數換行。
     static func lineCount(of text: String) -> Int {
         guard !text.isEmpty else { return 0 }
         let newlines = text.reduce(into: 0) { acc, ch in if ch == "\n" { acc += 1 } }
@@ -471,12 +576,17 @@ struct IsolationTests {
         #expect(Self.lineCount(of: String(repeating: "x\n", count: 200)) == 200)
     }
 
-    @Test("每個原始檔不得超過 200 行")
+    /// 行數上限分層：`Sources/` ≤ 200、`Tests/` ≤ 300 —— 測試檔合理地帶著 fixture
+    /// 判讀邏輯，所以給 300，而不是留一個沒寫明的豁免。掃描對象由磁碟推導（`Sources`／
+    /// `Tests` 遞迴），新增 module 或 test target 不會靜默逃過上限。
+    @Test("Sources 每檔 ≤ 200 行、Tests 每檔 ≤ 300 行")
     func fileLengthLimit() throws {
-        for dir in ["Sources/AuraCore", "Sources/AuraHookFile", "Sources/aura-hook"] {
-            for file in Self.swiftFiles(under: dir) {
+        for (layer, limit) in [("Sources", 200), ("Tests", 300)] {
+            let files = Self.swiftFiles(under: layer)
+            #expect(!files.isEmpty, "\(layer) 掃不到任何 .swift —— gate 不能空跑")
+            for file in files {
                 let lines = Self.lineCount(of: try String(contentsOf: file, encoding: .utf8))
-                #expect(lines <= 200, "\(file.lastPathComponent) 有 \(lines) 行，超過 200 行上限")
+                #expect(lines <= limit, "\(layer)/\(file.lastPathComponent) 有 \(lines) 行，超過 \(limit) 行上限")
             }
         }
     }
