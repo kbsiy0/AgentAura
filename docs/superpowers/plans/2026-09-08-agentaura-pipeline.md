@@ -258,6 +258,7 @@ let package = Package(
         .target(name: "AuraCore"),
         .target(name: "AuraHookFile", dependencies: ["AuraCore"]),
         .executableTarget(name: "aura-hook", dependencies: ["AuraCore", "AuraHookFile"]),
+        .executableTarget(name: "AgentAuraApp", dependencies: ["AuraCore", "AuraHookFile"]),
         .testTarget(
             name: "AuraCoreTests",
             dependencies: ["AuraCore", "AuraHookFile"],
@@ -293,6 +294,12 @@ public enum AuraHookFile {}
 // Sources/aura-hook/main.swift
 // 佔位：Task 11 填入實際內容。
 // 現在就必須存在，否則 Package.swift 宣告的 executableTarget 會讓 build 失敗。
+```
+
+```swift
+// Sources/AgentAuraApp/main.swift
+// 佔位：Task 16 填入實際內容（menu bar app 本體）。
+// 與上面同理：Package.swift 宣告了這個 executableTarget，沒有原始檔就 build 不起來。
 ```
 
 驗證四個 target 都能編譯：
@@ -5252,3 +5259,769 @@ T01 需要**使用者親自操作互動 session**（`PermissionRequest` / `Notif
 不能全自動化。
 
 **每個 task 的 pre-flight：** `git branch --show-current` 確認不在 `main`。
+
+---
+
+# 第二部分：UI（M4-M5）
+
+原計畫只到 M0-M3。使用者的目標是「產出一版可以用的版本」，而 T14 結束時的狀態是
+「hook 寫得出狀態、端到端驗證通過」的可驗證管線 —— **但看不到燈**。以下四個 task
+把它變成可用的 app。
+
+**貫穿的設計決定：動畫決策放在 `AuraCore`，做成純資料。**
+
+`IconState` → `IconAppearance`（顏色、動畫種類、幀率）是純函數，可在無 GUI 環境
+測試；AppKit 層只負責把 `IconAppearance` 畫出來。這樣做的三個理由：
+
+1. **注意力預算（R4）變成可單元測試的東西。**「只有 waiting 與 error 會動」
+   是產品決策，不該埋在 `NSView.draw` 裡靠肉眼驗。
+2. 守住 Global Constraint「`AuraCore` 不得依賴 AppKit」—— 由編譯器 gate 強制。
+3. 形態 A／B（R5）只需換 renderer，`IconAppearance` 不動。
+
+---
+
+### Task 15: IconAppearance —— 注意力預算的可測形式
+
+**Files:**
+- Create: `Sources/AuraCore/IconAppearance.swift`
+- Test: `Tests/AuraCoreTests/IconAppearanceTests.swift`
+
+**Interfaces:**
+- Consumes: `IconState`、`Activity`
+- Produces:
+  ```swift
+  public enum IconAnimation: Equatable, Sendable {
+      case none                                  // 靜態
+      case breathe(period: Double, min: Double, max: Double)
+      case doubleBlink(period: Double)
+  }
+  public struct IconAppearance: Equatable, Sendable {
+      public let activity: Activity
+      public let animation: IconAnimation
+      public let targetFPS: Int                  // 0 = 不需重繪
+      public let attentionCount: Int
+      public let liveCount: Int
+      public var needsAnimation: Bool            // targetFPS > 0
+  }
+  public enum AppearancePolicy {
+      public static func appearance(for icon: IconState, reduceMotion: Bool) -> IconAppearance
+  }
+  ```
+
+- [ ] **Step 1: 寫失敗測試**
+
+```swift
+// Tests/AuraCoreTests/IconAppearanceTests.swift
+import Testing
+@testable import AuraCore
+
+@Suite("注意力預算（R4）")
+struct IconAppearanceTests {
+
+    func appearance(_ a: Activity, waiting: Int = 0, error: Int = 0,
+                    working: Int = 0, reduceMotion: Bool = false) -> IconAppearance {
+        var counts: [Activity: Int] = [:]
+        if waiting > 0 { counts[.waiting] = waiting }
+        if error > 0 { counts[.error] = error }
+        if working > 0 { counts[.working] = working }
+        if counts.isEmpty { counts[a] = 1 }
+        let icon = IconState(activity: a, counts: counts, liveCount: working + waiting)
+        return AppearancePolicy.appearance(for: icon, reduceMotion: reduceMotion)
+    }
+
+    // ---- 核心規則：只有需要你行動的狀態才會動 ----
+
+    @Test("done 與 idle 完全不動；waiting 與 error 會動")
+    func onlyAttentionStatesAnimate() {
+        #expect(appearance(.waiting).needsAnimation)
+        #expect(appearance(.error).needsAnimation)
+        #expect(!appearance(.done).needsAnimation, "done 是「可以去看了」，不是「你被擋著」")
+        #expect(!appearance(.idle).needsAnimation)
+        // working 技術上仍會重繪（極慢呼吸），但幀率與對比都遠低於 waiting ——
+        // 那個差距由 workingAndWaitingAreDistinguishable 守。
+        #expect(appearance(.working).needsAnimation,
+                "working 有極微動畫讓人看得出在跑；強度差距另有測試")
+    }
+
+    @Test("幀率符合 DoD 的分層門檻")
+    func frameRateTiers() {
+        #expect(appearance(.idle).targetFPS == 0, "idle 必須零重繪")
+        #expect(appearance(.done).targetFPS == 0, "done 必須零重繪")
+        #expect(appearance(.working).targetFPS <= 10, "working 是常態，≤10 fps")
+        #expect(appearance(.waiting).targetFPS >= 30, "waiting 要流暢才有警示效果")
+        #expect(appearance(.error).targetFPS >= 30)
+    }
+
+    @Test("working 的呼吸低對比且週期長 —— 它是常態，不該搶注意力")
+    func workingIsSubtle() {
+        guard case .breathe(let period, let lo, let hi) = appearance(.working).animation else {
+            Issue.record("working 應為 breathe"); return
+        }
+        #expect(period >= 3.0, "週期至少 3 秒，實際 \(period)")
+        #expect(hi - lo <= 0.35, "透明度對比不得超過 0.35，實際 \(hi - lo)")
+    }
+
+    @Test("waiting 的呼吸明顯 —— 它需要你行動")
+    func waitingIsSalient() {
+        guard case .breathe(let period, let lo, let hi) = appearance(.waiting).animation else {
+            Issue.record("waiting 應為 breathe"); return
+        }
+        #expect(period <= 1.5, "週期不超過 1.5 秒")
+        #expect(hi - lo >= 0.6, "對比至少 0.6，才與 working 明顯不同")
+    }
+
+    @Test("error 是 double blink，與 waiting 的呼吸在形狀上就不同")
+    func errorIsDoubleBlink() {
+        guard case .doubleBlink = appearance(.error).animation else {
+            Issue.record("error 應為 doubleBlink"); return
+        }
+    }
+
+    @Test("working 與 waiting 的動畫參數差距足夠大，餘光可辨")
+    func workingAndWaitingAreDistinguishable() {
+        guard case .breathe(let wp, let wlo, let whi) = appearance(.working).animation,
+              case .breathe(let ap, let alo, let ahi) = appearance(.waiting).animation else {
+            Issue.record("兩者都應為 breathe"); return
+        }
+        #expect(wp / ap >= 2.0, "週期至少差 2 倍，實際 \(wp) vs \(ap)")
+        #expect((ahi - alo) / (whi - wlo) >= 2.0, "對比至少差 2 倍")
+    }
+
+    // ---- 減少動態效果 ----
+
+    @Test("系統開啟減少動態效果時，全部改為靜態")
+    func reduceMotionDisablesAllAnimation() {
+        for a in Activity.allCases {
+            let ap = appearance(a, reduceMotion: true)
+            #expect(ap.animation == .none, "\(a) 在 reduceMotion 下應為 .none")
+            #expect(ap.targetFPS == 0, "\(a) 在 reduceMotion 下應零重繪")
+        }
+    }
+
+    @Test("reduceMotion 不改變 activity —— 只改呈現方式")
+    func reduceMotionKeepsActivity() {
+        for a in Activity.allCases {
+            #expect(appearance(a, reduceMotion: true).activity == a)
+        }
+    }
+
+    // ---- 計數透傳 ----
+
+    @Test("attentionCount 與 liveCount 透傳自 IconState")
+    func countsPassThrough() {
+        let ap = appearance(.error, waiting: 2, error: 1, working: 3)
+        #expect(ap.attentionCount == 3, "error 1 + waiting 2")
+        #expect(ap.liveCount == 5)
+    }
+}
+```
+
+- [ ] **Step 2: 執行確認失敗**
+
+Run: `swift test --filter IconAppearanceTests`
+Expected: FAIL — `cannot find 'AppearancePolicy' in scope`
+
+- [ ] **Step 3: 實作**
+
+```swift
+// Sources/AuraCore/IconAppearance.swift
+
+/// Menu bar icon 的動畫形式。
+public enum IconAnimation: Equatable, Sendable {
+    case none
+    /// 透明度在 `min`…`max` 之間以 `period` 秒往復。
+    case breathe(period: Double, min: Double, max: Double)
+    /// 每 `period` 秒閃兩下。
+    case doubleBlink(period: Double)
+}
+
+/// 一個 `IconState` 該長什麼樣。純資料，不含任何繪製。
+public struct IconAppearance: Equatable, Sendable {
+    public let activity: Activity
+    public let animation: IconAnimation
+    /// 建議重繪幀率。`0` 表示完全靜態，`AnimationDriver` 不該排程任何重繪。
+    public let targetFPS: Int
+    public let attentionCount: Int
+    public let liveCount: Int
+
+    public var needsAnimation: Bool { targetFPS > 0 }
+}
+
+/// 注意力預算（R4）—— **這是產品決策，所以放在可單元測試的地方**。
+///
+/// 規則：只有需要使用者行動的狀態才會動。使用者的常態是多 agent 併行、
+/// 整夜跑 pipeline；若 `working` 也搶眼，menu bar 幾乎永遠在動，「動起來」
+/// 就失去訊號價值，必須辨色才知道發生什麼事。
+///
+/// 換來三件事：常態安靜；**餘光就能判斷、不需辨色**；大多數時間零重繪。
+public enum AppearancePolicy {
+
+    public static func appearance(for icon: IconState,
+                                 reduceMotion: Bool = false) -> IconAppearance {
+        let (animation, fps) = reduceMotion
+            ? (IconAnimation.none, 0)
+            : motion(for: icon.activity)
+        return IconAppearance(activity: icon.activity,
+                              animation: animation,
+                              targetFPS: fps,
+                              attentionCount: icon.attentionCount,
+                              liveCount: icon.liveCount)
+    }
+
+    static func motion(for activity: Activity) -> (IconAnimation, Int) {
+        switch activity {
+        case .idle, .done:
+            // 完全靜態。done 是「你可以去看了」，不是「你被擋著」。
+            return (.none, 0)
+        case .working:
+            // 常態：看得出在跑，但不搶注意力。週期長、對比低、幀率低。
+            return (.breathe(period: 4.0, min: 0.35, max: 0.60), 10)
+        case .waiting:
+            // 需要行動：週期短、對比高，與 working 差 4 倍週期、3 倍對比。
+            return (.breathe(period: 1.1, min: 0.20, max: 1.00), 30)
+        case .error:
+            // 需要行動，且形狀與 waiting 不同 —— 不必辨色也能區分。
+            return (.doubleBlink(period: 1.1), 30)
+        }
+    }
+}
+```
+
+- [ ] **Step 4: 執行確認通過**
+
+Run: `swift test --filter IconAppearanceTests`
+Expected: 全部 PASS（9 個測試）
+
+- [ ] **Step 5: Mutation 驗證**
+
+依 Global Constraints 的標準程序。三個：
+
+1. 把 `.working` 的 `targetFPS` 從 `10` 改成 `30` → `frameRateTiers` 必須 RED
+2. 把 `.done` 的 `(.none, 0)` 改成 `(.breathe(period: 2, min: 0.3, max: 0.9), 30)`
+   → `onlyAttentionStatesAnimate` 與 `frameRateTiers` 必須 RED
+3. 把 `.waiting` 的週期改成 `4.0`（與 working 相同）
+   → `workingAndWaitingAreDistinguishable` 與 `waitingIsSalient` 必須 RED
+
+第 3 個是重點：它守的是「餘光可辨」這個產品性質，而那是最容易在調參時
+不小心破壞、又最不容易從程式碼看出來的東西。
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Sources/AuraCore/IconAppearance.swift Tests/AuraCoreTests/IconAppearanceTests.swift
+git commit -F - <<'EOF'
+feat(core): IconAppearance —— 把注意力預算做成可單元測試的純資料
+
+只有 waiting 與 error 會動；working 是常態，用長週期低對比的呼吸；
+done 與 idle 完全靜態、零重繪。放在 AuraCore 而非 NSView.draw 裡，
+是為了讓「動 = 需要你」這條產品決策能被測試，而不是靠肉眼驗。
+EOF
+```
+
+---
+
+### Task 16: AnimationSchedule + StatusItemController —— 讓燈亮起來
+
+**這個 task 結束時，app 可以跑起來並在 menu bar 顯示狀態。**
+
+同樣的切法：**要不要動、多久動一次**是可測的決策，放 `AuraCore`；
+AppKit 層只負責照排程重繪。省電邏輯（螢幕睡眠、icon 被遮蔽）是這個決策的輸入，
+不是散落在 AppKit callback 裡的 if。
+
+**Files:**
+- Modify: `Package.swift`（新增 `AgentAuraApp` executable target）
+- Create: `Sources/AuraCore/AnimationSchedule.swift`
+- Create: `Sources/AgentAuraApp/main.swift`
+- Create: `Sources/AgentAuraApp/AppDelegate.swift`
+- Create: `Sources/AgentAuraApp/StatusItemController.swift`
+- Create: `Sources/AgentAuraApp/LEDStripView.swift`
+- Create: `Sources/AgentAuraApp/AnimationDriver.swift`
+- Test: `Tests/AuraCoreTests/AnimationScheduleTests.swift`
+
+**Interfaces:**
+- Consumes: `IconAppearance`、`AppearancePolicy`、`PipelineGraph`
+- Produces:
+  ```swift
+  // AuraCore（可測、無 AppKit）
+  public struct DisplayEnvironment: Equatable, Sendable {
+      public var screenAsleep: Bool
+      public var iconVisible: Bool
+      public var reduceMotion: Bool
+      public init(screenAsleep: Bool = false, iconVisible: Bool = true, reduceMotion: Bool = false)
+  }
+  public enum AnimationSchedule {
+      /// 回傳重繪間隔（秒）；`nil` 表示不該排程任何重繪。
+      public static func interval(for icon: IconState, in env: DisplayEnvironment) -> Double?
+  }
+
+  // AgentAuraApp（AppKit）
+  protocol IconRendering: AnyObject { func apply(_ appearance: IconAppearance, phase: Double) }
+  final class StatusItemController: IconRendering
+  final class AnimationDriver
+  ```
+
+- [ ] **Step 1: 寫失敗測試（純邏輯部分）**
+
+```swift
+// Tests/AuraCoreTests/AnimationScheduleTests.swift
+import Testing
+@testable import AuraCore
+
+@Suite("動畫排程與省電")
+struct AnimationScheduleTests {
+
+    func icon(_ a: Activity) -> IconState {
+        IconState(activity: a, counts: [a: 1], liveCount: a == .idle ? 0 : 1)
+    }
+
+    @Test("螢幕睡眠時完全不排程重繪 —— 沒人看得到，白吃電池")
+    func screenAsleepStopsEverything() {
+        for a in Activity.allCases {
+            let env = DisplayEnvironment(screenAsleep: true)
+            #expect(AnimationSchedule.interval(for: icon(a), in: env) == nil,
+                    "\(a) 在螢幕睡眠時仍排程重繪")
+        }
+    }
+
+    @Test("icon 被遮蔽（全螢幕 app）時不排程重繪")
+    func hiddenIconStopsEverything() {
+        for a in Activity.allCases {
+            let env = DisplayEnvironment(iconVisible: false)
+            #expect(AnimationSchedule.interval(for: icon(a), in: env) == nil)
+        }
+    }
+
+    @Test("減少動態效果時不排程重繪")
+    func reduceMotionStopsEverything() {
+        for a in Activity.allCases {
+            let env = DisplayEnvironment(reduceMotion: true)
+            #expect(AnimationSchedule.interval(for: icon(a), in: env) == nil)
+        }
+    }
+
+    @Test("正常情況下，靜態狀態不排程、動態狀態按幀率排程")
+    func normalIntervals() {
+        let env = DisplayEnvironment()
+        #expect(AnimationSchedule.interval(for: icon(.idle), in: env) == nil)
+        #expect(AnimationSchedule.interval(for: icon(.done), in: env) == nil)
+
+        let working = try! #require(AnimationSchedule.interval(for: icon(.working), in: env))
+        let waiting = try! #require(AnimationSchedule.interval(for: icon(.waiting), in: env))
+        #expect(working >= 0.09, "working ≤ 10 fps，間隔至少 0.09s，實際 \(working)")
+        #expect(waiting <= 0.034, "waiting ≥ 30 fps，間隔至多 0.034s，實際 \(waiting)")
+        #expect(working > waiting * 2, "working 的間隔要明顯長於 waiting")
+    }
+
+    @Test("間隔與 IconAppearance 的 targetFPS 一致 —— 不得各自定義幀率")
+    func intervalMatchesAppearance() {
+        let env = DisplayEnvironment()
+        for a in Activity.allCases {
+            let ap = AppearancePolicy.appearance(for: icon(a))
+            let iv = AnimationSchedule.interval(for: icon(a), in: env)
+            if ap.targetFPS == 0 {
+                #expect(iv == nil, "\(a) targetFPS 為 0 卻排了間隔")
+            } else {
+                let expected = 1.0 / Double(ap.targetFPS)
+                #expect(iv != nil && abs(iv! - expected) < 0.0001,
+                        "\(a) 的間隔應為 1/\(ap.targetFPS)，實際 \(iv as Any)")
+            }
+        }
+    }
+
+    @Test("任何一個省電條件成立就停止，不需要全部成立")
+    func anySuppressorStops() {
+        let combos = [
+            DisplayEnvironment(screenAsleep: true, iconVisible: true, reduceMotion: false),
+            DisplayEnvironment(screenAsleep: false, iconVisible: false, reduceMotion: false),
+            DisplayEnvironment(screenAsleep: false, iconVisible: true, reduceMotion: true),
+        ]
+        for env in combos {
+            #expect(AnimationSchedule.interval(for: icon(.error), in: env) == nil,
+                    "env=\(env) 應停止重繪")
+        }
+    }
+}
+```
+
+- [ ] **Step 2: 執行確認失敗**
+
+Run: `swift test --filter AnimationScheduleTests`
+Expected: FAIL — `cannot find 'AnimationSchedule' in scope`
+
+- [ ] **Step 3: 實作純邏輯部分**
+
+```swift
+// Sources/AuraCore/AnimationSchedule.swift
+
+/// 影響「該不該動」的外部條件。
+///
+/// 做成一個值而不是散在 AppKit callback 裡的 if：省電規則因此可以被測試，
+/// 而且新增一個抑制條件時只有一處要改。
+public struct DisplayEnvironment: Equatable, Sendable {
+    public var screenAsleep: Bool
+    public var iconVisible: Bool
+    public var reduceMotion: Bool
+
+    public init(screenAsleep: Bool = false, iconVisible: Bool = true, reduceMotion: Bool = false) {
+        self.screenAsleep = screenAsleep
+        self.iconVisible = iconVisible
+        self.reduceMotion = reduceMotion
+    }
+
+    /// 任一條件成立就不該動。
+    public var suppressesAnimation: Bool { screenAsleep || !iconVisible || reduceMotion }
+}
+
+public enum AnimationSchedule {
+
+    /// 重繪間隔（秒）；`nil` 表示不該排程任何重繪。
+    ///
+    /// 幀率**一律**取自 `AppearancePolicy`，不在這裡另定一份 —— 兩處各自定義
+    /// 幀率就會 drift，而 DoD 是照 `IconAppearance.targetFPS` 量的。
+    public static func interval(for icon: IconState,
+                                in env: DisplayEnvironment) -> Double? {
+        guard !env.suppressesAnimation else { return nil }
+        let fps = AppearancePolicy.appearance(for: icon, reduceMotion: env.reduceMotion).targetFPS
+        guard fps > 0 else { return nil }
+        return 1.0 / Double(fps)
+    }
+}
+```
+
+- [ ] **Step 4: 執行確認通過**
+
+Run: `swift test --filter AnimationScheduleTests`
+Expected: 全部 PASS（6 個測試）
+
+- [ ] **Step 5: 確認 app target 已存在**
+
+`Package.swift` 從 Task 02 起就宣告了 `AgentAuraApp`（當時只有一個佔位 `main.swift`）。
+本 task 是把佔位換成實際內容，不需要改 `Package.swift`。
+
+Run: `grep -n AgentAuraApp Package.swift`
+Expected: 一行 `.executableTarget(name: "AgentAuraApp", dependencies: ["AuraCore", "AuraHookFile"]),`
+
+- [ ] **Step 6: 實作 AppKit 層**
+
+```swift
+// Sources/AgentAuraApp/LEDStripView.swift
+import AppKit
+import AuraCore
+
+/// 形態 A：menu bar 裡的 8 顆迷你 LED 燈條。
+///
+/// `phase` 由 `AnimationDriver` 推進（0…1 的循環位置），view 自己不持有計時器 ——
+/// 這樣「多久畫一次」的決策留在可測的 `AnimationSchedule`，view 只負責畫。
+@MainActor
+final class LEDStripView: NSView {
+    /// 刻意不叫 `appearance` —— `NSView` 已有一個 `appearance: NSAppearance?`，
+    /// 同名會得到「cannot override a property with type 'NSAppearance?'」。
+    private var iconAppearance = AppearancePolicy.appearance(for: IconState.empty)
+    private var phase: Double = 0
+
+    static let ledCount = 8
+    static let ledWidth: CGFloat = 3
+    static let ledGap: CGFloat = 2
+    static let ledHeight: CGFloat = 12
+
+    static var preferredWidth: CGFloat {
+        CGFloat(ledCount) * ledWidth + CGFloat(ledCount - 1) * ledGap
+    }
+
+    func update(_ appearance: IconAppearance, phase: Double) {
+        self.iconAppearance = appearance
+        self.phase = phase
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let color = Self.color(for: iconAppearance.activity)
+        let alpha = Self.alpha(for: iconAppearance.animation, phase: phase)
+        var x: CGFloat = 0
+        let y = (bounds.height - Self.ledHeight) / 2
+        for _ in 0..<Self.ledCount {
+            let r = NSRect(x: x, y: y, width: Self.ledWidth, height: Self.ledHeight)
+            color.withAlphaComponent(alpha).setFill()
+            NSBezierPath(roundedRect: r, xRadius: 1.5, yRadius: 1.5).fill()
+            x += Self.ledWidth + Self.ledGap
+        }
+    }
+
+    /// 顏色跟隨 menu bar 的深淺色 —— `NSColor` 的 system color 會自己處理。
+    static func color(for activity: Activity) -> NSColor {
+        switch activity {
+        case .idle:    return .tertiaryLabelColor
+        case .working: return .systemBlue
+        case .waiting: return .systemOrange
+        case .done:    return .systemGreen
+        case .error:   return .systemRed
+        }
+    }
+
+    static func alpha(for animation: IconAnimation, phase: Double) -> CGFloat {
+        switch animation {
+        case .none:
+            return 1.0
+        case .breathe(_, let lo, let hi):
+            // 三角波比 sin 便宜，且在低幀率下看起來一樣
+            let t = phase < 0.5 ? phase * 2 : (1 - phase) * 2
+            return CGFloat(lo + (hi - lo) * t)
+        case .doubleBlink:
+            // 一個週期內：亮 亮 暗 —— 兩次短閃後留一段暗
+            switch phase {
+            case ..<0.14, 0.28..<0.42: return 1.0
+            default:                   return 0.08
+            }
+        }
+    }
+}
+```
+
+```swift
+// Sources/AgentAuraApp/AnimationDriver.swift
+import AppKit
+import AuraCore
+
+/// 照 `AnimationSchedule` 的決定推進 `phase` 並要求重繪。
+///
+/// 它**不決定**該不該動 —— 那是 `AnimationSchedule` 的職責。它只負責：
+/// 監聽環境變化、把新的環境交給 `AnimationSchedule`、依回傳的間隔排程。
+@MainActor
+final class AnimationDriver {
+    private var timer: Timer?
+    private var phase: Double = 0
+    private var icon: IconState = .empty
+    private var env = DisplayEnvironment()
+    private let onFrame: (IconAppearance, Double) -> Void
+
+    init(onFrame: @escaping (IconAppearance, Double) -> Void) {
+        self.onFrame = onFrame
+        // 觀察者的 closure 是 @Sendable，但我們指定 queue: .main，所以實際一定在
+        // main actor 上執行 —— 用 assumeIsolated 把這個事實告訴編譯器。
+        // 少了它會得到一串 "capture of 'self' with non-Sendable type" 警告。
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.addObserver(forName: NSWorkspace.screensDidSleepNotification,
+                       object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.update { $0.screenAsleep = true } }
+        }
+        nc.addObserver(forName: NSWorkspace.screensDidWakeNotification,
+                       object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.update { $0.screenAsleep = false } }
+        }
+        nc.addObserver(forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                       object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.update {
+                    $0.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                }
+            }
+        }
+        env.reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    func setIcon(_ icon: IconState) {
+        self.icon = icon
+        reschedule()
+    }
+
+    func setIconVisible(_ visible: Bool) {
+        update { $0.iconVisible = visible }
+    }
+
+    private func update(_ mutate: (inout DisplayEnvironment) -> Void) {
+        mutate(&env)
+        reschedule()
+    }
+
+    private func reschedule() {
+        timer?.invalidate()
+        timer = nil
+        let appearance = AppearancePolicy.appearance(for: icon, reduceMotion: env.reduceMotion)
+        // 靜態狀態也要畫一次，否則停止動畫後畫面留在上一格
+        onFrame(appearance, 0)
+
+        guard let interval = AnimationSchedule.interval(for: icon, in: env) else { return }
+        let period = Self.period(of: appearance.animation) ?? 1.0
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.phase = (self.phase + interval / period).truncatingRemainder(dividingBy: 1)
+                self.onFrame(appearance, self.phase)
+            }
+        }
+    }
+
+    static func period(of animation: IconAnimation) -> Double? {
+        switch animation {
+        case .none: return nil
+        case .breathe(let p, _, _): return p
+        case .doubleBlink(let p): return p
+        }
+    }
+}
+```
+
+```swift
+// Sources/AgentAuraApp/StatusItemController.swift
+import AppKit
+import AuraCore
+
+@MainActor
+protocol IconRendering: AnyObject {
+    func apply(_ appearance: IconAppearance, phase: Double)
+}
+
+/// 擁有 `NSStatusItem`，把 `IconAppearance` 交給 view 畫。
+@MainActor
+final class StatusItemController: IconRendering {
+    private let item: NSStatusItem
+    private let strip = LEDStripView()
+
+    init() {
+        item = NSStatusBar.system.statusItem(withLength: LEDStripView.preferredWidth + 8)
+        strip.frame = NSRect(x: 4, y: 0,
+                             width: LEDStripView.preferredWidth,
+                             height: item.statusBar?.thickness ?? 22)
+        item.button?.addSubview(strip)
+        item.button?.toolTip = "AgentAura"
+    }
+
+    var isVisible: Bool { item.isVisible }
+
+    func apply(_ appearance: IconAppearance, phase: Double) {
+        strip.update(appearance, phase: phase)
+        item.button?.toolTip = Self.tooltip(for: appearance)
+    }
+
+    static func tooltip(for a: IconAppearance) -> String {
+        if a.attentionCount > 0 { return "\(a.attentionCount) 個需要你 · \(a.liveCount) 個在跑" }
+        if a.liveCount > 0 { return "\(a.liveCount) 個 session 在跑" }
+        return "沒有活著的 session"
+    }
+}
+```
+
+```swift
+// Sources/AgentAuraApp/AppDelegate.swift
+import AppKit
+import AuraCore
+import AuraHookFile
+
+/// Composition root。唯一的組裝點。
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var graph: PipelineGraph!
+    private var status: StatusItemController!
+    private var driver: AnimationDriver!
+    private var livenessTimer: Timer?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        status = StatusItemController()
+        driver = AnimationDriver { [weak self] appearance, phase in
+            self?.status.apply(appearance, phase: phase)
+        }
+
+        graph = PipelineGraph.production()
+        // onIconStateChange 從 FSEvents 的背景 queue 上來，所以要 hop 回 main。
+        graph.onIconStateChange = { icon in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.driver.setIcon(icon)
+                self.driver.setIconVisible(self.status.isVisible)
+            }
+        }
+        graph.start()
+
+        // spec §3.5：每 5s 重驗 pid，抓「terminal 被強制關掉、SessionEnd 沒來」
+        livenessTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.graph.refreshLiveness() }
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        livenessTimer?.invalidate()
+        graph?.stop()
+    }
+}
+```
+
+```swift
+// Sources/AgentAuraApp/main.swift
+import AppKit
+
+// menu bar app：不要 dock icon、不要主視窗。
+// 以裸執行檔跑時 setActivationPolicy 就足夠；.app bundle 另由 Info.plist
+// 的 LSUIElement 宣告（Task 18）。
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory)
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
+```
+
+- [ ] **Step 7: 建置並手動確認燈會亮**
+
+```bash
+swift build 2>&1 | tail -3
+swift test 2>&1 | grep -E "Test run with"
+
+# 手動確認：先造幾個假狀態，再跑 app
+mkdir -p ~/.agentaura/sessions
+python3 - <<'EOF'
+import json, pathlib, datetime
+root = pathlib.Path.home()/".agentaura/sessions"
+root.mkdir(parents=True, exist_ok=True)
+now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z")
+for sid, act in [("demo-working","working"), ("demo-waiting","waiting")]:
+    (root/f"{sid}.json").write_text(json.dumps({
+        "schema": 1, "session_id": sid, "hook_event_name": "PreToolUse",
+        "written_at": now, "cwd": f"/Users/you/Code/Vibe/{sid}",
+        "main_activity": act, "subagents": {}, "tool_failures": 0,
+        "terminated": False, "is_interrupt": False,
+    }, ensure_ascii=False))
+print("已造 2 個假狀態檔")
+EOF
+
+./.build/debug/AgentAuraApp &
+APP=$!
+sleep 3
+# waiting 優先級低於 error 但高於 working → 應顯示橘色呼吸
+echo "看 menu bar 右側應出現橘色呼吸的 8 顆燈條"
+sleep 10
+kill $APP
+rm -f ~/.agentaura/sessions/demo-*.json
+```
+
+Expected: menu bar 出現燈條，且**橘色明顯呼吸**（因為有一個 waiting）。
+把其中一個檔案的 `main_activity` 改成 `error` 再跑，應變成紅色 double blink。
+
+- [ ] **Step 8: Mutation 驗證**
+
+依標準程序，兩個：
+
+1. 把 `DisplayEnvironment.suppressesAnimation` 改成只看 `reduceMotion`
+   → `screenAsleepStopsEverything`、`hiddenIconStopsEverything`、`anySuppressorStops` 必須 RED
+2. 把 `AnimationSchedule.interval` 的幀率改成寫死 `30`（不取自 `AppearancePolicy`）
+   → `intervalMatchesAppearance` 與 `normalIntervals` 必須 RED
+
+第 2 個守的是「幀率只有一個來源」—— 兩處各自定義幀率就會 drift，而 DoD 是照
+`IconAppearance.targetFPS` 量的。
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add Package.swift Sources/AuraCore/AnimationSchedule.swift Sources/AgentAuraApp \
+        Tests/AuraCoreTests/AnimationScheduleTests.swift
+git commit -F - <<'EOF'
+feat(app): menu bar 燈條 + 動畫排程 —— 第一個看得到的版本
+
+AnimationSchedule 放在 AuraCore：要不要動、多久動一次是可測的決策，
+省電條件（螢幕睡眠、icon 被遮蔽、減少動態效果）是它的輸入，不是散在
+AppKit callback 裡的 if。幀率一律取自 AppearancePolicy，不另定一份。
+
+AppKit 層很薄：LEDStripView 只負責畫（phase 由外部推進，view 不持有計時器），
+AnimationDriver 只負責監聽環境與排程，StatusItemController 只負責 NSStatusItem。
+EOF
+```
+
+---
