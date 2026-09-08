@@ -1931,6 +1931,28 @@ struct MergeRulesTests {
         #expect(s?.subagents == ["Explore": 2, "implementer": 1])
     }
 
+    @Test("使用者 Ctrl+C 中斷不計入 toolFailures —— 那是使用者的動作")
+    func interruptIsNotAFailure() {
+        let interrupted = HookPayload(json: [
+            "hook_event_name": "PostToolUseFailure", "session_id": "s1",
+            "tool_name": "Bash", "is_interrupt": true,
+            "error": "Interrupted by user",
+        ])!
+        var s = merge(interrupted, into: nil)
+        s = merge(interrupted, into: s)
+        #expect(s.toolFailures == 0, "中斷兩次仍是 0 次失敗")
+        #expect(s.mainActivity == .working)
+
+        let real = HookPayload(json: [
+            "hook_event_name": "PostToolUseFailure", "session_id": "s1",
+            "tool_name": "Read", "is_interrupt": false,
+            "error": "File does not exist",
+        ])!
+        s = merge(real, into: s)
+        #expect(s.toolFailures == 1, "真正的失敗才計入")
+        #expect(s.toolError == "File does not exist")
+    }
+
     @Test("toolFailures 累加，新一輪歸零")
     func toolFailureCounting() {
         var s: SessionSnapshot? = nil
@@ -2096,6 +2118,8 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
     public var notificationMessage: String?
     public var lastMessage: String?
     public var toolDescription: String?
+    /// 最後一次 tool 失敗的訊息（`PostToolUseFailure` 的 `error`）。
+    public var toolError: String?
     public var toolDurationMs: Int?
 
     public var turnStartedAt: Date?
@@ -2125,6 +2149,7 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
         case notificationMessage = "notification_message"
         case lastMessage         = "last_message"
         case toolDescription     = "tool_description"
+        case toolError           = "tool_error"
         case toolDurationMs      = "tool_duration_ms"
         case turnStartedAt   = "turn_started_at"
         case subagents, toolFailures = "tool_failures", terminated
@@ -2202,7 +2227,10 @@ public enum MergeRules {
             s.toolFailures  = 0
             s.subagents     = [:]
         }
-        if p.hookEventName == "PostToolUseFailure" { s.toolFailures += 1 }
+        // 使用者按 Ctrl+C 中斷不算失敗 —— 那是使用者的動作。
+        // `is_interrupt` 與 `error` 同在 `PostToolUseFailure` 上（實測）。
+        if p.hookEventName == "PostToolUseFailure", !p.isInterrupt { s.toolFailures += 1 }
+        if let e = p.toolError { s.toolError = e }
         // agentType 已在 HookPayload 把空字串正規化為 nil，故內部 subagent 不計入。
         if p.hookEventName == "SubagentStart", let type = p.agentType {
             s.subagents[type, default: 0] += 1
