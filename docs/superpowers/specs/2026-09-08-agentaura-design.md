@@ -367,9 +367,11 @@ if payload.isSubagent {
 
 1. `agent_type` 為空字串時正規化為 `nil` —— 否則 `subagents` 會出現 `"": N` 這種鍵
 2. `subagents` 只在 `SubagentStart` **且** `agent_type` 非空時累加 —— 內部 subagent 因此不計入
-3. **已知缺口**：實測從未捕獲 `SubagentStart`，故「以 `SubagentStart` 計數」未經驗證。
-   若真實的使用者 subagent 也不送 `SubagentStart`，計數會低報。這只影響面板的裝飾性數字，
-   不影響 activity 正確性；派真實 subagent 時補驗
+3. **已驗證**（2026-09-08 派真實 subagent 實測）：真實 subagent **確實**送 `SubagentStart`，
+   且 `agent_type` 有意義的值。實測捕獲 `SubagentStart` / `PreToolUse` ×9 /
+   `PostToolUse` ×8 / `PostToolBatch` ×5 / `PostToolUseFailure` ×1，`agent_type` 皆為
+   `"aura-t02"`（dispatch 時給的 agent 名稱）。故「以 `SubagentStart` 且 `agent_type` 非空
+   計數」的規則成立，內部 subagent（空字串）自然被排除
 
 ---
 
@@ -511,7 +513,7 @@ AgentAura 的對應要求：
 |---|---|---|
 | terminal 強制關閉，`SessionEnd` 未觸發 | 永遠卡 working | `LivenessProber` 每 5s 驗證所有 `.alive` |
 | pid 被回收給其他 process | 死 session 誤判為活著 | 比對 `pid_started_at`，不只比 pid（§3.5） |
-| 讀到寫入一半的 JSON | session 閃現／消失 | `LOCK_SH` 讀取；解析失敗保留上次已知狀態並重試 |
+| 讀到寫入一半的 JSON | session 閃現／消失 | `LOCK_SH` 讀取；解析失敗保留上次已知狀態並重試。**已有實證**：T01 的探針用 `printf >>` 併發 append，150 行裡有 2 行被寫壞（UTF-8 解碼失敗）—— 這正是 `aura-hook` 必須用 `flock` 而非 append 的理由 |
 | subagent 事件蓋掉主 agent 的 `waiting` | **最重要的訊號被靜默抹除** | main / sub 分槽，取 D1 優先序 max（§2.5） |
 | 內部 subagent 在 `Stop` 之後送 `SubagentStop` | **每個完成的 session 綠燈都變藍燈且回不去** | 主 agent 靜止態時完全忽略 subagent 事件（§2.5.1） |
 | 使用者按 Deny 後 session 結束，卡在 `waiting` | **已結束又已回答的 session 一直亮橘燈說「有人在等你」** | 只有 `done` / `error` 能進 unacked 尾巴（§2.4.1） |
