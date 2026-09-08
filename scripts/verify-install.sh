@@ -14,9 +14,12 @@ lipo -archs plugin/bin/aura-hook 2>/dev/null | grep -q arm64 \
   && ok "含 arm64" || bad "缺 arm64"
 
 echo "== 2. plugin 已註冊 =="
-claude plugin list 2>/dev/null | grep -q agentaura \
-  && ok "agentaura plugin 已安裝" \
-  || bad "未安裝 —— claude plugin marketplace add . && claude plugin install agentaura@agentaura -y"
+[ -e "$HOME/.claude/skills/agentaura" ] \
+  && ok "掛載存在：$(readlink "$HOME/.claude/skills/agentaura" 2>/dev/null || echo '（實體目錄）')" \
+  || bad "未掛載 —— ln -sfn \"$PWD/plugin\" ~/.claude/skills/agentaura"
+claude plugin list 2>/dev/null | grep -q "agentaura@skills-dir" \
+  && ok "Claude Code 已載入 agentaura@skills-dir" \
+  || bad "Claude Code 沒載入 —— 這是新 session 才會生效的，先開一個新 session 再跑"
 
 echo "== 2b. 官方 validator 零 error 零警告 =="
 # 只看 exit code 是空轉的：validator 對「unknown hook event」、「no type」、
@@ -35,14 +38,25 @@ for target in ./plugin .; do
   fi
 done
 
-echo "== 3. settings.json 未被污染（R6）=="
+echo "== 3. settings.json 全檔零污染（D3/R6）=="
+# **掃整個檔案，不只掃 hooks 區塊。**
+#
+# 前一版只看 `d.get('hooks', {})`。實測 `claude plugin marketplace add .` 會在
+# `extraKnownMarketplaces` 裡寫一筆 agentaura —— 那個位置**完全不在** hooks 底下，
+# 舊檢查會給綠燈。一個只看自己想得到的那個角落的檢查，等於沒有檢查。
 python3 -c "
-import json,pathlib,sys
-p=pathlib.Path.home()/'.claude/settings.json'
-d=json.loads(p.read_text()) if p.exists() else {}
-h=json.dumps(d.get('hooks',{}))
-sys.exit(1 if 'agentaura' in h.lower() or 'aura-hook' in h else 0)
-" && ok "settings.json 沒有 AgentAura 引用" || bad "settings.json 被寫入了 —— 違反 D3/R6"
+import json, pathlib, sys
+p = pathlib.Path.home()/'.claude/settings.json'
+raw = p.read_text() if p.exists() else '{}'
+hits = [k for k in ['agentaura', 'aura-hook', 'AgentAura'] if k.lower() in raw.lower()]
+if hits:
+    d = json.loads(raw)
+    where = [key for key in d if any(h.lower() in json.dumps(d[key]).lower() for h in hits)]
+    print('    污染位置：' + ', '.join(where))
+    sys.exit(1)
+sys.exit(0)
+" && ok "settings.json 全檔零 AgentAura 引用" \
+  || bad "settings.json 被寫入了 —— 違反 D3/R6。AgentAura 不該碰這個檔案的任何位元組"
 
 echo "== 4. 實機跑一輪 =="
 BEFORE=$(ls "$ROOT" 2>/dev/null | wc -l | tr -d ' ')

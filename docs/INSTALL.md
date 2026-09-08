@@ -10,39 +10,56 @@
 
 ```bash
 git clone <repo> && cd AgentAura
-./scripts/build-plugin.sh                    # 建置 universal aura-hook 到 plugin/bin/
-claude plugin validate ./plugin              # 官方 validator，必須零 error 零 warning
-claude plugin marketplace add .              # 把這個 repo 註冊成本地 marketplace
-claude plugin install agentaura@agentaura -y # 註冊 hooks（不會修改 ~/.claude/settings.json）
-./scripts/verify-install.sh                  # 驗證整條鏈路
+./scripts/build-plugin.sh                            # 建置 universal aura-hook 到 plugin/bin/
+claude plugin validate --strict ./plugin             # 官方 validator，零 error 零 warning
+ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura     # 掛載（settings.json 零改動）
+./scripts/verify-install.sh                          # 驗證整條鏈路
 ```
 
-> **為什麼要先 `marketplace add`：** `claude plugin install` **只從 marketplace 安裝**
-> （`claude plugin install --help`：「Install a plugin from available marketplaces」），
-> **不吃本地目錄路徑** —— `claude plugin install ./plugin` 不會生效。
-> 本地安裝的正確途徑是 `claude plugin marketplace add <path>`
-> （`marketplace add` 明文支援 URL / **path** / GitHub repo），
-> 這也是 repo 根目錄需要 `.claude-plugin/marketplace.json` 的原因。
+**下一個 Claude Code session 起生效**（skills-dir 的 plugin 在 session 啟動時載入；
+已在執行中的 session 不會中途載入新 plugin）。
+
+> **為什麼用 `~/.claude/skills/`，而不是 marketplace：**
 >
-> `-y` 是必要的：非 TTY 環境（腳本、CI）下 install 會等一個確認提示。
+> `claude plugin install` **只從 marketplace 安裝**（`--help`：「Install a plugin
+> from available marketplaces」），本地安裝要先 `claude plugin marketplace add <path>`。
+> **但那會寫 `~/.claude/settings.json`** —— 實測 `marketplace add` 在
+> `extraKnownMarketplaces` 裡加一筆 `agentaura → directory /path/to/repo`，
+> **直接違反 D3/R6「AgentAura 從不修改 settings.json」**。
+>
+> `~/.claude/skills/<name>/` 是 Claude Code 的另一條 plugin 載入路徑
+> （`claude plugin init --help`：「auto-loads next session as `<name>@skills-dir`」）。
+> 實測：
+> - 現有 5 個 skills-dir plugin 在 `settings.json` 裡**零命中**
+> - 掛上 symlink 後 `claude plugin list` 顯示 `agentaura@skills-dir ... ✔ loaded`
+> - 跑一個真的 `claude -p` session，hook 觸發、狀態檔寫出、內容完整
+> - **`settings.json` 的 md5 完全沒變**
+>
+> 用 **symlink** 而不是複製：改了程式碼重跑 `build-plugin.sh` 就生效，
+> 不需要重新安裝。（要凍結版本的話把 `ln -sfn` 換成 `cp -R` 即可。）
 
 **不需要重啟 Claude Code** —— hook 設定變更會立即對執行中的 session 生效（已實測確認）。
 
 ## 完整移除
 
 ```bash
-claude plugin uninstall agentaura             # 移除 plugin（hooks 隨之失效）
-claude plugin marketplace remove agentaura    # 移除本地 marketplace 註冊
-rm -rf ~/.agentaura                           # 狀態目錄，可安全刪除
+rm ~/.claude/skills/agentaura     # 移除掛載（hooks 隨之失效）
+rm -rf ~/.agentaura               # 狀態目錄，可安全刪除
 ```
 
-驗證移除乾淨（三者都該是 0）：
+> 沒有 `claude plugin uninstall` 這一步 —— 那是 marketplace 安裝的 plugin 才需要；
+> skills-dir 掛載的移除就是刪掉上面那個 symlink。
+
+一步安裝、一步移除（R6）。驗證移除乾淨：
 
 ```bash
-claude plugin list | grep -c agentaura              # → 0
-claude plugin marketplace list | grep -c agentaura  # → 0
-grep -c -i agentaura ~/.claude/settings.json        # → 0
+claude plugin list | grep -c -i agentaura           # → 0
+grep -c -i agentaura ~/.claude/settings.json        # → 0（**全程都是 0**）
+ls ~/.agentaura 2>/dev/null | wc -l                 # → 0
 ```
+
+第二行的重點是「**全程**都是 0」，不是「移除後變成 0」——
+AgentAura 從頭到尾沒有寫過 `settings.json` 的任何一個位元組。
 
 移除後 `~/.claude/settings.json` **不會留下任何 AgentAura 引用** ——
 這是刻意的設計：AgentAura 從不修改 `settings.json`，全部靠 plugin 機制。
@@ -58,8 +75,9 @@ grep -c -i agentaura ~/.claude/settings.json        # → 0
 
 ```bash
 ls -la ~/.agentaura/sessions/                        # 有檔案嗎？
-claude plugin list | grep agentaura                  # plugin 裝了嗎？
-claude plugin validate ./plugin                      # manifest 有 error / warning 嗎？
+claude plugin list | grep -A3 -i agentaura           # 載入了嗎？應顯示 ✔ loaded
+ls -la ~/.claude/skills/agentaura                    # 掛載還在嗎？指向對的地方嗎？
+claude plugin validate --strict ./plugin             # manifest 有 error / warning 嗎？
 lipo -archs plugin/bin/aura-hook                     # 二進位在嗎、架構對嗎？
 echo '{"hook_event_name":"Stop","session_id":"t1"}' | ./plugin/bin/aura-hook; echo $?
 ```
