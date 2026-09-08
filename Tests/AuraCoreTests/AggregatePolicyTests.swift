@@ -20,7 +20,10 @@ struct AggregatePolicyTests {
 
     @Test("2 個 working + 1 個 error → error（使用者原始舉例）")
     func twoWorkingOneErrorIsError() {
-        let r = policy.aggregate([state("a", .working), state("b", .working), state("c", .error)])
+        // `.error` 刻意**不放在陣列首尾** —— 放在尾端時，「最後一個贏」的錯誤
+        // 實作會巧合給出正確答案，這條測試就對 D1 的核心 mutation 失去鑑別力
+        // （實測：mutation 下只有 `orderIndependent` 變紅，這條照樣綠）。
+        let r = policy.aggregate([state("a", .working), state("b", .error), state("c", .working)])
         #expect(r.activity == .error)
     }
 

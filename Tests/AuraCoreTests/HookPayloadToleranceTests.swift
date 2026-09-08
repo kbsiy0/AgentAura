@@ -86,11 +86,20 @@ struct HookPayloadToleranceTests {
     /// 結果核心主張對 14 個 optional 欄位中的 12 個完全沒有測試。
     @Test("逐一破壞真實 payload 的每個欄位：只有兩個是必要的")
     func perFieldCorruptionTolerance() throws {
-        let reals = try Fixtures.rawEvents(named: "round2")
+        // 三份 fixture 全用，**不取樣**。
+        //
+        // 曾經有一版寫 `where i % 8 == 0`（為了控制測試時間），它靜默掏空了覆蓋：
+        // 9 個這個型別真的會讀的 key 完全沒有損壞測試，因為那個 stride 剛好錯過
+        // 它們在 corpus 裡的每一次出現 —— 其中包括 `error` 與 `is_interrupt`
+        // （`toolError` / `isInterrupt` 的來源），它們唯一的出現位置在 round2 的
+        // index 66，而 66 % 8 == 2。
+        let reals = try Fixtures.rawEvents(named: "round1")
+            + Fixtures.rawEvents(named: "round1b")
+            + Fixtures.rawEvents(named: "round2")
         let required: Set<String> = ["hook_event_name", "session_id"]
         var checked: Set<String> = []
 
-        for (i, json) in reals.enumerated() where i % 8 == 0 {   // 取樣，控制測試時間
+        for json in reals {
             for key in json.keys {
                 checked.insert(key)
 
@@ -117,7 +126,18 @@ struct HookPayloadToleranceTests {
                 }
             }
         }
-        #expect(checked.count >= 12,
-                "應掃過至少 12 個真實欄位，實際 \(checked.sorted())")
+        // 斷言涵蓋 corpus 裡出現過的**每一個** key，而不是「至少 N 個」——
+        // `>=` 無法察覺取樣把某些 key 整批跳過。
+        let allCorpusKeys = Set(reals.flatMap { $0.keys })
+        #expect(checked == allCorpusKeys,
+                "漏掃的 key：\(allCorpusKeys.subtracting(checked).sorted())")
+
+        // 特別點名這個型別會讀、且 corpus 有的 key —— 最容易被取樣跳過的那一批
+        for key in ["error", "is_interrupt", "message", "model",
+                    "notification_type", "reason", "source", "tool_input"] {
+            if allCorpusKeys.contains(key) {
+                #expect(checked.contains(key), "\(key) 在 corpus 裡卻沒被掃到")
+            }
+        }
     }
 }

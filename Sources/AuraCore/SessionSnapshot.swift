@@ -3,7 +3,12 @@ import Foundation
 /// `~/.agentaura/sessions/<session_id>.json` 的內容。
 ///
 /// 分成三類欄位：
-/// 1. 當次事件直接覆寫的（`hookEventName`、`writtenAt`、`cwd` …）
+/// 1. 每次事件**必定覆寫**的：`hookEventName`、`writtenAt`
+///    （每個 payload 都一定帶這兩個值，所以沒有 carry-forward 的問題）
+/// 1b. **carry-forward** 的：`cwd`、`permissionMode`、`effort`、`model`、`source`、
+///    `reason`、`notificationType`、`toolDescription` … 這些用 `?? existing`
+///    或 `if let`，不帶該欄位的事件會**保留舊值**。別改成直接賦值 ——
+///    `fieldsCarryForward` 測試釘死的就是這件事。
 /// 2. **分槽**欄位（`main*` / `sub*`）—— subagent 不得覆蓋主 agent，見 §2.5
 /// 3. **累積**欄位（`turnStartedAt`、`subagents`、`toolFailures`）—— 由 `MergeRules` 帶過來
 public struct SessionSnapshot: Codable, Sendable, Equatable {

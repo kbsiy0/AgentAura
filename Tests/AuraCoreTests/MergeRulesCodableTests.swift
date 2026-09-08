@@ -30,6 +30,7 @@ struct MergeRulesCodableTests {
     @Test("JSON round-trip 保留每一個 stored property")
     func codableRoundTripCoversEveryField() throws {
         var s = SessionSnapshot(sessionID: "round-trip-1")
+        s.schema              = 7
         s.hookEventName       = "PermissionRequest"
         s.writtenAt           = Date(timeIntervalSince1970: 1_788_628_111)
         s.pid                 = 4242
@@ -50,14 +51,30 @@ struct MergeRulesCodableTests {
         s.lastMessage         = "全部完成"
         s.toolDescription     = "Download example.com to dl2.html"
         s.toolDurationMs      = 12_403
+        s.toolError           = "File does not exist"
         s.turnStartedAt       = Date(timeIntervalSince1970: 1_788_628_000)
         s.subagents           = ["Explore": 2, "implementer": 1]
         s.toolFailures        = 3
         s.terminated          = true
 
-        // 每個欄位都不是預設值 —— 任何從 CodingKeys 漏掉的 key 都會讓下面的等式失敗
-        let blank = SessionSnapshot(sessionID: "round-trip-1")
-        #expect(s != blank, "測試資料必須與空白初始狀態不同，否則這個 gate 沒有意義")
+        // 「每個欄位都不是預設值」這件事本身要被檢查，不能只寫在 doc-comment 裡。
+        //
+        // 這個 gate 曾經自己漏過欄位：宣稱涵蓋「每一個 stored property」，但
+        // `toolError` 與 `schema` 從頭到尾沒被設值。實測把 `case toolError` 或
+        // `case schema` 從 CodingKeys 移掉 —— 編譯照過，全套件 121 個測試無一變紅。
+        //
+        // 手寫的欄位清單會 drift，所以改用 `Mirror` 從型別本身推導：
+        // 只要有任何 stored property 停在預設值，這裡就紅，並指名是哪一個。
+        let blank = SessionSnapshot(sessionID: "blank")
+        let mine = Array(Mirror(reflecting: s).children)
+        let theirs = Array(Mirror(reflecting: blank).children)
+        #expect(mine.count == theirs.count)
+        for (a, b) in zip(mine, theirs) {
+            #expect("\(a.value)" != "\(b.value)", """
+                stored property `\(a.label ?? "?")` 沒被設成非預設值 —— 這個 gate 對它是盲的。
+                把它從 CodingKeys 移掉不會有任何測試變紅。請在上面補一行設值。
+                """)
+        }
 
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
         let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
