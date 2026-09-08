@@ -1038,6 +1038,28 @@ struct HookPayloadTests {
         #expect(p.effortLevel == nil)
     }
 
+    @Test("PermissionRequest 的實測欄位（含 permission_suggestions）")
+    func permissionRequestFields() throws {
+        let reqs = try Fixtures.events(named: "round2", kind: "PermissionRequest")
+        #expect(!reqs.isEmpty, "Task 01 第三輪必須捕獲")
+        let json = try #require(reqs.first)
+        #expect(json["permission_mode"] as? String == "default",
+                "CLI 的 --permission-mode manual 在 payload 裡是 default")
+        #expect(json["permission_suggestions"] != nil, "實測發現的額外欄位")
+        let p = try #require(HookPayload(json: json))
+        #expect(p.effect == .setActivity(.waiting))
+        #expect(p.toolName == "Bash")
+    }
+
+    @Test("SessionEnd 的實測 reason 值")
+    func sessionEndReason() throws {
+        let ends = try Fixtures.events(named: "round2", kind: "SessionEnd")
+        #expect(!ends.isEmpty)
+        let p = try #require(HookPayload(json: try #require(ends.first)))
+        #expect(p.reason == "prompt_input_exit", "實測值")
+        #expect(p.effect == .sessionEnded)
+    }
+
     @Test("effect 直接委派給 EventMapping，含 notification_type")
     func effectDelegation() throws {
         let a = try #require(HookPayload(json: [
@@ -2104,7 +2126,7 @@ git commit -m "feat(core): SessionState / IconState 與 SessionReducer"
       public mutating func upsert(_ s: SessionState)
       /// 打開面板：所有未確認一律標為已確認，已結束且已確認者移出並回傳其 id（供刪檔）
       public mutating func acknowledgeAll() -> [String]
-      /// 參與 icon 聚合的 session：活著的，加上已結束但未確認的
+      /// 參與 icon 聚合的 session：活著的，加上已結束但未確認**結果**（done/error）的
       public var visible: [SessionState]
       public func isAcknowledged(_ id: String) -> Bool
   }
@@ -2152,6 +2174,29 @@ struct SessionRegistryTests {
         var r = SessionRegistry()
         r.upsert(state("a", .done, live: false))
         #expect(r.visible.map(\.id) == ["a"])
+    }
+
+    @Test("PermissionRequest 後直接 SessionEnd（按 Deny 的實測序列）→ 不得留在尾巴")
+    func endedWhileWaitingIsDropped() {
+        var r = SessionRegistry()
+        r.upsert(state("denied", .waiting, live: false))
+        #expect(r.visible.isEmpty,
+                "已結束、使用者早就按過 Deny 的 session 不得亮橘燈說「有人在等你」（§2.4.1）")
+    }
+
+    @Test("pid 死亡且卡在 waiting → 同樣丟棄")
+    func deadWhileWaitingIsDropped() {
+        var r = SessionRegistry()
+        r.upsert(state("crashed", .waiting, live: false))
+        r.upsert(state("alive", .working))
+        #expect(r.visible.map(\.id) == ["alive"])
+    }
+
+    @Test("還活著的 waiting 仍然可見（那是真的在等你）")
+    func aliveWaitingStaysVisible() {
+        var r = SessionRegistry()
+        r.upsert(state("w", .waiting))
+        #expect(r.visible.map(\.id) == ["w"])
     }
 
     @Test("已結束且非靜止態（working/idle）直接不可見")
@@ -2274,11 +2319,17 @@ public struct SessionRegistry: Sendable {
         return removable
     }
 
-    /// 參與 icon 聚合的 session：活著的，加上已結束但仍有未確認結果的。
+    /// 參與 icon 聚合的 session：活著的，加上已結束但仍有未確認**結果**的。
+    ///
+    /// `waiting` 刻意不算結果（§2.4.1）。實測：使用者按 Deny 不產生任何 hook 事件，
+    /// session 的最後事件停在 `PermissionRequest`，之後直接 `SessionEnd`。
+    /// 若 `waiting` 也能進尾巴，一個已結束、使用者早就回答過的 session 會讓 icon
+    /// 一直亮橘燈說「有人在等你」—— 本產品最不該犯的錯。
     public var visible: [SessionState] {
         states.values.filter { s in
             if s.liveness != .ended { return true }
-            return s.isQuiescent && !acknowledged.contains(s.id)
+            let isResult = s.activity == .done || s.activity == .error
+            return isResult && !acknowledged.contains(s.id)
         }
     }
 }

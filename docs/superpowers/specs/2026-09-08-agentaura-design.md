@@ -156,6 +156,12 @@ jsonl 格式）—— 不進第一版。
 | `auto` 已是預設權限模式 | `PermissionRequest` 只在**每次都問**的模式觸發（CLI 旗標是 `--permission-mode manual`，文件裡稱 `default`）；`auto` 模式的拒絕走 `PermissionDenied` |
 | **Bash exit≠0 不觸發 `PostToolUseFailure`** | 指令回非零只是「tool 成功執行、輸出裡有錯誤」。`PostToolUseFailure` 只在 tool 本身失敗時觸發（實測：`Read` 不存在的檔）。**影響 `tool_failures` 的語意** —— 面板該欄位計的是「tool 層級的錯誤」，不含失敗的 shell 指令。這其實是對的語意（測試紅燈是正常工作），但面板文案不可寫成「指令失敗數」 |
 | `PostToolUseFailure` **沒有** `tool_error` 欄位 | 文件說有，實測只有 `tool_name` / `tool_input` / `duration_ms`。故不得依賴 `tool_error` 顯示錯誤原因 |
+| CLI 的 `--permission-mode manual` 在 payload 裡是 `"default"` | 兩者是同一個模式的不同名字。狀態檔範例用 `"default"` 正確 |
+| `PermissionRequest` 帶 `tool_name` / `tool_input` / **`permission_suggestions`** | 最後一項是規則建議陣列。面板可用 `tool_input.description` 顯示「在等你批准什麼」 |
+| `SessionEnd` 的 `reason` 實測值：`"prompt_input_exit"` | 確認欄位名是 `reason` |
+| **`Notification(permission_prompt)` 沒有觸發** | 真的出現權限提示時，只送 `PermissionRequest`，沒有對應的 `Notification`。§2.2.1 表中的 `permission_prompt` 來自 前一個專案 的 matcher 與文件，實測未出現 —— 保留在表中無害（兩者都映射到 `waiting`），但**主要訊號確定是 `PermissionRequest`**，這驗證了 §2.2.1「不需要靠 Notification 兜底」的判斷 |
+| **使用者按 Deny 不產生任何 hook 事件** | 見 §2.4.1 —— 這導出一個 false-positive bug |
+| `PermissionDenied` 只在 **auto 模式自動拒絕**時觸發 | 不是使用者手動 Deny。故仍未捕獲，改列 best-effort |
 
 ### 2.2 event → activity 對照表
 
@@ -252,6 +258,40 @@ session 進入靜止態（`waiting` / `done` / `error`）時 `acknowledged = fal
 產品最大價值被抵銷。
 
 確認後：已結束且已確認的 session 移出 registry，其狀態檔刪除。
+
+### 2.4.1 `waiting` 不得進入 unacked 尾巴（false-positive 修正）
+
+**第三輪實測發現。** 使用者按 Deny 拒絕權限請求時，**不產生任何 hook 事件** ——
+實測序列：
+
+```
++68.44s  PreToolUse         Bash
++68.45s  PermissionRequest  Bash     ← 提示出現
+（使用者按 Deny）                      ← 沒有任何事件
++91.04s  SessionEnd         reason=prompt_input_exit
+```
+
+`PermissionDenied` 只在 **auto 模式自動拒絕**時觸發，不涵蓋使用者手動 Deny。
+所以 session 的最後事件停在 `PermissionRequest` → `main_activity` 卡在 `waiting`。
+
+若 `waiting` 也能進入 unacked 尾巴，結果是：**一個已經結束、而且使用者早就回答過的
+session，會讓 icon 一直亮橘燈說「有人在等你」** —— 這正是本產品最不該犯的錯。
+
+**修法：只有 `done` 與 `error` 能進入 unacked 尾巴。**
+
+```swift
+if state.liveness != .ended { return true }          // 活著的都可見
+// waiting 不是「結果」——已結束的 session 不可能還在等你回答
+return (state.activity == .done || state.activity == .error)
+       && !acknowledged.contains(state.id)
+```
+
+理由：尾巴存在的目的是「讓你看到還沒看過的**結果**」。`waiting` 不是結果，
+是一個已經無從行動的中間狀態。同理，pid 死亡（crash）時卡在 `waiting` 的 session
+也一併丟棄。
+
+**誠實的限制**：本次實測中使用者在 Deny 後 22 秒就退出，所以無法確認「若繼續留著，
+最終是否會有 `Stop` 抵達」。上述修法在兩種情況下都正確，故不因此阻塞。
 
 ### 2.5 主 agent 與 subagent 必須分槽（critical）
 
@@ -474,6 +514,7 @@ AgentAura 的對應要求：
 | 讀到寫入一半的 JSON | session 閃現／消失 | `LOCK_SH` 讀取；解析失敗保留上次已知狀態並重試 |
 | subagent 事件蓋掉主 agent 的 `waiting` | **最重要的訊號被靜默抹除** | main / sub 分槽，取 D1 優先序 max（§2.5） |
 | 內部 subagent 在 `Stop` 之後送 `SubagentStop` | **每個完成的 session 綠燈都變藍燈且回不去** | 主 agent 靜止態時完全忽略 subagent 事件（§2.5.1） |
+| 使用者按 Deny 後 session 結束，卡在 `waiting` | **已結束又已回答的 session 一直亮橘燈說「有人在等你」** | 只有 `done` / `error` 能進 unacked 尾巴（§2.4.1） |
 | `agent_type` 為空字串 | `subagents` 出現 `"": N` 這種無意義鍵 | 空字串正規化為 nil，計數時跳過（§2.5.1） |
 | 未知 `notification_type` | 無故亮橘燈（auth / quota 雜訊） | 不改變 activity；`PermissionRequest` 已覆蓋真正的等待情況（§2.2.1） |
 | Claude Code 新增 hook event | 解析爆掉 | 未知 event 不改變 activity，只更新時戳；`schema` 欄位擋不相容 |
@@ -517,6 +558,9 @@ AgentAura 的對應要求：
 19. 只有 `SubagentStop` 沒有 `SubagentStart` 的 subagent → 不得計入 `subagents`
 20. `Notification` payload 缺 `permission_mode` / `effort` → 不得使既有值被清掉
 21. `SessionStart` 帶 `model`，後續 event 不帶 → `model` 必須被帶過來
+22. **`PermissionRequest` 後直接 `SessionEnd`（使用者按 Deny 的實測序列）→ 該 session 不得留在尾巴亮橘燈**（§2.4.1）
+23. pid 死亡且最後狀態是 `waiting` → 同上，必須丟棄
+24. 已結束的 `done` / `error` → 必須留在尾巴
 
 ### 5.2 composition-root smoke
 
@@ -546,6 +590,7 @@ AgentAura 的對應要求：
 | `Notification` 型別分流（改回一律 waiting） | 「`auth_success` 不改變 activity」 |
 | 主 agent 靜止時忽略 subagent 事件（改回一律寫 sub 槽） | 「`Stop` 後的 `SubagentStop` 不得把 done 變成 working」 |
 | `agent_type` 空字串正規化 | 「`subagents` 不得出現空字串鍵」 |
+| 尾巴的 `done`/`error` 限制（改回收所有靜止態） | 「`PermissionRequest` 後 `SessionEnd` 的 session 不得亮橘燈」 |
 
 ### 5.4 UI 驗收
 
@@ -728,6 +773,22 @@ M1 的測試 fixture 由此衍生至 `Tests/Fixtures/real-payloads/`。
 仍缺：`PermissionRequest`、`PermissionDenied`（需 `default` 權限模式，`auto` 已是預設）、
 `SubagentStart`、`StopFailure`、`PreCompact` / `PostCompact`。
 
-**產出**：§2.1.2 的 7 項補充，以及 §2.5.1 的 critical bug —— 那個 bug 影響每一個
+**產出**：§2.1.2 的補充，以及 §2.5.1 的 critical bug —— 那個 bug 影響每一個
 跑完的 session，且只有靠真實時序資料才看得到（單靠文件推不出「內部 subagent 會在
 Stop 之後才送 SubagentStop」）。這是 M0 排在最前面的具體回報。
+
+### 第三輪（2026-09-08，`--permission-mode manual`）
+
+同一份 `round2/log.ndjson`（累計 101 個事件、4 個 session）。
+
+補齊：`PermissionRequest`（×2，含 `permission_suggestions`）、`SessionEnd`（含
+`reason="prompt_input_exit"`）、`PostToolUseFailure`。
+
+**產出**：§2.4.1 的 false-positive bug（使用者按 Deny 不產生事件 → session 卡在
+`waiting` → 已結束又已回答卻一直亮橘燈），以及確認「真的出現權限提示時只送
+`PermissionRequest`、沒有對應的 `Notification`」—— 這驗證了 §2.2.1 不靠 Notification
+兜底的判斷。
+
+仍缺（全部改列 best-effort）：`PermissionDenied`（只在 auto 模式自動拒絕時觸發）、
+`SubagentStart`（內部 subagent 不送；真實 subagent 待 T02 dispatch 時觀察）、
+`StopFailure`、`PreCompact` / `PostCompact`。
