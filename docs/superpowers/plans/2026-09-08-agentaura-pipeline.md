@@ -405,18 +405,65 @@ struct FixtureIntegrityTests {
         #expect(effort is [String: Any], "實測 effort 是 {\"level\":…} 物件（spec §2.1.1）")
     }
 
-    @Test("沒有任何 event 帶 model 欄位")
-    func noModelField() throws {
-        let all = try Fixtures.rawEvents(named: "round1") + Fixtures.rawEvents(named: "round1b")
-        #expect(all.allSatisfy { $0["model"] == nil }, "實測確認 hook payload 不帶 model（spec §2.1.1）")
+    @Test("round1 沒有任何 event 帶 model，round2 的 SessionStart 有")
+    func modelFieldOnlyOnSessionStart() throws {
+        let r1 = try Fixtures.rawEvents(named: "round1") + Fixtures.rawEvents(named: "round1b")
+        #expect(r1.allSatisfy { $0["model"] == nil }, "第一輪：無 model")
+
+        let starts = try Fixtures.events(named: "round2", kind: "SessionStart")
+        #expect(!starts.isEmpty)
+        #expect(starts.allSatisfy { $0["model"] is String },
+                "第二輪實測：SessionStart 帶 model（spec §2.1.1，第二輪為準）")
+        // 其他 event 仍然不帶 —— 故 model 必須由 MergeRules 帶過來
+        let others = try Fixtures.rawEvents(named: "round2")
+            .filter { $0["hook_event_name"] as? String != "SessionStart" }
+        #expect(others.allSatisfy { $0["model"] == nil })
     }
 
-    @Test("round2 有捕獲 Notification 並帶 notification_type")
+    @Test("round2 有捕獲 Notification，notification_type 與 message 皆經量測確認")
     func round2HasNotification() throws {
         let notifs = try Fixtures.events(named: "round2", kind: "Notification")
         #expect(!notifs.isEmpty, "Task 01 必須捕獲至少 1 筆 Notification")
         #expect(notifs.allSatisfy { $0["notification_type"] is String },
                 "欄位名必須經實測確認，不能只靠文件")
+        #expect(notifs.allSatisfy { $0["message"] is String },
+                "實測發現的額外欄位（spec §2.1.2）")
+    }
+
+    @Test("round2 的 SubagentStop 有 agent_type 為空字串的內部 subagent")
+    func round2HasInternalSubagent() throws {
+        let stops = try Fixtures.events(named: "round2", kind: "SubagentStop")
+        #expect(!stops.isEmpty)
+        #expect(stops.contains { ($0["agent_type"] as? String) == "" },
+                "內部 subagent 的 agent_type 是空字串而非 null —— §2.5.1 critical bug 的來源")
+        #expect(stops.allSatisfy { ($0["agent_id"] as? String)?.isEmpty == false })
+    }
+
+    @Test("round2 裡 SubagentStop 出現在主 agent Stop 之後（§2.5.1 的時序證據）")
+    func round2SubagentStopAfterStop() throws {
+        // 探針的外層有 _t 時戳，rawEvents 已剝掉；這裡直接讀原始行。
+        let url = try #require(Bundle.module.url(forResource: "Fixtures/round2", withExtension: "ndjson"))
+        struct Row { let t: Double; let sid: String; let event: String; let isSub: Bool }
+        let rows: [Row] = try String(contentsOf: url, encoding: .utf8)
+            .split(separator: "\n").compactMap { line in
+                guard let d = line.data(using: .utf8),
+                      let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                      let t = o["_t"] as? Double,
+                      let p = o["_payload"] as? [String: Any],
+                      let sid = p["session_id"] as? String,
+                      let ev = p["hook_event_name"] as? String else { return nil }
+                return Row(t: t, sid: sid, event: ev,
+                           isSub: (p["agent_id"] as? String)?.isEmpty == false)
+            }
+        var found = false
+        for sid in Set(rows.map(\.sid)) {
+            let mine = rows.filter { $0.sid == sid }
+            guard let stop = mine.first(where: { $0.event == "Stop" && !$0.isSub })?.t,
+                  let subStop = mine.first(where: { $0.event == "SubagentStop" })?.t
+            else { continue }
+            if subStop > stop { found = true }
+        }
+        #expect(found, "至少一個 session 的 SubagentStop 晚於 Stop —— 這是 §2.5.1 的實測依據")
     }
 }
 ```
@@ -492,6 +539,15 @@ struct ActivityTests {
         #expect(Set(ps).count == Activity.allCases.count)
         #expect(ps.sorted() == [0, 1, 2, 3, 4])
     }
+
+    @Test("isQuiescent 僅 waiting / done / error 為真")
+    func quiescence() {
+        #expect(Activity.waiting.isQuiescent)
+        #expect(Activity.done.isQuiescent)
+        #expect(Activity.error.isQuiescent)
+        #expect(!Activity.working.isQuiescent)
+        #expect(!Activity.idle.isQuiescent)
+    }
 }
 ```
 
@@ -525,6 +581,14 @@ public enum Activity: String, Codable, Sendable, CaseIterable {
         case .waiting: 3
         case .error:   4
         }
+    }
+
+    /// 靜止態：使用者行動前不會再有新事件覆寫。
+    ///
+    /// `MergeRules` 用它決定是否忽略 subagent 事件 —— 主 agent 靜止時，
+    /// 殘留的 subagent 活動（含 Claude Code 的內部 subagent）不得改變 activity（§2.5.1）。
+    public var isQuiescent: Bool {
+        self == .waiting || self == .done || self == .error
     }
 }
 
@@ -783,10 +847,13 @@ git commit -m "feat(core): Activity 優先序與 event→activity 對照，含 N
       public let reason: String?
       public let toolName: String?
       public let toolDurationMs: Int?
+      public let model: String?
       public let notificationType: String?
+      public let notificationMessage: String?
+      public let model: String?
       public let lastMessage: String?
       public let agentID: String?
-      public let agentType: String?
+      public let agentType: String?    // 空字串正規化為 nil
       public var isSubagent: Bool { agentID != nil }
       public var effect: EventEffect { ... }
       public init?(json: [String: Any])
@@ -929,6 +996,48 @@ struct HookPayloadTests {
         #expect((p.cwd?.count ?? 0) > 1000)
     }
 
+    @Test("agent_type 空字串正規化為 nil（內部 subagent，§2.5.1）")
+    func emptyAgentTypeNormalized() throws {
+        let p = try #require(HookPayload(json: [
+            "hook_event_name": "SubagentStop", "session_id": "s1",
+            "agent_id": "a8c360a1fe475f199", "agent_type": "",
+        ]))
+        #expect(p.isSubagent, "agent_id 有值 → 仍是 subagent 事件")
+        #expect(p.agentType == nil, "空字串不得成為 subagents 的鍵")
+    }
+
+    @Test("round2 的真實內部 subagent payload 解析後 agentType 為 nil")
+    func realInternalSubagentParsed() throws {
+        let stops = try Fixtures.events(named: "round2", kind: "SubagentStop")
+        let internals = stops.compactMap { HookPayload(json: $0) }
+            .filter { $0.agentType == nil && $0.isSubagent }
+        #expect(!internals.isEmpty, "實測確實有 agent_type 為空字串的 subagent")
+    }
+
+    @Test("SessionStart 的 model 被讀出來，其他 event 沒有")
+    func modelFromSessionStart() throws {
+        let starts = try Fixtures.events(named: "round2", kind: "SessionStart")
+        let p = try #require(HookPayload(json: try #require(starts.first)))
+        #expect(p.model?.hasPrefix("claude") == true, "實測值形如 claude-opus-5[1m]")
+        let pre = try #require(HookPayload(json: [
+            "hook_event_name": "PreToolUse", "session_id": "s1",
+        ]))
+        #expect(pre.model == nil)
+    }
+
+    @Test("Notification 的 message 欄位被讀出來，且缺 permission_mode/effort 也能解析")
+    func notificationFields() throws {
+        let notifs = try Fixtures.events(named: "round2", kind: "Notification")
+        let json = try #require(notifs.first)
+        #expect(json["permission_mode"] == nil, "實測：Notification 不帶此欄位")
+        #expect(json["effort"] == nil)
+        let p = try #require(HookPayload(json: json))
+        #expect(p.notificationType == "idle_prompt")
+        #expect(p.notificationMessage?.isEmpty == false)
+        #expect(p.permissionMode == nil)
+        #expect(p.effortLevel == nil)
+    }
+
     @Test("effect 直接委派給 EventMapping，含 notification_type")
     func effectDelegation() throws {
         let a = try #require(HookPayload(json: [
@@ -998,10 +1107,14 @@ public struct HookPayload: Sendable, Equatable {
         reason           = Self.string(json["reason"]) ?? Self.string(json["end_reason"])
         toolName         = Self.string(json["tool_name"])
         toolDurationMs   = json["duration_ms"] as? Int
-        notificationType = Self.string(json["notification_type"])
+        notificationType = Self.nonEmpty(json["notification_type"])
+        notificationMessage = Self.nonEmpty(json["message"])
+        model            = Self.nonEmpty(json["model"])
         lastMessage      = Self.string(json["last_assistant_message"])
-        agentID          = Self.string(json["agent_id"])
-        agentType        = Self.string(json["agent_type"])
+        agentID          = Self.nonEmpty(json["agent_id"])
+        // 內部 subagent 的 agent_type 是**空字串**而非 null —— 正規化，
+        // 否則 subagents 會出現 "": N 這種無意義鍵（§2.5.1）。
+        agentType        = Self.nonEmpty(json["agent_type"])
     }
 
     public init?(data: Data) {
@@ -1014,6 +1127,12 @@ public struct HookPayload: Sendable, Equatable {
 
     /// 只接受真正的 String；`NSNull`、數字、容器都轉不成 String，自然回 nil。
     static func string(_ any: Any?) -> String? { any as? String }
+
+    /// 同 `string`，但空字串也視為缺值。
+    static func nonEmpty(_ any: Any?) -> String? {
+        guard let s = any as? String, !s.isEmpty else { return nil }
+        return s
+    }
 
     /// `effort` 實測是 `{"level":"xhigh"}`，但也容忍字串形狀。
     static func effortLevel(_ any: Any?) -> String? {
@@ -1060,7 +1179,8 @@ git commit -m "feat(core): HookPayload 容錯解析，含 effort/reason 型別�
   public struct SessionSnapshot: Codable, Sendable, Equatable {
       public var schema: Int, sessionID: String, hookEventName: String
       public var writtenAt: Date, pid: Int32?, pidStartedAt: Int64?
-      public var cwd: String?, permissionMode: String?, effort: String?, source: String?, reason: String?
+      public var cwd: String?, permissionMode: String?, effort: String?, model: String?
+      public var source: String?, reason: String?
       public var mainActivity: Activity, mainTool: String?
       public var subActivity: Activity?, subTool: String?, subAgentType: String?
       public var notificationType: String?, lastMessage: String?, toolDurationMs: Int?
@@ -1140,6 +1260,75 @@ struct MergeRulesTests {
         #expect(s.mainActivity == .done)
         #expect(s.subActivity == nil, "該輪的 subagent 都已結束")
         #expect(s.subTool == nil)
+    }
+
+    // ---- §2.5.1：主 agent 靜止後必須忽略 subagent 事件 ----
+
+    @Test("Stop 之後 2.6s 抵達的內部 SubagentStop 不得把 done 變成 working")
+    func internalSubagentStopAfterStopIsIgnored() {
+        var s = merge(payload("Stop"), into: nil)
+        #expect(s.mainActivity == .done)
+
+        // 實測時序：agent_type 空字串的內部 subagent，Stop 後 +2.58s
+        let internalSub = HookPayload(json: [
+            "hook_event_name": "SubagentStop", "session_id": "s1",
+            "agent_id": "a8c360a1fe475f199", "agent_type": "",
+        ])!
+        s = merge(internalSub, into: s, at: t0.addingTimeInterval(2.58))
+
+        #expect(s.mainActivity == .done)
+        #expect(s.subActivity == nil, "主 agent 靜止 → 不得寫 sub 槽")
+        #expect(max(s.mainActivity, s.subActivity ?? .idle) == .done,
+                "綠燈必須維持綠燈 —— 此 bug 會影響每一個跑完的 session")
+        #expect(s.writtenAt == t0.addingTimeInterval(2.58), "但時戳仍要更新")
+    }
+
+    @Test("StopFailure 之後的 SubagentStop 不得把 error 變成 working")
+    func subagentStopAfterStopFailureIsIgnored() {
+        var s = merge(payload("StopFailure"), into: nil)
+        s = merge(payload("SubagentStop", agent: "a1"), into: s, at: t0.addingTimeInterval(3))
+        #expect(s.mainActivity == .error)
+        #expect(s.subActivity == nil)
+    }
+
+    @Test("PermissionRequest 之後的 subagent 事件不得寫 sub 槽")
+    func subagentIgnoredWhileWaiting() {
+        var s = merge(payload("PermissionRequest", tool: "Bash"), into: nil)
+        s = merge(payload("PostToolUse", tool: "Write", agent: "a1"),
+                  into: s, at: t0.addingTimeInterval(0.02))
+        #expect(s.mainActivity == .waiting)
+        #expect(s.subActivity == nil, "比單靠 max 更直接地保護 waiting")
+    }
+
+    @Test("主 agent 仍在 working 時，subagent 事件正常寫入 sub 槽")
+    func subagentRecordedWhileWorking() {
+        var s = merge(payload("PreToolUse", tool: "Bash"), into: nil)
+        s = merge(payload("PostToolUse", tool: "Grep", agent: "a1", agentType: "Explore"), into: s)
+        #expect(s.subActivity == .working)
+        #expect(s.subTool == "Grep")
+        #expect(s.subAgentType == "Explore")
+    }
+
+    @Test("agent_type 空字串的 subagent 不計入 subagents")
+    func internalSubagentNotCounted() {
+        let start = HookPayload(json: [
+            "hook_event_name": "SubagentStart", "session_id": "s1",
+            "agent_id": "a1", "agent_type": "",
+        ])!
+        let s = merge(start, into: nil)
+        #expect(s.subagents.isEmpty, "不得出現空字串鍵")
+    }
+
+    @Test("model 只由 SessionStart 提供，後續事件必須帶過來")
+    func modelCarriedForward() {
+        let start = HookPayload(json: [
+            "hook_event_name": "SessionStart", "session_id": "s1",
+            "source": "startup", "model": "claude-opus-5[1m]",
+        ])!
+        var s = merge(start, into: nil)
+        #expect(s.model == "claude-opus-5[1m]")
+        s = merge(payload("UserPromptSubmit"), into: s, at: t0.addingTimeInterval(5))
+        #expect(s.model == "claude-opus-5[1m]", "PreToolUse 等事件不帶 model，不得被清掉")
     }
 
     @Test("主 agent 的 StopFailure 同樣清空 subagent 槽")
@@ -1274,6 +1463,7 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
     public var cwd: String?
     public var permissionMode: String?
     public var effort: String?
+    public var model: String?
     public var source: String?
     public var reason: String?
 
@@ -1304,7 +1494,7 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
         case writtenAt       = "written_at"
         case pid
         case pidStartedAt    = "pid_started_at"
-        case cwd, permissionMode = "permission_mode", effort, source, reason
+        case cwd, permissionMode = "permission_mode", effort, model, source, reason
         case mainActivity    = "main_activity"
         case mainTool        = "main_tool"
         case subActivity     = "sub_activity"
@@ -1345,6 +1535,8 @@ public enum MergeRules {
         s.cwd            = p.cwd ?? s.cwd
         s.permissionMode = p.permissionMode ?? s.permissionMode
         s.effort         = p.effortLevel ?? s.effort
+        // model 只有 SessionStart 提供，必須帶過來（§2.1.1 第二輪校正）。
+        s.model          = p.model ?? s.model
         if let src = p.source   { s.source = src }
         if let r   = p.reason   { s.reason = r }
         if let n   = p.notificationType { s.notificationType = n }
@@ -1356,6 +1548,11 @@ public enum MergeRules {
         switch p.effect {
         case .setActivity(let a):
             if p.isSubagent {
+                // §2.5.1 —— 主 agent 靜止時完全忽略 subagent 事件。
+                // 實測：Claude Code 的內部 subagent（agent_type 空字串、只送
+                // SubagentStop）會在主 agent Stop 之後 2.6s ~ 184s 才抵達。
+                // 若寫進 sub 槽，max(done, working) = working，綠燈變藍燈且回不去。
+                guard !s.mainActivity.isQuiescent else { break }
                 s.subActivity  = a
                 s.subTool      = p.toolName ?? s.subTool
                 s.subAgentType = p.agentType ?? s.subAgentType
@@ -1381,6 +1578,7 @@ public enum MergeRules {
             s.subagents     = [:]
         }
         if p.hookEventName == "PostToolUseFailure" { s.toolFailures += 1 }
+        // agentType 已在 HookPayload 把空字串正規化為 nil，故內部 subagent 不計入。
         if p.hookEventName == "SubagentStart", let type = p.agentType {
             s.subagents[type, default: 0] += 1
         }

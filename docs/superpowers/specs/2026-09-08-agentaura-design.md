@@ -103,6 +103,7 @@ app 啟動掃一次目錄即得正確現況。整個設計因此塌縮成很小�
   "cwd": "/Users/you/Code/Vibe/AgentAura",
   "permission_mode": "default",
   "effort": "xhigh",
+  "model": "claude-opus-5[1m]",
   "source": "startup",
   "reason": null,
 
@@ -131,7 +132,7 @@ app 啟動掃一次目錄即得正確現況。整個設計因此塌縮成很小�
 
 | 欄位 | 文件／前一版假設 | **實測** |
 |---|---|---|
-| `model` | `SessionStart` 帶 model | **任何 event 都沒有**。面板無法顯示模型 |
+| `model` | `SessionStart` 帶 model | **第一輪：任何 event 都沒有；第二輪（2026-09-08）：`SessionStart` 有** `"model":"claude-opus-5[1m]"`。以第二輪為準 —— 面板可顯示模型，但只有 `SessionStart` 提供，須由 `MergeRules` 帶過來 |
 | `effort` | 字串 `"high"` | 物件 `{"level":"xhigh"}` → `aura-hook` 攤平存字串 |
 | `SessionEnd` 結束原因 | `end_reason` | 實際欄位名是 **`reason`** |
 | `SessionStart` | 無額外欄位 | 有 **`source`**（區分 fresh start / resume） |
@@ -139,8 +140,20 @@ app 啟動掃一次目錄即得正確現況。整個設計因此塌縮成很小�
 | `Stop` | `last_assistant_message` | 確認存在，另有 `background_tasks` / `session_crons` / `stop_hook_active` |
 | 全部 tool event | — | 皆帶 `scratchpad_dir`、`prompt_id`、`transcript_path` |
 
-`transcript_path` 出現在**每一個** payload 上。模型名稱等 hook 拿不到的資訊，未來若要補，
-這是唯一的 enrichment 縫（代價是依賴內部 jsonl 格式）—— 不進第一版。
+`transcript_path` 出現在**每一個** payload 上，是未來 enrichment 的唯一縫（代價是依賴內部
+jsonl 格式）—— 不進第一版。
+
+### 2.1.2 第二輪實測補充（2026-09-08，兩個 session、45 個事件）
+
+| 發現 | 內容 |
+|---|---|
+| `notification_type` **欄位名確認正確** | 實捕 `Notification` payload：`{"notification_type":"idle_prompt","message":"Claude is waiting for your input"}`。此欄位先前只有文件依據，現已量測確認 |
+| `Notification` 多一個 `message` 欄位 | 人可讀字串，面板可直接顯示 |
+| `Notification` payload **缺** `permission_mode` / `effort` | 各 event 的欄位集合不同 —— 字典式解析（§3.x）天生容忍 |
+| `SessionStart` 有 `model` | 見上表 |
+| `SubagentStop` 有 `agent_transcript_path` | subagent 的獨立 transcript |
+| **內部 subagent 的 `agent_type` 是空字串** | 見 §2.5.1 —— 這導出一個 critical bug |
+| `auto` 已是預設權限模式 | `PermissionRequest` 只在 `default` 模式觸發；`auto` 模式的拒絕走 `PermissionDenied` |
 
 ### 2.2 event → activity 對照表
 
@@ -272,6 +285,49 @@ let activity = max(file.main_activity, file.sub_activity ?? .idle)   // Activity
 （該輪的 subagent 都已結束）。
 
 面板顯示：主 agent 的 tool 為主行，subagent 的以 `Explore → Grep` 形式附註。
+
+### 2.5.1 主 agent 靜止後必須忽略 subagent 事件（critical）
+
+**第二輪實測發現的第二個 bug，比第一個更普遍 —— 它會影響每一個跑完的 session。**
+
+Claude Code 會執行**內部 subagent**（摘要／標題那類），特徵：
+
+- `agent_type` 是**空字串**（不是 null），`agent_id` 正常
+- **只送 `SubagentStop`，不送 `SubagentStart`**
+- 在主 agent 的 `Stop` **之後**才送 —— 實測兩個 session 皆重現，間隔 **+2.58s** 與 **+184.37s**
+
+在只有 §2.5 分槽 + `max` 的設計下：
+
+```
+Stop            → main = done,  sub = nil   → 綠燈
+SubagentStop    → sub  = working             → max(done, working) = working
+（2.6 秒後）                                  → 綠燈變藍燈，且永遠回不去
+```
+
+不會有第二個 `Stop` 把它救回來，所以**每個 session 完成後的綠燈都會在幾秒內變成藍燈**。
+`done` 是最常見的完成訊號，這等於把它整個廢掉。
+
+**修法：主 agent 處於靜止態（`waiting` / `done` / `error`）時，完全忽略 subagent 事件** ——
+不寫 sub 槽，只更新 `written_at`。
+
+```swift
+if payload.isSubagent {
+    guard !file.main_activity.isQuiescent else { /* 只更新時戳 */ }
+    file.sub_activity = activity(of: payload)
+}
+```
+
+理由：主 agent 已停下時，殘留的 subagent 活動不是內部雜務就是與「這個 session 是否在為你工作」
+無關。這條規則同時**更直接地**保護了 §2.5 的原始情境（main = waiting 時 subagent 蓋不掉它），
+比單靠 `max` 更強。
+
+**連帶修正：**
+
+1. `agent_type` 為空字串時正規化為 `nil` —— 否則 `subagents` 會出現 `"": N` 這種鍵
+2. `subagents` 只在 `SubagentStart` **且** `agent_type` 非空時累加 —— 內部 subagent 因此不計入
+3. **已知缺口**：實測從未捕獲 `SubagentStart`，故「以 `SubagentStart` 計數」未經驗證。
+   若真實的使用者 subagent 也不送 `SubagentStart`，計數會低報。這只影響面板的裝飾性數字，
+   不影響 activity 正確性；派真實 subagent 時補驗
 
 ---
 
@@ -415,6 +471,8 @@ AgentAura 的對應要求：
 | pid 被回收給其他 process | 死 session 誤判為活著 | 比對 `pid_started_at`，不只比 pid（§3.5） |
 | 讀到寫入一半的 JSON | session 閃現／消失 | `LOCK_SH` 讀取；解析失敗保留上次已知狀態並重試 |
 | subagent 事件蓋掉主 agent 的 `waiting` | **最重要的訊號被靜默抹除** | main / sub 分槽，取 D1 優先序 max（§2.5） |
+| 內部 subagent 在 `Stop` 之後送 `SubagentStop` | **每個完成的 session 綠燈都變藍燈且回不去** | 主 agent 靜止態時完全忽略 subagent 事件（§2.5.1） |
+| `agent_type` 為空字串 | `subagents` 出現 `"": N` 這種無意義鍵 | 空字串正規化為 nil，計數時跳過（§2.5.1） |
 | 未知 `notification_type` | 無故亮橘燈（auth / quota 雜訊） | 不改變 activity；`PermissionRequest` 已覆蓋真正的等待情況（§2.2.1） |
 | Claude Code 新增 hook event | 解析爆掉 | 未知 event 不改變 activity，只更新時戳；`schema` 欄位擋不相容 |
 | app 未運行時累積事件 | 啟動後畫面空白 | `bootstrap()` 掃目錄；靜止態天生在檔案裡 |
@@ -451,6 +509,12 @@ AgentAura 的對應要求：
 13. `Notification` 的 12 種型別逐一驗證，特別是 `agent_completed → done`、`auth_success → 不改變`
 14. `effort` 送 `{"level":"xhigh"}` 物件形狀；也送字串與 `null`（防上游改格式）
 15. `SessionEnd` 用 `reason` 欄位；也送舊的 `end_reason`（兩者都要能容忍）
+16. **主 agent `Stop` 之後 2.6s 送 `SubagentStop`（`agent_type` 空字串）→ activity 必須維持 `done`**（§2.5.1）
+17. 主 agent `StopFailure` 之後送 `SubagentStop` → 必須維持 `error`
+18. 主 agent `PermissionRequest` 之後送 `SubagentStop` → 必須維持 `waiting`
+19. 只有 `SubagentStop` 沒有 `SubagentStart` 的 subagent → 不得計入 `subagents`
+20. `Notification` payload 缺 `permission_mode` / `effort` → 不得使既有值被清掉
+21. `SessionStart` 帶 `model`，後續 event 不帶 → `model` 必須被帶過來
 
 ### 5.2 composition-root smoke
 
@@ -478,6 +542,8 @@ AgentAura 的對應要求：
 | `pid_started_at` 比對 | 「pid 回收不誤判為活著」 |
 | main/sub 分槽（改回單槽 last-write-wins） | 「subagent 事件不得蓋掉主 agent 的 waiting」 |
 | `Notification` 型別分流（改回一律 waiting） | 「`auth_success` 不改變 activity」 |
+| 主 agent 靜止時忽略 subagent 事件（改回一律寫 sub 槽） | 「`Stop` 後的 `SubagentStop` 不得把 done 變成 working」 |
+| `agent_type` 空字串正規化 | 「`subagents` 不得出現空字串鍵」 |
 
 ### 5.4 UI 驗收
 
@@ -649,3 +715,17 @@ M1 的測試 fixture 由此衍生至 `Tests/Fixtures/real-payloads/`。
 單一 `session_id` 內主／subagent 交錯 5 次。
 
 教訓：跨 session 的資料一律先按 `session_id` 分組再看時序。此規則寫入 §5.1 案例 11-12。
+
+### 第二輪（2026-09-08）
+
+`docs/evidence/hook-payloads/round2/`（`probe.sh` + `log.ndjson`）。兩個 session、45 個事件。
+
+補齊：`Notification`（含確認 `notification_type` 欄位名）、`SessionStart`（含 `model`）、
+`Stop`、`SubagentStop`、`PostToolBatch`、`PostToolUseFailure`、`UserPromptSubmit`。
+
+仍缺：`PermissionRequest`、`PermissionDenied`（需 `default` 權限模式，`auto` 已是預設）、
+`SubagentStart`、`StopFailure`、`PreCompact` / `PostCompact`。
+
+**產出**：§2.1.2 的 7 項補充，以及 §2.5.1 的 critical bug —— 那個 bug 影響每一個
+跑完的 session，且只有靠真實時序資料才看得到（單靠文件推不出「內部 subagent 會在
+Stop 之後才送 SubagentStop」）。這是 M0 排在最前面的具體回報。
