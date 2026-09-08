@@ -389,6 +389,34 @@ struct IsolationTests {
     /// `internal import` / `public import` / `package import` …）；**之後**可以有一個
     /// 宣告關鍵字（scoped import，如 `import class AppKit.NSWindow`）。
     /// 錨定在行首，所以散文註解與字串字面值不會誤觸。
+    // MARK: - 隔離 gate：問編譯器，不掃原始碼
+
+    /// 為什麼改成問編譯器（前四輪都掃原始碼文字，每輪都被新的語法形狀打破：scoped
+    /// import → access-level import → attribute 字串參數 → regex literal `/…/`、
+    /// 插值、「多行字串的開頭 delimiter 後面必須換行」…）：
+    ///
+    /// 1. 掃文字等於重寫一份 Swift lexer，任何近似都留下繞過空間；
+    /// 2. 更關鍵——掃文字答的是「這份**文字**裡有沒有 import AppKit 的字樣」，而
+    ///    Global Constraint 問的是「AuraCore **建起來**會不會依賴 AppKit」，且含
+    ///    transitive：只寫 `import Mid`、而 Mid 內部 `@_exported import AppKit` 的
+    ///    檔案全文「AppKit」出現 0 次，依賴卻是真的（實測 trace 確實回報 AppKit）。
+    ///
+    /// 編譯器用的就是編譯這個 module 的那套 lexer，答的也正是第 2 個問題 —— 沒有
+    /// 語法能騙過它，corpus 也不必隨 Swift 語法演進而增長。
+    static let bannedModules: Set<String> = ["AppKit", "SwiftUI", "Cocoa"]
+
+    /// gate 用的 target triple：arch 跟著主機（Intel Mac 也要能跑），最低版本對齊
+    /// Package.swift 的 `.macOS(.v13)`，一致性由 `manifestPinsGateAssumptions` 釘住。
+    static var gateTarget: String {
+        #if arch(arm64)
+        "arm64-apple-macos13"
+        #elseif arch(x86_64)
+        "x86_64-apple-macos13"
+        #else
+        #error("未支援的架構：請補上這個架構的 gate target triple")
+        #endif
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // 這道 gate 走過五輪。前四輪都在同一個 regex 上打補丁，每一輪都綠燈交付、
     // 每一輪都還藏著一個漏放：
@@ -1381,6 +1409,52 @@ struct HookPayloadTests {
         let p = try #require(HookPayload(json: json))
         #expect(p.reason == "prompt_input_exit", "實測值")
         #expect(p.effect == .sessionEnded)
+    }
+
+    /// **source-derived 逐欄位容錯掃描。**
+    ///
+    /// 上面那些具名測試是手工列舉的，所以會漏：實測 `agentID` / `lastMessage` /
+    /// `source` / `toolDurationMs` 四個欄位從來沒有被型別容錯測到。手工清單會漏，
+    /// 而且新增欄位時不會自己長 —— 和本計畫其他地方的 hand-maintained 清單同一個病。
+    ///
+    /// 改成從**真實 payload 的實際 key** 推導：逐一移除、逐一換成 5 種不符型別，
+    /// 斷言只有 `hook_event_name` 與 `session_id` 是必要的，其餘任何欄位壞掉都
+    /// 不得讓整個解析失敗（該欄位變 nil 即可）。
+    @Test("逐一破壞真實 payload 的每個欄位：只有兩個是必要的")
+    func perFieldTolerance() throws {
+        let reals = try Fixtures.rawEvents(named: "round2")
+        let required: Set<String> = ["hook_event_name", "session_id"]
+        var checked: Set<String> = []
+
+        for (i, json) in reals.enumerated() where i % 8 == 0 {   // 取樣，控制測試時間
+            for key in json.keys {
+                checked.insert(key)
+
+                var dropped = json
+                dropped.removeValue(forKey: key)
+                if required.contains(key) {
+                    #expect(HookPayload(json: dropped) == nil,
+                            "\(key) 是必要欄位，移除後應回 nil")
+                } else {
+                    #expect(HookPayload(json: dropped) != nil,
+                            "\(key) 非必要，移除後仍應解析成功")
+                }
+
+                for wrong: Any in [NSNull(), 42, ["nested": [1, 2, 3]], [1, 2, 3], true] {
+                    var retyped = json
+                    retyped[key] = wrong
+                    if required.contains(key) {
+                        #expect(HookPayload(json: retyped) == nil,
+                                "\(key) 型別錯時應回 nil")
+                    } else {
+                        #expect(HookPayload(json: retyped) != nil,
+                                "\(key) 型別錯時不該讓整個解析失敗，該欄位變 nil 即可")
+                    }
+                }
+            }
+        }
+        #expect(checked.count >= 12,
+                "應掃過至少 12 個真實欄位，實際 \(checked.sorted())")
     }
 
     @Test("effect 直接委派給 EventMapping，含 notification_type")
