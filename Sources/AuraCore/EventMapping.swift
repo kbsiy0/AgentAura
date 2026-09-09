@@ -78,14 +78,30 @@ public enum EventMapping {
     /// 必須等於這個集合**（加上 `agent_completed`，它是 `done` 不是 waiting）。
     ///
     /// 與 `handledEvents` 同理：跨層 gate 從生產碼推導，不留第二份手寫清單。
+    ///
+    /// **`idle_prompt` 刻意不在這裡**（2026-09-09 實測修正，spec §2.2.1）：它在一輪結束
+    /// 60 秒後必送，語意是「我講完了、你還沒講」——那是 `done` 的延續，不是被擋住。
+    /// 第一版把它歸 waiting，結果每個講完話的 session 60 秒後都亮橘，R4「動＝需要你」失效。
+    /// `IdlePromptTests` 釘住這條；把它加回來 gate 會紅、matcher gate 也會要求 hooks.json 跟著改。
     public static let notificationTypesNeedingUser: Set<String> = [
-        "permission_prompt", "idle_prompt", "agent_needs_input",
+        "permission_prompt", "agent_needs_input",
         "elicitation_dialog", "elicitation_url_dialog",
     ]
 
     /// `Notification` 中代表「有結果可看」的型別。
     public static let notificationTypesMeaningDone: Set<String> = [
         "agent_completed",
+    ]
+
+    /// `Notification` 中**已知且刻意**不改變 activity 的型別（spec §2.2.1 的「不改變」列）。
+    ///
+    /// 與 `registeredButNoActivityChange` 同一個角色：讓「刻意忽略」與「落到 default 的未知型別」
+    /// 在測試裡分得開 —— 真實 fixture 的回歸測試對前者放行、對後者變紅。
+    /// `idle_prompt` 在此的理由見 `notificationTypesNeedingUser` 的說明。
+    public static let notificationTypesDeliberatelyIgnored: Set<String> = [
+        "idle_prompt",
+        "auth_success", "elicitation_complete", "elicitation_response",
+        "quota_auto_resume_fired", "quota_auto_resume_stale", "quota_auto_resume_disabled",
     ]
 
     /// `hooks.json` 的 `Notification` matcher 應涵蓋的全部型別。

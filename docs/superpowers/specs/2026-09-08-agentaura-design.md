@@ -219,7 +219,7 @@ enum Activity: Int, Comparable {
 | `notification_type` | activity |
 |---|---|
 | `permission_prompt` | `waiting` |
-| `idle_prompt` | `waiting` |
+| `idle_prompt` | **不改變**（2026-09-09 修正，見下） |
 | `agent_needs_input` | `waiting` |
 | `elicitation_dialog` / `elicitation_url_dialog` | `waiting` |
 | `agent_completed` | `done` —— **不是 waiting** |
@@ -228,7 +228,26 @@ enum Activity: Int, Comparable {
 | `quota_auto_resume_fired` / `_stale` / `_disabled` | 不改變 |
 | 未知型別 | 不改變 |
 
-安裝時 `Notification` hook 加 matcher 只收前 6 種，作為縱深防禦；
+**`idle_prompt` 為何不是 waiting（2026-09-09 實測修正）**：一輪結束、60 秒沒收到新 prompt，Claude Code 送
+`idle_prompt`（message「Claude is waiting for your input」）。第一版把它歸為「需要使用者」，實測結果是**每一個講完話的
+session 60 秒後都變橘色呼吸**——「動＝需要你」（R4）失效，與 §2.4.1 的 Deny 假陽性同族。`idle_prompt` 的語意是
+「我講完了、你還沒講」，是 `done` 的延續而非「被擋住」；真正擋住的情況由 `permission_prompt` / `agent_needs_input` /
+`elicitation_*` 承擔。故 `idle_prompt` 不改變 activity，matcher 亦不收（`EventMapping.notificationTypesNeedingUser`
+是 matcher 的推導來源，跨層 gate 會強制一致）。
+
+舊映射其實造成三件事，不只假陽性：(1) **假陽性橘燈**；(2) **結果消失**——`done` 的 session 60 秒後變 `waiting`，
+terminal 一收掉 `liveness == .ended`，而 §2.4.1 說 waiting 不算「結果」→ 直接被丟出可見集合，整夜跑完的 session 早上
+回來是暗燈；(3) **聚合污染**——`waiting > working`，一個 idle 完的 session 把整顆燈拖成橘、`attentionCount` 虛報。
+證據早就在語料裡：`round2.ndjson` 第 16／76 行是同一 session 的 `idle_prompt`，各在其 `Stop` 之後 +60.1s／+60.0s，
+且三份 fixture 中零筆出現在活躍回合——2026-09-08 四道關卡全綠時它就躺在那裡，因為 `realEventsAreAllMapped`
+只問「有沒有映射」不問「映射得對不對」（gates share one eye）。
+
+**誠實的限制**：若某些互動（例如 plan-mode 批准、`AskUserQuestion`）**只**送 `idle_prompt` 而不送任何其他 event，
+橘燈不會亮。以量測證據（idle_prompt 100% 出現在 Stop +60s）權衡，這個取捨是對的；若日後實測到那種互動，
+應為它捕獲專屬型別，而不是把 `idle_prompt` 加回來。
+
+安裝時 `Notification` hook 加 matcher 只收 5 種（`permission_prompt` / `agent_needs_input` / `elicitation_dialog` /
+`elicitation_url_dialog` / `agent_completed`），作為縱深防禦；
 但**payload 內的型別檢查才是正確性保證**（matcher 支援度可能隨版本變動）。
 
 ### 2.3 記憶體模型

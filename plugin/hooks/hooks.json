@@ -201,7 +201,7 @@
     ],
     "Notification": [
       {
-        "matcher": "permission_prompt|idle_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog|agent_completed",
+        "matcher": "permission_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog|agent_completed",
         "hooks": [
           {
             "type": "command",

@@ -1,5 +1,8 @@
 # AgentAura 實作計畫（M0-M3 資料管線 + M4/M5 的 UI 最小可用版）
 
+> 註（2026-09-09）：本文件是 pipeline 期間的歷史快照。其中 `idle_prompt` → waiting 的映射與 matcher 字串已於
+> 2026-09-09 修正為「不改變」，正典見 spec §2.2.1；複製本文件的程式碼片段回去會讓 `IdlePromptTests` 立刻紅。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 建立 Claude Code hook → 狀態檔 → `IconState` 的完整資料管線（T01-T14），再加上足以「產出一版可以用的版本」的 UI（T15-T18：選單列 icon、面板、`.app`）。

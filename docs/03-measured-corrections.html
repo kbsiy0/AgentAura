@@ -184,7 +184,8 @@ let activity = max(file.main_activity, file.sub_activity ?? .idle)</code></pre>
 <table>
 <thead><tr><th style="min-width:280px">notification_type</th><th>activity</th></tr></thead>
 <tbody>
-<tr><td><code>permission_prompt</code> / <code>idle_prompt</code> / <code>agent_needs_input</code></td><td><span style="color:var(--waiting);font-weight:640">waiting</span></td></tr>
+<tr><td><code>permission_prompt</code> / <code>agent_needs_input</code></td><td><span style="color:var(--waiting);font-weight:640">waiting</span></td></tr>
+<tr><td><code>idle_prompt</code></td><td>不改變 —— <b>2026-09-09 修正</b>：它是「講完了、你還沒講」，原歸 waiting 使每個講完話的 session 60s 後亮橘（R4 假陽性）</td></tr>
 <tr><td><code>elicitation_dialog</code> / <code>elicitation_url_dialog</code></td><td><span style="color:var(--waiting);font-weight:640">waiting</span></td></tr>
 <tr><td><code>agent_completed</code></td><td><span style="color:var(--done);font-weight:640">done</span> —— 不是 waiting</td></tr>
 <tr><td><code>auth_success</code></td><td>不改變</td></tr>

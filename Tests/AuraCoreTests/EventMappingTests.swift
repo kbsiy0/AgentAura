@@ -41,9 +41,12 @@ struct EventMappingTests {
 
     // ---- Notification 的 12 種型別（§2.2.1）----
 
+    // **刻意手寫**（不從 notificationTypesNeedingUser 推導）：它是獨立錨點，推導了就變成
+    // 「集合說 waiting 就 waiting」的循環。下面 notificationNoise 則刻意推導——兩者不對稱是設計。
     @Test("需要使用者的 notification 型別 → waiting", arguments: [
-        "permission_prompt", "idle_prompt", "agent_needs_input",
+        "permission_prompt", "agent_needs_input",
         "elicitation_dialog", "elicitation_url_dialog",
+        // idle_prompt 自 2026-09-09 起不在此列（spec §2.2.1；見 IdlePromptTests）
     ])
     func notificationNeedsUser(_ type: String) {
         #expect(effect("Notification", type) == .setActivity(.waiting))
@@ -55,12 +58,27 @@ struct EventMappingTests {
                 "背景 agent 跑完應顯示 done，不該讓 icon 亮成「需要你」")
     }
 
-    @Test("雜訊型別不改變 activity（不得無故亮橘燈）", arguments: [
-        "auth_success", "elicitation_complete", "elicitation_response",
-        "quota_auto_resume_fired", "quota_auto_resume_stale", "quota_auto_resume_disabled",
-    ])
+    @Test("刻意忽略的型別不改變 activity（不得無故亮橘燈）——從生產碼集合推導",
+          arguments: EventMapping.notificationTypesDeliberatelyIgnored)
     func notificationNoise(_ type: String) {
         #expect(effect("Notification", type) == .noChange)
+    }
+
+    @Test("三個 notification 集合互斥，且刻意忽略集合非空")
+    func notificationSetsAreDisjoint() {
+        let need = EventMapping.notificationTypesNeedingUser
+        let done = EventMapping.notificationTypesMeaningDone
+        let skip = EventMapping.notificationTypesDeliberatelyIgnored
+        #expect(need.isDisjoint(with: done) && need.isDisjoint(with: skip) && done.isDisjoint(with: skip),
+                "同一型別出現在兩個集合，哪個贏取決於 switch 順序 —— 不可接受")
+        #expect(!skip.isEmpty, "集合空了這條與 notificationNoise 都會變成空跑")
+        // 「非空」只證明還有東西，不證明該有的還在：集合縮小一項不會有任何測試紅
+        //（那 6 個雜訊型別在 fixture 裡不存在、生產上走 default）。這裡把成員釘死對齊 spec §2.2.1。
+        #expect(skip == ["idle_prompt",
+                         "auth_success", "elicitation_complete", "elicitation_response",
+                         "quota_auto_resume_fired", "quota_auto_resume_stale", "quota_auto_resume_disabled"],
+                "spec §2.2.1 的「不改變」列有 7 種；少了或換了就是有一列失去看守")
+        #expect(need.count + done.count + skip.count == 12, "spec §2.2.1 共 12 種型別")
     }
 
     @Test("未知或缺失的 notification_type 不改變 activity")
@@ -77,7 +95,7 @@ struct EventMappingTests {
         for e in EventMapping.handledEvents
             where !EventMapping.registeredButNoActivityChange.contains(e) {
             let r = EventMapping.effect(forEvent: e,
-                                        notificationType: e == "Notification" ? "idle_prompt" : nil)
+                                        notificationType: e == "Notification" ? "permission_prompt" : nil)
             #expect(r != .noChange, "\(e) 在 handledEvents 裡卻落到 default")
         }
     }
@@ -114,11 +132,19 @@ struct EventMappingTests {
             + Fixtures.rawEvents(named: "round2")
         let kinds = Set(all.compactMap { $0["hook_event_name"] as? String })
         #expect(kinds.count >= 11, "三份 fixture 應涵蓋至少 11 種 event，實際 \(kinds.sorted())")
+        var deliberatelySkipped = 0
         for ev in all {
             let name = try #require(ev["hook_event_name"] as? String)
-            let e = EventMapping.effect(forEvent: name,
-                                       notificationType: ev["notification_type"] as? String)
-            #expect(e != .noChange, "實測捕獲的 \(name) 竟然沒有對照規則")
+            let type = ev["notification_type"] as? String
+            if name == "Notification", let type,
+               EventMapping.notificationTypesDeliberatelyIgnored.contains(type) {
+                deliberatelySkipped += 1        // 有名字、有 notificationNoise 釘住 —— 不是「沒有規則」
+                continue
+            }
+            let e = EventMapping.effect(forEvent: name, notificationType: type)
+            #expect(e != .noChange, "實測捕獲的 \(name)(\(type ?? "-")) 竟然沒有對照規則")
         }
+        // round2 實測含 2 筆 idle_prompt；這個數字為 0 代表 fixture 或放行條件壞了
+        #expect(deliberatelySkipped >= 2, "預期 round2 有 ≥2 筆刻意忽略的 Notification，實際 \(deliberatelySkipped)")
     }
 }

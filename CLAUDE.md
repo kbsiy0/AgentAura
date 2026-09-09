@@ -61,6 +61,7 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 
 - **絕不修改 `~/.claude/settings.json`**（D3/R6 —— 安裝走 `~/.claude/skills/agentaura` symlink；`claude plugin marketplace add` 會寫 `extraKnownMarketplaces`，那條路已從計畫移除）。`verify-install.sh` 掃**整個**檔案而不只 `hooks` 鍵。
 - **`waiting` 不得進入「已結束但未確認」的尾巴**（spec §2.4.1 / `e90931c` —— 實測按 Deny 不產生任何 hook 事件，否則早已回答過的 session 會讓 icon 一直亮橘燈）。
+- **`Notification(idle_prompt)` 不得映射到 `waiting`**（spec §2.2.1 / `IdlePromptTests` —— 一輪結束 60s 後 Claude Code 必送它；歸 waiting 等於每個講完話的 session 都亮橘、terminal 收掉後結果消失、聚合被拖成橘）。
 - **主／副槽分開，activity 取優先序 max；主槽靜止時完全忽略 subagent 事件**（spec §2.5 / §2.5.1 / `efccc03` —— subagent 與父 session 共用 `session_id`，實測最密相鄰 20ms）。
 - **`aura-hook` 一律 `exit 0`，stdout / stderr 一律空**（觀測性絕不可干擾 agent。代價：exit code 無法用來驗收，所以驗收必須看產物）。
 - **解析失敗 ≠ 檔案不存在**（spec §3.3 / §4 第 3 列 / `dae435d` —— 損壞檔要保留上次已知狀態並重試；只有檔案真的消失才移除 session）。
