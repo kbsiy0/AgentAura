@@ -135,4 +135,49 @@ struct SessionReducerTests {
         let s = snapshot { $0.mainActivity = .error; $0.reason = "overloaded_error" }
         #expect(SessionReducer.state(from: s, liveness: probe).errorType == "overloaded_error")
     }
+
+    /// **資料流四段的第三段 gate**（payload → 檔案 → **state** → UI）。
+    ///
+    /// `SessionState` 的 doc-comment 寫著「修一條資料流要走完四段」——
+    /// 但那句話先前**沒有任何 gate**。實證：把 `SessionReducer` 裡
+    /// `toolDescription: s.toolDescription` 改成 `nil`，14 條測試無一變紅
+    /// （最終 review 的 I3：`toolDescription` / `notificationMessage` 存得到、
+    /// 送不出去，而面板顯示的正是 `HookPayload` 自己判定「不夠」的那個字串）。
+    ///
+    /// 這條用 `Mirror` 從**輸出端**推導：餵一個每個欄位都有值的 snapshot，
+    /// 產出的 `SessionState` 裡任何 `nil` 都代表那個欄位沒接上。
+    /// 新增欄位忘了接、既有欄位被改斷，兩個方向都會紅。
+    @Test("snapshot 的每個欄位都走得到 SessionState —— 沒有半路掉的")
+    func reducerCarriesEveryField() {
+        let s = snapshot {
+            $0.cwd = "/Users/you/Code/Vibe/payments-api"
+            $0.permissionMode = "default"
+            $0.effort = "xhigh"
+            $0.model = "claude-opus-5"
+            $0.reason = "overloaded_error"
+            $0.mainActivity = .error
+            $0.mainTool = "Bash"
+            $0.subActivity = .working
+            $0.subTool = "Grep"
+            $0.subAgentType = "Explore"
+            $0.notificationMessage = "Claude is waiting for your input"
+            $0.lastMessage = "全部完成"
+            $0.toolDescription = "Download example.com to dl2.html"
+            $0.toolError = "File does not exist"
+            $0.toolDurationMs = 12_403
+            $0.turnStartedAt = Date(timeIntervalSince1970: 1_788_628_000)
+            $0.subagents = ["Explore": 2]
+            $0.toolFailures = 3
+        }
+        let st = SessionReducer.state(from: s, liveness: probe)
+
+        let unwired = Mirror(reflecting: st).children
+            .filter { String(describing: $0.value) == "nil" }
+            .map { $0.label ?? "?" }
+        #expect(unwired.isEmpty, """
+            這些欄位沒有從 snapshot 走到 SessionState：\(unwired.sorted())
+            資料流是 payload → 檔案 → state → UI 四段，這裡是第三段。
+            前兩段有測試、第四段有測試，中間斷掉時先前沒有任何東西會紅。
+            """)
+    }
 }
