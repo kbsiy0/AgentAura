@@ -212,4 +212,18 @@ struct SnapshotIOTests {
         try SnapshotIO.update(sessionID: "s1", root: root) { _ in self.snap("s1", .idle) }
         #expect(SnapshotIO.read(sessionID: "s1", root: root) != nil)
     }
+
+    /// **狀態檔含使用者的工作內容**（`cwd`、tool 參數、助理輸出的開頭），
+    /// 沒有理由讓同機其他帳號讀得到。
+    @Test("狀態檔 0600、目錄 0700")
+    func filePermissionsArePrivate() throws {
+        let root = try makeRoot()
+        try SnapshotIO.update(sessionID: "p1", root: root) { _ in self.snap("p1", .working) }
+        let fm = FileManager.default
+        let file = try SnapshotIO.url(for: "p1", root: root)
+        let fileMode = try #require(fm.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber)
+        #expect(fileMode.int16Value == 0o600, "狀態檔權限是 \(String(fileMode.int16Value, radix: 8))")
+        let dirMode = try #require(fm.attributesOfItem(atPath: root.path)[.posixPermissions] as? NSNumber)
+        #expect(dirMode.int16Value == 0o700, "狀態目錄權限是 \(String(dirMode.int16Value, radix: 8))")
+    }
 }

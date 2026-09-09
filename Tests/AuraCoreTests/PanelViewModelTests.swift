@@ -158,4 +158,63 @@ struct PanelViewModelTests {
     func titleWhenEmpty() {
         #expect(!PanelViewModel.title(for: .empty).isEmpty)
     }
+
+    // MARK: - 最終 review 的 I3 / I4
+
+    /// **waiting 那一列要說出在等什麼**（spec §2.1.2 / §3.7）。
+    ///
+    /// `toolDescription` 先前只走完 payload → 檔案兩段，沒進 `SessionState`
+    /// 也沒進面板 —— 面板顯示的正是 `HookPayload` 的 doc-comment 自己判定
+    /// 「不夠」的那個字串「等你批准：Bash」。
+    @Test("waiting 的主行用 toolDescription，不是只有 tool 名")
+    func waitingHeadlineUsesToolDescription() {
+        let s = state(.waiting, tool: "Bash", desc: "Download example.com to dl2.html")
+        #expect(PanelViewModel.headline(for: s) == "等你批准：Download example.com to dl2.html")
+    }
+
+    @Test("沒有 toolDescription 時退回 notificationMessage，再退回 tool 名")
+    func waitingHeadlineFallbacks() {
+        let m = state(.waiting, tool: "Bash", notif: "MCP server 在等你輸入")
+        #expect(PanelViewModel.headline(for: m) == "等你批准：MCP server 在等你輸入")
+        let t = state(.waiting, tool: "Bash")
+        #expect(PanelViewModel.headline(for: t) == "等你批准：Bash")
+    }
+
+    /// **主 agent 的 tool 是主行，subagent 的是附註**（spec §2.5 結尾）。
+    ///
+    /// `MergeRules` 費了很大力氣保住 `mainTool` 不被 subagent 覆蓋
+    /// （`mainToolNotOverwritten`），先前卻在呈現層又被覆蓋掉 ——
+    /// 只要有 subagent 在跑，使用者就看不到主 agent 在做什麼。
+    @Test("working 的主行是主 agent 的 tool，subagent 只出現在副行")
+    func workingHeadlineKeepsMainTool() {
+        let s = state(.working, tool: "Bash", sub: "Explore → Grep")
+        #expect(PanelViewModel.headline(for: s) == "Bash", "主行被 subagent 蓋掉了")
+        #expect(PanelViewModel.detail(for: s, now: Date()).contains("Explore → Grep"),
+                "subagent 應以附註形式出現在副行")
+    }
+
+    @Test("沒有主 tool 時才退回 subagent 的")
+    func workingHeadlineFallsBackToSubagent() {
+        let s = state(.working, sub: "Explore → Grep")
+        #expect(PanelViewModel.headline(for: s) == "Explore → Grep")
+    }
+
+    @Test("tool 耗時出現在副行")
+    func detailShowsToolDuration() {
+        let s = state(.working, tool: "Bash", durationMs: 12_403)
+        #expect(PanelViewModel.detail(for: s, now: Date()).contains("12"), "應含 tool 耗時")
+    }
+
+    /// 這幾條共用的建構器 —— 只填會用到的欄位，其餘給中性值。
+    func state(_ a: Activity, tool: String? = nil, sub: String? = nil,
+               desc: String? = nil, notif: String? = nil, durationMs: Int? = nil) -> SessionState {
+        SessionState(id: "s1", projectName: "P", projectPath: "/x",
+                     permissionMode: nil, effort: nil, model: nil,
+                     activity: a, mainActivity: a, subActivity: nil,
+                     currentTool: tool, subagentTool: sub, toolDurationMs: durationMs,
+                     turnStartedAt: nil, subagents: [:], toolFailures: 0,
+                     lastMessage: nil, errorType: nil, toolError: nil,
+                     toolDescription: desc, notificationMessage: notif,
+                     liveness: .alive(pid: 1), updatedAt: Date())
+    }
 }

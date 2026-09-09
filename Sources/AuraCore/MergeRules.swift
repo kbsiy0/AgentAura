@@ -3,6 +3,10 @@ import Foundation
 /// 把一個 hook event 併進既有狀態。`aura-hook` 與測試共用同一份規則。
 public enum MergeRules {
 
+    /// 落檔時保留的助理輸出長度上限。面板只用得到開頭幾十個字。
+    static let storedMessageLimit = 500
+
+
     public static func merge(_ p: HookPayload,
                              into existing: SessionSnapshot?,
                              pid: Int32?,
@@ -24,7 +28,10 @@ public enum MergeRules {
         if let n   = p.notificationType { s.notificationType = n }
         if let nm  = p.notificationMessage { s.notificationMessage = nm }
         if let td  = p.toolDescription  { s.toolDescription = td }
-        if let m   = p.lastMessage      { s.lastMessage = m }
+        // **截斷後才落檔。** 這是助理輸出的原文，會躺在磁碟上；面板只用得到開頭
+        // 幾十個字（`PanelViewModel.summarise` 截 80）。存全文只是把使用者的內容
+        // 無謂地攤在檔案系統上，而且 1MB 的訊息實測是可能的。
+        if let m   = p.lastMessage      { s.lastMessage = String(m.prefix(Self.storedMessageLimit)) }
         if let d   = p.toolDurationMs   { s.toolDurationMs = d }
 
         applyCounters(p, to: &s, now: now)

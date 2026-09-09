@@ -56,9 +56,19 @@ public enum SnapshotIO {
                               root: URL = defaultRoot,
                               _ transform: (SessionSnapshot?) -> SessionSnapshot) throws {
         let url = try url(for: sessionID, root: root)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        // **0700 / 0600。** 這些檔含 `cwd`、tool 參數與助理輸出的開頭 ——
+        // 是使用者的工作內容，沒有理由讓同機其他帳號讀得到。
+        //
+        // `createDirectory` 的 `attributes` 只在**真的建立**時生效，目錄已存在時
+        // 是 no-op —— 而舊版建出來的目錄是 0755。所以建完再無條件設一次。
+        // 設不成不該讓 hook 失敗（契約是「絕不干擾 agent」），故用 `try?`。
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700],
+                                               ofItemAtPath: root.path)
 
-        let fd = open(url.path, O_RDWR | O_CREAT, 0o644)
+        let fd = open(url.path, O_RDWR | O_CREAT, 0o600)
         guard fd >= 0 else { throw POSIXError(.EIO) }
         defer { close(fd) }
         guard flock(fd, LOCK_EX) == 0 else { throw POSIXError(.EWOULDBLOCK) }

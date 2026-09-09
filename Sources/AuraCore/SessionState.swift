@@ -26,6 +26,14 @@ public struct SessionState: Sendable, Equatable, Identifiable {
     public let errorType: String?
     /// 最後一次真正的 tool 失敗訊息（使用者中斷不算，見 `MergeRules`）。
     public let toolError: String?
+    /// `PermissionRequest` 的 `tool_input.description` —— 「在等你批准**什麼**」。
+    ///
+    /// 只有 tool 名不夠：「等你批准：Bash」看不出在等什麼，而那正是最需要資訊的一列。
+    /// （`HookPayload` 的 doc-comment 逐字寫過這件事，但這個欄位當初只走完
+    /// payload → 檔案兩段，沒進 state 也沒進 UI —— 跟 `model` 是同一個坑。）
+    public let toolDescription: String?
+    /// `Notification` 帶的訊息文字，waiting 那一列的補充說明。
+    public let notificationMessage: String?
     public let liveness: Liveness
     public let updatedAt: Date
 
@@ -37,6 +45,7 @@ public struct SessionState: Sendable, Equatable, Identifiable {
                 currentTool: String?, subagentTool: String?, toolDurationMs: Int?,
                 turnStartedAt: Date?, subagents: [String: Int], toolFailures: Int,
                 lastMessage: String?, errorType: String?, toolError: String?,
+                toolDescription: String? = nil, notificationMessage: String? = nil,
                 liveness: Liveness, updatedAt: Date) {
         self.id = id
         self.projectName = projectName
@@ -56,6 +65,8 @@ public struct SessionState: Sendable, Equatable, Identifiable {
         self.lastMessage = lastMessage
         self.errorType = errorType
         self.toolError = toolError
+        self.toolDescription = toolDescription
+        self.notificationMessage = notificationMessage
         self.liveness = liveness
         self.updatedAt = updatedAt
     }

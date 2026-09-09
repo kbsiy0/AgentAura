@@ -23,6 +23,8 @@ public enum SessionReducer {
             lastMessage: s.lastMessage,
             errorType: s.mainActivity == .error ? s.reason : nil,
             toolError: s.toolError,
+            toolDescription: s.toolDescription,
+            notificationMessage: s.notificationMessage,
             liveness: Self.resolveLiveness(of: s, probe: probe),
             updatedAt: s.writtenAt
         )

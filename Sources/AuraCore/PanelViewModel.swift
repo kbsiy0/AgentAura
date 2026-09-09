@@ -44,15 +44,25 @@ public enum PanelViewModel {
     static func headline(for s: SessionState) -> String {
         switch s.activity {
         case .waiting:
-            let what = s.currentTool ?? "輸入"
-            return "等你批准：\(what)"
+            // **先用 `toolDescription`。** 只有 tool 名的話「等你批准：Bash」
+            // 看不出在等什麼，而 waiting 正是最需要資訊的一列。
+            // `notificationMessage`（例如「MCP server 在等你輸入」）是第二順位。
+            if let what = s.toolDescription ?? s.notificationMessage {
+                return "等你批准：\(what)"
+            }
+            return "等你批准：\(s.currentTool ?? "輸入")"
         case .error:
             return s.toolError ?? s.errorType ?? "執行失敗"
         case .done:
             return summarise(s.lastMessage) ?? "已完成"
         case .working:
-            if let sub = s.subagentTool { return sub }
-            return s.currentTool ?? "執行中"
+            // **主 agent 的 tool 是主行**（spec §2.5 結尾）。subagent 的以
+            // `Explore → Grep` 形式**附註**在副行，不是拿來取代主行。
+            //
+            // 這裡先前寫成 subagent 優先 —— `MergeRules` 費了很大力氣保住
+            // `mainTool` 不被 subagent 覆蓋（`mainToolNotOverwritten`），
+            // 結果在呈現層又被覆蓋掉了。資料層守住的東西在最後一段丟失。
+            return s.currentTool ?? s.subagentTool ?? "執行中"
         case .idle:
             return "等你下指令"
         }
@@ -72,6 +82,8 @@ public enum PanelViewModel {
         if let start = s.turnStartedAt {
             parts.append("本輪 " + duration(now.timeIntervalSince(start)))
         }
+        if let sub = s.subagentTool { parts.append(sub) }   // §2.5：subagent 以附註呈現
+        if let ms = s.toolDurationMs, ms > 0 { parts.append(duration(Double(ms) / 1000)) }
         let subs = s.subagents.values.reduce(0, +)
         if subs > 0 { parts.append("\(subs) subagents") }
         if s.toolFailures > 0 { parts.append("\(s.toolFailures) tool 失敗") }
