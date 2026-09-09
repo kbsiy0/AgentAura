@@ -499,7 +499,14 @@ app 比對 pid **與**啟動時戳，兩者皆符才算活著。
 當前 tool 或等待原因（含 tool 耗時）、subagent 的 tool（附註行）、本輪已跑多久、
 subagent 數、tool 失敗數、完成訊息摘要（done）、相對時間。
 
-**不顯示模型** —— 實測確認 hook payload 完全不帶 `model`（§2.1.1）。
+**顯示模型** —— 這裡原本寫「不顯示模型 —— 實測確認 hook payload 完全不帶 `model`」，
+那是**第一輪的結論，已被第二輪推翻**（§2.1.1 的表格記錄了推翻，這一句沒有同步 ——
+同一份文件裡兩個相反的陳述）。
+
+實際：`SessionStart` 帶 `"model":"claude-opus-5[1m]"`（`round2.ndjson` 有 2 筆），
+由 `MergeRules` carry-forward；使用者中途 `/model` 換模型時，`PostModelSwitch`
+帶 `to_model` 更新它。面板的 meta 行顯示「模型 · effort · permission_mode」，
+缺值整段省略不留懸空分隔符。
 
 打開面板即 acknowledge（D2）。語意明確定義為：**面板開啟的瞬間，registry 中所有
 `acknowledged == false` 的 session 一律標為已確認**（不論是否捲動到、是否可見）。
