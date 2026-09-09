@@ -77,6 +77,21 @@ AgentAura 從頭到尾沒有寫過 `settings.json` 的任何一個位元組。
 `~/.agentaura/sessions/<session_id>.json` —— 每個 Claude Code session 一個檔，
 內容是瞬時狀態，可隨時安全刪除（app 會在下一個 hook 事件時重建）。
 
+## 從舊版升級
+
+`~/.agentaura/sessions/` 裡的狀態檔權限是 **0600**（目錄 0700）—— 那些檔含 `cwd`、
+tool 參數與助理輸出的開頭。
+
+早期版本建的檔是 0644。新版會在**每次寫入該檔時**收緊它，所以還活著的 session
+會自動修好；但**再也不會被寫入的舊 session 檔會停在 0644**。要一次收乾淨：
+
+```bash
+chmod 600 ~/.agentaura/sessions/*.json
+```
+
+（或直接 `rm -rf ~/.agentaura` —— 那裡面是瞬時狀態，刪掉即可，app 會在下一個
+hook 事件時重建。）
+
 ## 疑難排解
 
 **燈沒反應**
