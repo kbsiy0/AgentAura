@@ -1,8 +1,8 @@
-# AgentAura 資料管線 實作計畫（M0-M3）
+# AgentAura 實作計畫（M0-M3 資料管線 + M4/M5 的 UI 最小可用版）
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 建立 Claude Code hook → 狀態檔 → `IconState` 的完整資料管線，以 headless renderer 端到端驗證，不含任何 UI。
+**Goal:** 建立 Claude Code hook → 狀態檔 → `IconState` 的完整資料管線（T01-T14），再加上足以「產出一版可以用的版本」的 UI（T15-T18：選單列 icon、面板、`.app`）。
 
 **Architecture:** Claude Code plugin 註冊全部 async hook → `aura-hook` CLI 在 `flock` 下 merge-write `~/.agentaura/sessions/<session_id>.json` → `HookFileSource` 以 FSEvents 監看 → `SessionReducer` 產 `SessionState` → `AggregatePolicy` 產 `IconState`。核心邏輯（`AuraCore`）為純函數且零 AppKit 依賴。
 
@@ -10,7 +10,24 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-08-agentaura-design.md`
 
-**範圍說明：** 本計畫涵蓋 spec 的 M0-M3。M4（menu bar 形態 A/B）與 M5（面板 + 自我健檢）另出一份計畫 —— T01 的實測結果可能改變那部分的設計（例如 `getppid()` 若不等於 claude 本體，liveness 需重做）。
+**範圍說明：** T01-T14 涵蓋 spec 的 M0-M3（資料管線 + plugin + 安裝）。
+T15-T18 是後來追加的第二部分，取 M4/M5 裡「讓它能用」的最小子集。
+
+**明確不在本計畫內的 M4 工作**：spec 的 R5 要求「形態用證據決定，不預先鎖定」——
+M4 原本要**同時**做兩個原型（A：8 顆迷你 LED 燈條；B：單一符號 + 顏色 + 動畫），
+共用同一份 `IconState`、只換 `IconRenderer` 實作，再由 persona-tester 對
+**餘光辨識**與**遠距辨識**打分後選一個。**本計畫只做形態 A**，
+沒有做 A/B 比較，所以 **R5 尚未滿足**，必須記為 known gap 而不是宣稱達成。
+
+> **一個已知的形態觀察（留給 M4）**：`LEDStripView` 目前把 8 顆 LED 畫成
+> **完全相同的顏色與 alpha**，所以那 8 顆的資訊量等於 1 顆 —— 它是裝飾，
+> 不是資料。而 `IconAppearance` 其實已經帶著 `liveCount` 與 `attentionCount`，
+> 要讓「亮幾顆」有意義只需要幾行。
+>
+> **刻意不在這裡改**：那是形態決策，而 R5 明文要求形態由 A/B 證據決定、
+> 不預先鎖定。現在的畫法符合 spec §3.6 的字面（一條反映**聚合**狀態的燈條 +
+> R4 的動畫語言），改它會變成我用直覺替 M4 做決定。
+> M4 做 A/B 時把「8 顆是否該編碼 session 數」一併列為受測變項。
 
 ## Global Constraints
 
@@ -5527,7 +5544,6 @@ Task 13 的 `hooks.json` 指向 `${CLAUDE_PLUGIN_ROOT}/bin/aura-hook`，但**沒
 - [ ] **Step 1: 寫失敗測試 —— plugin 佈局**
 
 ```swift
-// Tests/AuraCoreTests/InstallLayoutTests.swift
 import Testing
 import Foundation
 
@@ -5619,7 +5635,17 @@ struct InstallLayoutTests {
     func installDocHasUninstall() throws {
         let doc = try String(contentsOf: Self.repoRoot().appendingPathComponent("docs/INSTALL.md"),
                              encoding: .utf8)
-        #expect(doc.contains("plugin uninstall"), "必須寫明如何完整移除")
+        // 斷言**真正的移除指令**，不是一個代理字串。
+        //
+        // 這裡原本斷言 `doc.contains("plugin uninstall")`。安裝方式改成 skills-dir
+        // 掛載之後，那個字串只剩在一句「**沒有** `claude plugin uninstall` 這一步」
+        // 的說明裡 —— 斷言靠一段**語意相反**的文字通過，等於什麼都沒驗。
+        // 代理字串會 drift，指令不會。
+        #expect(doc.contains("## 完整移除"), "必須有完整移除的段落")
+        #expect(doc.contains("rm ~/.claude/skills/agentaura"),
+                "必須寫明真正的移除指令（skills-dir 掛載就是刪那個 symlink）")
+        #expect(doc.contains("ln -sfn") && doc.contains("~/.claude/skills/agentaura"),
+                "安裝指令也要在文件裡，且與實際機制一致")
         #expect(doc.contains(".agentaura"), "必須說明狀態目錄可安全手動刪除")
     }
 }
@@ -7322,8 +7348,17 @@ swift test 2>&1 | grep -E "Test run with"
 依標準程序，三個：
 
 1. `rows` 的排序改成只按 `updatedAt`（拿掉 activity 比較）→ `sortFollowsPriority` 必須 RED
-2. `duration` 的 `max(0, seconds)` 改成 `seconds` → `clockSkewClampsToZero`、
-   `futureTurnStartClamps`、`durationFormatting` 必須 RED
+2. `duration` 的 `max(0, seconds)` 改成 `seconds` →
+   **`futureTurnStartClamps` 與 `durationFormatting` 必須 RED**
+
+   > 這裡原本也列了 `clockSkewClampsToZero`，**那是錯的**（T17 的 implementer
+   > 實測後回報）。原因：`clockSkewClampsToZero` 測的是 `relativeTime`，
+   > 而 `relativeTime` 內部有**自己獨立的** `max(0, now.timeIntervalSince(date))`，
+   > 在呼叫 `duration()` 之前就已經把值 clamp 到非負 —— 所以 `duration()` 內部的
+   > clamp 被拿掉時，`relativeTime` 拿到的輸入本來就是 0，不受影響。
+   >
+   > 兩個獨立的 clamp 各自需要各自的 mutation。implementer 沒有為了讓它變紅
+   > 而加斷言，處置正確。
 3. `meta` 的 `compactMap { $0 }` 改成 `map { $0 ?? "" }` → `metaHandlesMissingModel` 必須 RED
 
 第 3 個守的是「缺值不留懸空分隔符」—— 那是 UI 最典型的「看起來對，直到某個欄位缺值」。
@@ -7502,57 +7537,60 @@ Expected: 五項全 ✓，最後印 `實機驗收 PASS`。
 應出現**紅色 double blink 的燈條**（三個假狀態裡有一個 error，D1 優先序取最大），
 點一下應開出面板列出三列、排序 error → waiting → working。
 
-- [ ] **Step 4: 更新 INSTALL.md**
+- [ ] **Step 4: 更新 INSTALL.md —— 補上 app 的建置與啟動**
+
+> **錨點必須對到 `INSTALL.md` 的現況。** 這一段原本拿 marketplace 流程當 `OLD`，
+> 但 T14 的 fix round 已把安裝改成 skills-dir 掛載 —— `s.count(OLD)` 是 0，assert 會炸。
+> （T18 的 implementer 正確地停下來回報而不是自行調整錨點，那個 assert 護欄起了作用。）
+
+用 Edit 工具直接改 `docs/INSTALL.md`（不要用腳本 —— 這段本身就是「錨點會 drift」的案例）：
+
+**4a.** 在「## 安裝」的程式碼區塊裡，把
+
+```
+./scripts/verify-install.sh                          # 驗證整條鏈路
+```
+
+換成
+
+```
+./scripts/verify-install.sh                          # 驗證 hook 鏈路
+
+./scripts/build-app.sh                               # 組出 build/AgentAura.app
+./scripts/verify-app.sh                              # 實機啟動驗收
+open build/AgentAura.app                             # 開始使用
+```
+
+並在該區塊之後補一行：
+
+> 要開機自動啟動：把 `build/AgentAura.app` 拖進「系統設定 → 一般 → 登入項目」。
+
+**4b.** 在「## 完整移除」的程式碼區塊**最前面**補兩行：
+
+```
+pkill -f AgentAura.app            # 關掉 app
+rm -rf build/AgentAura.app        # 刪掉 app（建置產物，隨時可重建）
+```
+
+（原有的 `rm ~/.claude/skills/agentaura` 與 `rm -rf ~/.agentaura` 兩行保留不動 ——
+`installDocHasUninstall` 斷言的正是那兩行。）
+
+Run: `swift test --filter installDocHasUninstall`
+Expected: 仍然 PASS（斷言的 `rm ~/.claude/skills/agentaura` 與 `ln -sfn` 都還在）。
+- [ ] **Step 4b: 把 `build/` 加入 `.gitignore`（建置產物不進版控）**
 
 ```bash
-python3 - <<'PY'
-import pathlib
-p = pathlib.Path("docs/INSTALL.md"); s = p.read_text()
-# `str.replace` 找不到目標時會**靜默什麼都不做** —— 這個編輯的目標字串必須與
-# T14 寫進 INSTALL.md 的內容逐字相符，所以先 assert 再改。
-# （T14 的安裝流程改過一次；這裡若沒同步，就會變成一個看不見的 no-op。）
-OLD = """```bash
-git clone <repo> && cd AgentAura
-./scripts/build-plugin.sh                    # 建置 universal aura-hook 到 plugin/bin/
-claude plugin validate ./plugin              # 官方 validator，必須零 error 零 warning
-claude plugin marketplace add .              # 把這個 repo 註冊成本地 marketplace
-claude plugin install agentaura@agentaura -y # 註冊 hooks（不會修改 ~/.claude/settings.json）
-./scripts/verify-install.sh                  # 驗證整條鏈路
-```"""
-assert s.count(OLD) == 1, f"INSTALL.md 的安裝段找不到或不唯一（{s.count(OLD)}）—— T14 的內容變了？"
-s = s.replace(OLD,
-"""```bash
-git clone <repo> && cd AgentAura
-./scripts/build-plugin.sh                    # 建置 universal aura-hook 到 plugin/bin/
-claude plugin validate ./plugin              # 官方 validator，必須零 error 零 warning
-claude plugin marketplace add .              # 把這個 repo 註冊成本地 marketplace
-claude plugin install agentaura@agentaura -y # 註冊 hooks（不會修改 ~/.claude/settings.json）
-./scripts/verify-install.sh                  # 驗證 hook 鏈路
-
-./scripts/build-app.sh             # 組出 build/AgentAura.app（universal + ad-hoc 簽章）
-./scripts/verify-app.sh            # 實機啟動驗收
-open build/AgentAura.app           # 開始使用
+grep -q '^build/$' .gitignore || printf 'build/\n' >> .gitignore
+git check-ignore -v build/    # 必須印出命中的規則
 ```
 
-要開機自動啟動：把 `build/AgentAura.app` 拖進「系統設定 → 一般 → 登入項目」。""")
-s += """
-## 移除 app
-
-```bash
-pkill -f AgentAura.app          # 關掉
-rm -rf build/AgentAura.app      # 刪掉 bundle
-```
-
-app 不寫任何設定到 `~/Library`，狀態全在 `~/.agentaura/`，刪掉即乾淨。
-"""
-p.write_text(s); print("INSTALL.md 已更新")
-PY
-```
+> T14 已經為 `plugin/bin/` 做過同一件事，這裡漏了 —— `build/AgentAura.app`
+> 是 universal binary + bundle，數十 MB，絕不該進版控。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Resources/Info.plist scripts/build-app.sh scripts/verify-app.sh docs/INSTALL.md
+git add .gitignore Resources/Info.plist scripts/build-app.sh scripts/verify-app.sh docs/INSTALL.md
 git commit -F - <<'EOF'
 feat(app): .app bundle + 實機啟動驗收 —— 第一個可雙擊執行的版本
 
