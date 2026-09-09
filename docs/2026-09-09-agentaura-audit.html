@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentAura 建置審計報告</title>
+<style>
+  :root{
+    --bg:#fbfaf8; --fg:#1a1a19; --muted:#6b6a66; --line:#e2e0da;
+    --card:#ffffff; --accent:#b45309; --ok:#15803d; --bad:#b91c1c; --info:#1d4ed8;
+    --code-bg:#f4f2ee;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#16161a; --fg:#e8e6e1; --muted:#9c9a94; --line:#2e2e34;
+      --card:#1d1d22; --accent:#f59e0b; --ok:#4ade80; --bad:#f87171; --info:#93c5fd;
+      --code-bg:#232329;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#16161a; --fg:#e8e6e1; --muted:#9c9a94; --line:#2e2e34;
+    --card:#1d1d22; --accent:#f59e0b; --ok:#4ade80; --bad:#f87171; --info:#93c5fd;
+    --code-bg:#232329;
+  }
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--fg); margin:0;
+    font:16px/1.75 -apple-system,"PingFang TC","Noto Sans CJK TC","Helvetica Neue",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:900px;margin:0 auto;padding:56px 24px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  h1{font-size:30px;line-height:1.35;margin:0 0 10px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:15px;margin:0}
+  h2{font-size:22px;margin:56px 0 16px;letter-spacing:-.01em;padding-top:8px}
+  h3{font-size:17px;margin:32px 0 10px}
+  p{margin:0 0 14px}
+  code{background:var(--code-bg);padding:1px 5px;border-radius:4px;
+       font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre{background:var(--code-bg);padding:14px 16px;border-radius:8px;overflow-x:auto;
+      font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 16px;
+      border:1px solid var(--line)}
+  pre code{background:none;padding:0}
+  a{color:var(--info)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0 28px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .stat .n{font-size:26px;font-weight:600;letter-spacing:-.02em;display:block;line-height:1.2}
+  .stat .l{color:var(--muted);font-size:13px;margin-top:3px;display:block}
+  table{width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:13px;letter-spacing:.02em}
+  .scroll{overflow-x:auto;margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+        padding:18px 20px;margin:0 0 18px}
+  .card h4{margin:0 0 8px;font-size:16px}
+  .bad{color:var(--bad)} .ok{color:var(--ok)} .muted{color:var(--muted)}
+  .tag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:99px;
+       border:1px solid var(--line);color:var(--muted);margin-right:6px;vertical-align:2px}
+  .tag.crit{color:var(--bad);border-color:currentColor}
+  .tag.fix{color:var(--ok);border-color:currentColor}
+  blockquote{margin:0 0 16px;padding:2px 0 2px 16px;border-left:3px solid var(--accent);
+             color:var(--muted)}
+  figure{margin:0 0 28px}
+  figcaption{color:var(--muted);font-size:13px;margin-top:8px;text-align:center}
+  svg{max-width:100%;height:auto;display:block;margin:0 auto}
+  .st{fill:var(--fg);font:13px -apple-system,"PingFang TC",sans-serif}
+  .sm{fill:var(--muted);font:11px ui-monospace,Menlo,monospace}
+  .bx{fill:var(--card);stroke:var(--line);stroke-width:1.5}
+  .bx-a{fill:var(--card);stroke:var(--accent);stroke-width:2}
+  .ar{stroke:var(--muted);stroke-width:1.5;fill:none;marker-end:url(#a)}
+  hr{border:0;border-top:1px solid var(--line);margin:48px 0}
+  ul{margin:0 0 16px;padding-left:22px} li{margin-bottom:7px}
+  .lead{font-size:17px;color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>AgentAura 建置審計報告</h1>
+  <p class="sub">分支 <code>change/agentaura-pipeline</code> · 69 commits · 2026-09-08 → 09 ·
+     <a href="https://github.com/kbsiy0/AgentAura/pull/2">PR #2</a></p>
+</header>
+
+<p class="lead">把 Claude Code 的運行狀態顯示在 macOS 選單列。這份報告記錄的不只是做了什麼，
+更是<strong>這一輪反覆抓到的同一族缺陷</strong>：一個看起來像守衛的東西，實際上永遠不會觸發。</p>
+
+<div class="grid">
+  <div class="stat"><span class="n">235</span><span class="l">tests / 23 suites</span></div>
+  <div class="stat"><span class="n">96–99<span style="font-size:16px">%</span></span><span class="l">AuraCore 覆蓋率</span></div>
+  <div class="stat"><span class="n">2.4<span style="font-size:16px">×</span></span><span class="l">測試碼 ÷ 生產碼</span></div>
+  <div class="stat"><span class="n">18</span><span class="l">task</span></div>
+  <div class="stat"><span class="n">10</span><span class="l">輪修復批次</span></div>
+  <div class="stat"><span class="n">0</span><span class="l">TSan race（867s）</span></div>
+</div>
+
+<h2>1 · 做出了什麼</h2>
+
+<p>一個 Claude Code plugin（19 個 hook 事件，全部 <code>async: true</code>）把每個 session 的狀態
+寫進 <code>~/.agentaura/sessions/</code>，一個 menu bar app 監看那個目錄並把多個 session
+<strong>聚合</strong>成一顆燈。</p>
+
+<figure>
+<svg viewBox="0 0 860 330" role="img" aria-label="資料流：hook 到選單列">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+
+  <rect class="bx" x="10" y="14" width="180" height="52" rx="8"/>
+  <text class="st" x="100" y="38" text-anchor="middle">Claude Code</text>
+  <text class="sm" x="100" y="55" text-anchor="middle">19 hook 事件 · async</text>
+
+  <path class="ar" d="M100,68 L100,100"/>
+  <rect class="bx-a" x="10" y="102" width="180" height="52" rx="8"/>
+  <text class="st" x="100" y="126" text-anchor="middle">aura-hook</text>
+  <text class="sm" x="100" y="143" text-anchor="middle">任何錯誤都靜默 exit 0</text>
+
+  <path class="ar" d="M100,156 L100,188"/>
+  <rect class="bx-a" x="10" y="190" width="180" height="60" rx="8"/>
+  <text class="st" x="100" y="212" text-anchor="middle">狀態檔</text>
+  <text class="sm" x="100" y="229" text-anchor="middle">flock read-merge-write</text>
+  <text class="sm" x="100" y="243" text-anchor="middle">0600 / 目錄 0700</text>
+
+  <path class="ar" d="M190,220 L246,220"/>
+  <text class="sm" x="218" y="211" text-anchor="middle">FSEvents</text>
+
+  <rect class="bx" x="248" y="190" width="164" height="60" rx="8"/>
+  <text class="st" x="330" y="216" text-anchor="middle">HookFileSource</text>
+  <text class="sm" x="330" y="234" text-anchor="middle">bootstrap + 監看</text>
+
+  <path class="ar" d="M412,220 L468,220"/>
+  <rect class="bx-a" x="470" y="182" width="176" height="76" rx="8"/>
+  <text class="st" x="558" y="206" text-anchor="middle">PipelineGraph</text>
+  <text class="sm" x="558" y="223" text-anchor="middle">composition root</text>
+  <text class="sm" x="558" y="240" text-anchor="middle">SessionRegistry · 聚合</text>
+
+  <path class="ar" d="M646,208 L706,180"/>
+  <path class="ar" d="M646,232 L706,262"/>
+
+  <rect class="bx" x="708" y="146" width="142" height="52" rx="8"/>
+  <text class="st" x="779" y="170" text-anchor="middle">LEDStripView</text>
+  <text class="sm" x="779" y="187" text-anchor="middle">選單列燈條</text>
+
+  <rect class="bx" x="708" y="240" width="142" height="52" rx="8"/>
+  <text class="st" x="779" y="264" text-anchor="middle">PanelView</text>
+  <text class="sm" x="779" y="281" text-anchor="middle">popover 面板</text>
+
+  <text class="sm" x="330" y="300" text-anchor="middle">AuraCore（純邏輯，零 UI 依賴）· AuraHookFile（檔案 + FSEvents）· AgentAuraApp（AppKit）</text>
+</svg>
+<figcaption>資料流。橘框是這一輪出過 Critical bug 的位置。</figcaption>
+</figure>
+
+<div class="scroll">
+<table>
+  <tr><th>module</th><th>檔／行</th><th>職責</th></tr>
+  <tr><td><code>AuraCore</code></td><td>15 / 931</td><td>純邏輯。零 AppKit 依賴，由編譯器 gate 把關</td></tr>
+  <tr><td><code>AuraHookFile</code></td><td>4 / 334</td><td><code>flock</code> 讀寫、FSEvents、composition root</td></tr>
+  <tr><td><code>aura-hook</code></td><td>1 / 39</td><td>被 hook 呼叫的 CLI，一律 exit 0</td></tr>
+  <tr><td><code>AgentAuraApp</code></td><td>6 / 380</td><td>AppKit：選單列、動畫、面板</td></tr>
+  <tr><td class="muted">測試</td><td class="muted">25 / 4023</td><td class="muted">生產碼的 2.4 倍</td></tr>
+</table>
+</div>
+
+<h2>2 · 三個只有實測才找得到的 bug</h2>
+
+<p>設計階段實際跑了 141 個真實 hook payload。以下三件事<strong>讀文件讀不出來</strong>，
+而每一個都會讓產品在最關鍵的時刻失效。</p>
+
+<div class="card">
+  <h4>① subagent 事件會抹掉主 agent 的 <code>waiting</code></h4>
+  <p>單槽 last-write-wins 的話，主 agent 正在等你批准時，一個 subagent 的
+  <code>PreToolUse</code> 會把狀態蓋成 <code>working</code> —— <strong>橘燈消失，而你根本不知道它在等你</strong>。</p>
+  <p class="muted">修法：主／副分槽 + 取優先序最大值；主槽處於靜止態時完全忽略 subagent 事件。</p>
+</div>
+
+<div class="card">
+  <h4>② 使用者按 Deny 不產生任何 hook 事件</h4>
+  <p>實測序列：<code>PermissionRequest</code> → （按 Deny）→ 什麼都沒有 → <code>SessionEnd</code>。
+  所以 <code>waiting</code> 絕不能進入「已結束但未確認」的尾巴，否則一個你早就回答過的 session
+  會讓 icon <strong>一直亮橘燈說「有人在等你」</strong>。</p>
+</div>
+
+<div class="card">
+  <h4>③ <code>PostToolUseFailure</code> 的錯誤欄位叫 <code>error</code>，不是 <code>tool_error</code></h4>
+  <p>我一開始寫進 spec 的結論是「它沒有錯誤欄位」。那是因為我透過一份<strong>自己寫的 key 過濾器</strong>
+  去看 payload，而那份過濾器不含真正的欄位名。</p>
+  <blockquote>用自己的假設去觀察，只會看到自己的假設。</blockquote>
+</div>
+
+<h2>3 · 這一輪真正的主題：空轉的守衛</h2>
+
+<p>18 個 task 之外跑了 10 輪修復批次。回頭看，絕大多數 finding 都是<strong>同一族</strong>——
+一個看起來像守衛的東西，實際上永遠不會觸發，於是測試照樣全綠。</p>
+
+<blockquote>空轉的守衛比沒有守衛更糟，因為它製造信心。</blockquote>
+
+<div class="scroll">
+<table>
+  <tr><th style="width:30px">#</th><th>形狀</th><th>本專案的實例</th></tr>
+  <tr><td>1</td><td>取樣掏空覆蓋</td>
+      <td><code>i % 8 == 0</code> 讓 9 個型別真的會讀的欄位<strong>零</strong>損壞測試，
+      包括那個 commit 自己新增的兩個</td></tr>
+  <tr><td>2</td><td><code>&gt;=</code> 代替 <code>==</code></td>
+      <td><code>checked.count &gt;= 12</code> 無法察覺整批遺漏</td></tr>
+  <tr><td>3</td><td>測資位置讓 mutation 隱形</td>
+      <td><code>[working, working, error]</code> —— error 剛好在最後，
+      「最後一個贏」的錯誤實作巧合給出正確答案</td></tr>
+  <tr><td>4</td><td>假逾時</td>
+      <td><code>timeout: 5</code> 的檢查點在「收到元素之後」，零元素時永久 block ——
+      mutation 下<strong>掛住而不是變紅</strong></td></tr>
+  <tr><td>5</td><td>拿被測物當終止條件</td>
+      <td>靠「stop() 會 finish() stream」來結束迴圈，而那正是被測的性質</td></tr>
+  <tr><td>6</td><td>守衛從未被觸及</td>
+      <td><code>allSessionIDs</code> 有三個過濾條件，樣本只觸及一個</td></tr>
+  <tr><td>7</td><td>零樣本恆綠</td>
+      <td><code>for</code> 迴圈跑零次時，裡面的斷言一次都不執行</td></tr>
+  <tr><td>8</td><td>宣稱沒有被檢查</td>
+      <td>doc-comment 說「涵蓋每一個 stored property」，但那句話本身沒有被斷言 ——
+      實際漏了兩個欄位</td></tr>
+</table>
+</div>
+
+<h3>共同的修法方向</h3>
+
+<p>不是「多加測試」，而是<strong>把宣稱變成從來源推導的斷言</strong>，或<strong>去問持有契約的那一方</strong>。</p>
+
+<figure>
+<svg viewBox="0 0 820 260" role="img" aria-label="從自己寫的近似，換成問持有契約的一方">
+  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker></defs>
+
+  <text class="sm" x="150" y="20" text-anchor="middle">自己寫的近似</text>
+  <text class="sm" x="660" y="20" text-anchor="middle">持有契約的一方</text>
+
+  <rect class="bx" x="20" y="34" width="262" height="42" rx="7"/>
+  <text class="st" x="151" y="60" text-anchor="middle">regex 掃原始碼找 import</text>
+  <path d="M290,55 L520,55" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+  <rect class="bx-a" x="530" y="34" width="262" height="42" rx="7"/>
+  <text class="st" x="661" y="60" text-anchor="middle">問編譯器（module trace）</text>
+
+  <rect class="bx" x="20" y="90" width="262" height="42" rx="7"/>
+  <text class="st" x="151" y="116" text-anchor="middle">自己比對 hooks.json 字典</text>
+  <path d="M290,111 L520,111" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+  <rect class="bx-a" x="530" y="90" width="262" height="42" rx="7"/>
+  <text class="st" x="661" y="116" text-anchor="middle">claude plugin validate</text>
+
+  <rect class="bx" x="20" y="146" width="262" height="42" rx="7"/>
+  <text class="st" x="151" y="172" text-anchor="middle">比對 validator 的輸出文字</text>
+  <path d="M290,167 L520,167" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+  <rect class="bx-a" x="530" y="146" width="262" height="42" rx="7"/>
+  <text class="st" x="661" y="172" text-anchor="middle">用它的 --strict</text>
+
+  <rect class="bx" x="20" y="202" width="262" height="42" rx="7"/>
+  <text class="st" x="151" y="228" text-anchor="middle">比對 Package.swift 原始文字</text>
+  <path d="M290,223 L520,223" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+  <rect class="bx-a" x="530" y="202" width="262" height="42" rx="7"/>
+  <text class="st" x="661" y="228" text-anchor="middle">swift package dump-package</text>
+</svg>
+<figcaption>同一個教訓學了四次。每一次我都往正確方向走了一步，但都停在「自己再包一層近似」。</figcaption>
+</figure>
+
+<div class="card">
+  <h4>黑名單 → 白名單基準</h4>
+  <p>隔離 gate 原本是黑名單 <code>["AppKit","SwiftUI","Cocoa"]</code>。
+  改成<strong>在測試時算出基準線</strong>：編一個只 <code>import Foundation</code> 的 probe，
+  它載入的 module 集合就是那一層的閉包；被測 target 不得超出它。</p>
+  <p>實測：<code>AuraCore</code> 載入的 17 個 module 與基準<strong>一個不多一個不少</strong>。
+  而加一行 <code>import CoreImage</code>（<span class="bad">不在黑名單上</span>）——
+  舊 gate 是綠的，新 gate 精準點名 6 個超出基準的 module。</p>
+  <p class="muted">基準隨工具鏈自動更新，所以升級 Swift 不會誤紅；而任何新框架都會超出基準。</p>
+</div>
+
+<h2>4 · gate 的三種類型</h2>
+
+<p>最終 reviewer 把 8 條 plugin wired-gate 逐一分類，結果很有啟發性：</p>
+
+<div class="scroll">
+<table>
+  <tr><th>類型</th><th>條數</th><th>防得住什麼</th><th>防不住什麼</th></tr>
+  <tr><td>內部一致性</td><td><strong>6</strong></td><td>drift</td>
+      <td class="bad">「我從頭到尾就理解錯了」</td></tr>
+  <tr><td>平台契約</td><td><strong>1</strong></td><td>理解錯</td><td>—</td></tr>
+  <tr><td>存在性</td><td>1</td><td>產物沒建出來</td><td>—</td></tr>
+</table>
+</div>
+
+<p>關鍵觀察：連「跨層 source-derived 雙向等式」這種<strong>真的抓到過 regression</strong> 的強 gate，
+仍然是內部一致性 —— 如果兩邊犯了<strong>相同</strong>的錯，它看不出來。</p>
+
+<p>而歷史正好印證：<code>hooks.json</code> 把事件放在最外層時（整個 plugin 的 hook 一個都不會載入），
+當時 7 條 gate <strong class="bad">全部綠燈</strong>，因為沒有一條真正問過平台「你會不會載入這個 hook」。</p>
+
+<blockquote>每一個「tested ≠ wired」的風險點，至少要有一條會去問外部權威的 gate。
+只有內部一致性的話，測試數量再多也只是把同一個誤解複製了很多份。</blockquote>
+
+<h2>5 · 最終審查抓到的（都已修）</h2>
+
+<p>一位獨立 reviewer 在自己的 worktree 裡跑了全量測試 3 次、TSan 867 秒、獨立重量覆蓋率，
+並自製 probe 測試。verdict：「不可直接合進 main —— 但只差一小步」。</p>
+
+<div class="card">
+  <h4><span class="tag crit">Critical</span> 回訪 session 的結果被靜默吞掉</h4>
+  <p><code>acknowledged</code> 從不回收。整夜 pipeline 失敗 → 早上開面板看過 →
+  下午 <code>claude --resume</code> 同一個 id 又失敗 → <strong class="bad">紅燈從來沒亮過</strong>。</p>
+  <p class="muted"><span class="tag fix">已修</span> 兩條移除路徑都回收；三條 probe 在還原修法後全紅。</p>
+</div>
+
+<div class="card">
+  <h4><span class="tag crit">Critical</span> 解析失敗被當成「檔案不存在」</h4>
+  <p><code>aura-hook</code> 若在 <code>truncate</code> 與 <code>write</code> 之間被 SIGKILL，
+  磁碟上留下永久損壞的檔 → 5 秒後一個<strong>真的在等你批准</strong>的 session 被移除 →
+  而你還沒回答，不會再有事件重建它 → <strong class="bad">橘燈永久熄滅</strong>。</p>
+  <p class="muted">同一份規格，<code>HookFileSource</code> 做對了、<code>PipelineGraph</code> 做反了 ——
+  因為 <code>read</code> 用同一個 <code>nil</code> 表達兩種語意完全不同的失敗。
+  <span class="tag fix">已修</span></p>
+</div>
+
+<div class="card">
+  <h4><span class="tag crit">Critical</span> 整個 app 層零測試覆蓋</h4>
+  <p>把 <code>AppDelegate</code> 的 <code>graph.start()</code> 與 liveness timer 整段註解掉
+  （<strong>產品開起來永遠什麼都不顯示</strong>），<strong class="bad">220/220 全綠</strong>。</p>
+  <p class="muted">這是整個專案從頭到尾在防的失效模式，出現在最後一層。
+  <span class="tag fix">已修</span> 補上 spec 要求的 composition-root smoke 後，
+  同一個 mutation 在 5s / 10s 內各自變紅（有界失敗，不是掛住）。</p>
+</div>
+
+<div class="card">
+  <h4><span class="tag">Important</span> 面板說不出在等什麼</h4>
+  <p><code>toolDescription</code> 被完整解析、合併、落檔、有 round-trip 測試 ——
+  然後沒進 <code>SessionState</code>。面板顯示的是「等你批准：Bash」，
+  而那<strong>一字不差就是</strong> <code>HookPayload</code> 的 doc-comment 自己判定「不夠」的那個字串。</p>
+  <p class="muted">四段資料流（payload → 檔案 → state → UI）每一段都有測試，
+  但第四段的測試<strong>直接手造 <code>SessionState</code></strong>，繞過了第三段 ——
+  接縫因此隱形。<span class="tag fix">已修</span> 用 <code>Mirror</code> 從輸出端推導出第三段的 gate。</p>
+</div>
+
+<h2>6 · 驗收證據</h2>
+
+<div class="scroll">
+<table>
+  <tr><th>項目</th><th>結果</th></tr>
+  <tr><td>測試</td><td class="ok">235 tests / 23 suites，全量三跑無 flaky</td></tr>
+  <tr><td><code>AuraCore</code> 覆蓋率</td><td class="ok">96.06% regions / 99.18% lines</td></tr>
+  <tr><td>Thread Sanitizer</td><td class="ok">全量 867 秒，零 race 警告</td></tr>
+  <tr><td>端到端</td><td class="ok">真的 spawn <code>aura-hook</code> 執行檔 → 狀態檔 → FSEvents → IconState，不 mock 任何一層</td></tr>
+  <tr><td>實機安裝</td><td class="ok">真的 <code>claude -p</code> session 觸發 hook，狀態檔內容完整</td></tr>
+  <tr><td><code>~/.claude/settings.json</code></td><td class="ok">md5 前後<strong>完全相同</strong>，grep 命中數 0</td></tr>
+  <tr><td><code>.app</code></td><td class="ok">universal（arm64 + x86_64）、簽章有效、實測啟動存活、零輸出、無 dock icon</td></tr>
+  <tr><td>hook 延遲 p95</td><td>5.5ms vs 門檻 5ms（<strong>known gap</strong>；spawn 地板 2.24ms，差額主要是 dyld 載入）</td></tr>
+  <tr><td>agent 減速</td><td class="ok">0ms —— <code>async: true</code>，19 個事件全部釘死</td></tr>
+</table>
+</div>
+
+<h2>7 · 已知缺口</h2>
+
+<p><strong>明確未實作的 spec 條目</strong>（不是「做了但不完美」，是沒做）：</p>
+<ul>
+  <li><strong>§3.8 自我健檢（死 hook 偵測）</strong> —— R6 的後半。屬 M5，需另出計畫。
+      <code>verify-install.sh</code> 做的是安裝當下的一次性驗收，不是持續健檢。</li>
+  <li><strong>§4 重繪節流 ≥100ms、面板列表虛擬化</strong> —— spec 明文列出的兩項。</li>
+</ul>
+
+<p><strong>已實作但未驗收</strong>：</p>
+<ul>
+  <li><strong>R5（形態用證據決定）尚未滿足。</strong> spec 要求 M4 同時做兩個原型
+      （A：8 顆 LED 燈條；B：單一符號 + 顏色 + 動畫），由 persona-tester 對
+      <strong>餘光辨識</strong>與<strong>遠距辨識</strong>打分後選定。本分支只做了形態 A。
+      spec 的風險登記表明確寫著前一個同類專案就是<strong>失敗於形態選擇</strong> —— 這一項不該被跳過。</li>
+  <li><strong>視覺呈現未經人眼驗收</strong> —— 執行環境沒有螢幕錄製 / 輔助使用權限，
+      無法截圖或自動點擊。渲染判斷邏輯有 31 個純邏輯測試覆蓋，但「橘色呼吸看起來對不對、
+      餘光掃到會不會注意到」必須由人跑一次 <code>open build/AgentAura.app</code> 親眼確認。</li>
+  <li><code>LEDStripView</code> 目前把 8 顆 LED 畫成<strong>相同</strong>顏色與 alpha，資訊量等於 1 顆。
+      <code>IconAppearance</code> 已帶著 <code>liveCount</code> / <code>attentionCount</code>，
+      要讓「亮幾顆」有意義只需幾行 —— 但那是形態決策，刻意留給 M4 的 A/B 一起測。</li>
+</ul>
+
+<hr>
+
+<h2>安裝與使用</h2>
+<pre><code>./scripts/build-plugin.sh                            # universal aura-hook
+claude plugin validate --strict ./plugin             # 官方 validator
+ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura     # 掛載（settings.json 零改動）
+./scripts/verify-install.sh                          # 驗證整條鏈路
+
+./scripts/build-app.sh                               # 組出 build/AgentAura.app
+open build/AgentAura.app</code></pre>
+
+<p>移除：<code>rm ~/.claude/skills/agentaura &amp;&amp; rm -rf ~/.agentaura</code></p>
+
+<p class="muted" style="font-size:13.5px;margin-top:40px">
+完整的決策紀錄（75 條 ruling、每一個 mutation 的實際紅燈輸出）在
+<code>.superpowers/sdd/2026-09-08-agentaura-pipeline/progress.md</code>（2420 行，git-ignored）。
+spec 在 <code>docs/superpowers/specs/2026-09-08-agentaura-design.md</code>。
+</p>
+
+</div>
+</body>
+</html>
