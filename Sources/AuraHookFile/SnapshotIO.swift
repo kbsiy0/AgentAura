@@ -69,6 +69,10 @@ public enum SnapshotIO {
                                                ofItemAtPath: root.path)
 
         let fd = open(url.path, O_RDWR | O_CREAT, 0o600)
+        // `O_CREAT` 的 mode 只在**建立時**套用 —— 舊版建出來的 0644 檔案
+        // 就算被重寫一百次也還是 0644。所以每次都無條件收緊一次。
+        // 失敗不該讓 hook 失敗（契約是「絕不干擾 agent」），故不檢查回傳值。
+        if fd >= 0 { _ = fchmod(fd, 0o600) }
         guard fd >= 0 else { throw POSIXError(.EIO) }
         defer { close(fd) }
         guard flock(fd, LOCK_EX) == 0 else { throw POSIXError(.EWOULDBLOCK) }

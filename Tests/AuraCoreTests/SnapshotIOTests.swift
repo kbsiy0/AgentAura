@@ -215,6 +215,29 @@ struct SnapshotIOTests {
 
     /// **狀態檔含使用者的工作內容**（`cwd`、tool 參數、助理輸出的開頭），
     /// 沒有理由讓同機其他帳號讀得到。
+    /// **既有檔案也要被收緊。**
+    ///
+    /// `O_CREAT` 的 mode 只在建立時套用 —— 用過舊版（0644）的人，
+    /// 檔案被重寫一百次也還是 0644。實測確認過這件事，所以每次都 `fchmod`。
+    @Test("舊版留下的 0644 檔案，寫入後會被收緊成 0600")
+    func existingLoosePermissionsAreTightened() throws {
+        let root = try makeRoot()
+        let url = try SnapshotIO.url(for: "old1", root: root)
+        // 模擬舊版留下的檔：0644
+        FileManager.default.createFile(atPath: url.path, contents: Data("{}".utf8),
+                                       attributes: [.posixPermissions: 0o644])
+        let before = try #require(FileManager.default
+            .attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber)
+        #expect(before.int16Value == 0o644, "前提：這個檔一開始是 0644")
+
+        try SnapshotIO.update(sessionID: "old1", root: root) { _ in self.snap("old1", .working) }
+
+        let after = try #require(FileManager.default
+            .attributesOfItem(atPath: url.path)[.posixPermissions] as? NSNumber)
+        #expect(after.int16Value == 0o600,
+                "既有檔案沒有被收緊，仍是 \(String(after.int16Value, radix: 8))")
+    }
+
     @Test("狀態檔 0600、目錄 0700")
     func filePermissionsArePrivate() throws {
         let root = try makeRoot()
