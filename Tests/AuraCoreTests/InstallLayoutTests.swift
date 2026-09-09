@@ -89,7 +89,17 @@ struct InstallLayoutTests {
     func installDocHasUninstall() throws {
         let doc = try String(contentsOf: Self.repoRoot().appendingPathComponent("docs/INSTALL.md"),
                              encoding: .utf8)
-        #expect(doc.contains("plugin uninstall"), "必須寫明如何完整移除")
+        // 斷言**真正的移除指令**，不是一個代理字串。
+        //
+        // 這裡原本斷言 `doc.contains("plugin uninstall")`。安裝方式改成 skills-dir
+        // 掛載之後，那個字串只剩在一句「**沒有** `claude plugin uninstall` 這一步」
+        // 的說明裡 —— 斷言靠一段**語意相反**的文字通過，等於什麼都沒驗。
+        // 代理字串會 drift，指令不會。
+        #expect(doc.contains("## 完整移除"), "必須有完整移除的段落")
+        #expect(doc.contains("rm ~/.claude/skills/agentaura"),
+                "必須寫明真正的移除指令（skills-dir 掛載就是刪那個 symlink）")
+        #expect(doc.contains("ln -sfn") && doc.contains("~/.claude/skills/agentaura"),
+                "安裝指令也要在文件裡，且與實際機制一致")
         #expect(doc.contains(".agentaura"), "必須說明狀態目錄可安全手動刪除")
     }
 }

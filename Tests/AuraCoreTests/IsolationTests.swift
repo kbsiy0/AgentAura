@@ -4,42 +4,60 @@ import Foundation
 @Suite("跨層隔離約束")
 struct IsolationTests {
 
-    @Test("除 UI target 外，Sources/ 下每個 target 都不得載入 AppKit / SwiftUI / Cocoa")
+    /// **除了 UI target，`Sources/` 下每個 target 都不得超出它那一層的 module 基準。**
+    ///
+    /// 兩處改進，都來自「不要手維護平台已經知道的事」：
+    ///
+    /// 1. **順序從 `swift package dump-package` 拓撲推導**，不再手寫。
+    /// 2. **判準從黑名單改成白名單基準**：先編一個只 `import Foundation`
+    ///    （`AuraHookFile` 再加 `CoreServices`）的 probe，它載入的集合就是那一層的閉包；
+    ///    被測 target 不得超出它。黑名單只答得出「有沒有踩到我想得到的那三個」，
+    ///    基準答的是「有沒有超出這一層該有的東西」—— 不需要我預見未來的框架。
+    ///    基準在測試時用同一套工具鏈算出，所以升級 Swift 不會誤紅。
+    @Test("除 UI target 外，Sources/ 下每個 target 都不得超出其 module 基準")
     func nonUITargetsLoadNoUIModules() throws {
+        let ordered = try Gate.nonTestTargetsInDependencyOrder().filter { !Gate.uiTargets.contains($0) }
+        #expect(!ordered.isEmpty, "dump-package 推導不出任何非 UI target —— gate 不能空跑")
+
+        // 完整性：磁碟上的目錄不得有 target 逃過 gate
         let sources = Gate.repoRoot().appendingPathComponent("Sources")
         let dirs = Set(((try? FileManager.default.contentsOfDirectory(
                 at: sources, includingPropertiesForKeys: [.isDirectoryKey])) ?? [])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .map(\.lastPathComponent))
-        #expect(!dirs.isEmpty, "Sources/ 下掃不到任何 target 目錄 —— gate 不能空跑")
-
-        // 需要 gate 的集合 = 磁碟現況 − 允許清單。這個方向才是重點：
-        // 任何新增的 target 只要沒被明確豁免，就必須出現在順序清單裡，否則紅。
-        // （允許清單裡的 target 尚未建立時不會誤紅 —— 減去一個不存在的名字是 no-op。）
-        let gated = dirs.subtracting(Gate.uiTargets)
-        #expect(Set(Gate.nonUITargetsInDependencyOrder) == gated, """
-            需要 gate 的 target 與順序清單不一致 —— 新 target 不得靜默逃過 gate。
-            磁碟上需要 gate 卻沒列：\(gated.subtracting(Set(Gate.nonUITargetsInDependencyOrder)).sorted())
-            列了卻不存在：\(Set(Gate.nonUITargetsInDependencyOrder).subtracting(gated).sorted())
+        #expect(dirs.subtracting(Gate.uiTargets) == Set(ordered), """
+            磁碟上的 target 與 dump-package 推導的清單不一致。
+            只在磁碟上：\(dirs.subtracting(Gate.uiTargets).subtracting(Set(ordered)).sorted())
+            只在 manifest 裡：\(Set(ordered).subtracting(dirs).sorted())
             """)
 
+        // 每個 target 允許的額外 import（超出純 Foundation 的部分）
+        let extraImports: [String: [String]] = ["AuraHookFile": ["CoreServices"]]
+
         try Gate.withTemporaryDirectory { dir -> Void in
-            for target in Gate.nonUITargetsInDependencyOrder {
+            var built: Set<String> = []
+            for target in ordered {
                 let files = Gate.swiftFiles(under: "Sources/\(target)")
                 #expect(!files.isEmpty, "\(target) 掃不到原始檔 —— gate 不能空跑")
                 let loaded = try Gate.loadedModules(compiling: files, searchPaths: [dir.path])
-                let banned = loaded.intersection(Gate.bannedModules)
-                #expect(banned.isEmpty, """
-                    \(target) 編譯時載入了禁止的 module：\(banned.sorted().joined(separator: ", "))
-                    （這次共載入 \(loaded.count) 個 module）
+                let baseline = try Gate.baselineModules(importing: ["Foundation"] + (extraImports[target] ?? []))
+                let extra = loaded
+                    .subtracting(baseline)
+                    .subtracting(built)                       // 自己的依賴 module
+                    .subtracting(Gate.compilerInternalModules)
+                #expect(extra.isEmpty, """
+                    \(target) 載入了超出其 module 基準的東西：\(extra.sorted().joined(separator: ", "))
+                    基準 = 只 import \((["Foundation"] + (extraImports[target] ?? [])).joined(separator: " / ")) 的閉包（\(baseline.count) 個）
+                    這次共載入 \(loaded.count) 個。
                     """)
-                // executable target 沒有人依賴它，不需要 emit module
-                if target != Gate.nonUITargetsInDependencyOrder.last {
+                if target != ordered.last {
                     try Gate.emitModule(named: target, files: files, into: dir)
+                    built.insert(target.replacingOccurrences(of: "-", with: "_"))
                 }
             }
         }
     }
+
 
     /// **豁免必須被賺到。**
     ///

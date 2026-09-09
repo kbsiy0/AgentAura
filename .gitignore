@@ -8,3 +8,4 @@ xcuserdata/
 .superpowers/
 .claude/worktrees/
 plugin/bin/
+build/

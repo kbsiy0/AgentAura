@@ -13,8 +13,14 @@ git clone <repo> && cd AgentAura
 ./scripts/build-plugin.sh                            # 建置 universal aura-hook 到 plugin/bin/
 claude plugin validate --strict ./plugin             # 官方 validator，零 error 零 warning
 ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura     # 掛載（settings.json 零改動）
-./scripts/verify-install.sh                          # 驗證整條鏈路
+./scripts/verify-install.sh                          # 驗證 hook 鏈路
+
+./scripts/build-app.sh                               # 組出 build/AgentAura.app
+./scripts/verify-app.sh                               # 實機啟動驗收
+open build/AgentAura.app                             # 開始使用
 ```
+
+> 要開機自動啟動：把 `build/AgentAura.app` 拖進「系統設定 → 一般 → 登入項目」。
 
 **下一個 Claude Code session 起生效**（skills-dir 的 plugin 在 session 啟動時載入；
 已在執行中的 session 不會中途載入新 plugin）。
@@ -43,6 +49,8 @@ ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura     # 掛載（settings.json �
 ## 完整移除
 
 ```bash
+pkill -f AgentAura.app            # 關掉 app
+rm -rf build/AgentAura.app        # 刪掉 app（建置產物，隨時可重建）
 rm ~/.claude/skills/agentaura     # 移除掛載（hooks 隨之失效）
 rm -rf ~/.agentaura               # 狀態目錄，可安全刪除
 ```

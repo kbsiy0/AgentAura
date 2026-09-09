@@ -153,4 +153,96 @@ enum Gate {
         let newlines = text.reduce(into: 0) { acc, ch in if ch == "\n" { acc += 1 } }
         return text.hasSuffix("\n") ? newlines : newlines + 1
     }
+
+    // MARK: - 平台契約：從 `swift package dump-package` 推導，不比對原始文字
+
+    struct PackageTarget {
+        let name: String
+        let type: String            // regular / executable / test
+        let dependencies: [String]
+    }
+
+    /// 解析 `swift package dump-package`。
+    ///
+    /// 比對 `Package.swift` 的**原始文字**對排版敏感，而且答不出依賴關係。
+    /// SwiftPM 自己就提供了結構化輸出 —— 平台給了契約就用契約。
+    static func packageTargets() throws -> [PackageTarget] {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        // **必須用獨立的 `--scratch-path`。**
+        //
+        // `swift test` 執行期間持有這個 package 的 SwiftPM 鎖；測試裡再開一個
+        // 用預設 `.build` 的 `swift package` 子行程會永遠等下去（實測：180s 逾時強殺）。
+        // 給它一個自己的 scratch 目錄就不會碰到那把鎖。
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aura-dump-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        task.arguments = ["swift", "package", "--scratch-path", scratch.path, "dump-package"]
+        task.currentDirectoryURL = repoRoot()
+        let pipe = Pipe(); task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+        try task.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+        guard task.terminationStatus == 0 else {
+            throw GateFailure("swift package dump-package 失敗（exit \(task.terminationStatus)）—— gate 無法作答")
+        }
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = obj["targets"] as? [[String: Any]], !raw.isEmpty else {
+            throw GateFailure("dump-package 解析不出 targets —— 空結果不能讀成「乾淨」")
+        }
+        return raw.map { t in
+            let deps = (t["dependencies"] as? [[String: Any]] ?? []).compactMap { d -> String? in
+                (d["byName"] as? [Any])?.first as? String ?? (d["target"] as? [Any])?.first as? String
+            }
+            return PackageTarget(name: t["name"] as? String ?? "?",
+                                 type: t["type"] as? String ?? "?",
+                                 dependencies: deps)
+        }
+    }
+
+    /// `Sources/` 下的非測試 target，依依賴拓撲排序（被依賴者在前）。
+    ///
+    /// 先前這是一份**手寫**的順序清單。依賴順序其實在 `Package.swift` 裡就有，
+    /// 只是要問對人 —— `dump-package` 給得出來，那就不該手維護。
+    static func nonTestTargetsInDependencyOrder() throws -> [String] {
+        let targets = try packageTargets().filter { $0.type != "test" }
+        let byName = Dictionary(uniqueKeysWithValues: targets.map { ($0.name, $0) })
+        var out: [String] = []
+        var visiting: Set<String> = []
+        func visit(_ name: String) throws {
+            guard !out.contains(name) else { return }
+            guard !visiting.contains(name) else { throw GateFailure("target 依賴有環：\(name)") }
+            visiting.insert(name)
+            for d in byName[name]?.dependencies ?? [] where byName[d] != nil { try visit(d) }
+            visiting.remove(name)
+            out.append(name)
+        }
+        for t in targets.map(\.name).sorted() { try visit(t) }
+        return out
+    }
+
+    // MARK: - 白名單基準：不列名單，當場算
+
+    /// 只 `import` 指定 module 的 probe 會載入哪些 module —— 那就是那一層的閉包。
+    ///
+    /// 為什麼不寫死一份白名單：白名單會隨工具鏈 drift，升級 Swift 就誤紅，
+    /// 而一個會為了無關原因變紅的 gate，很快就會被當成雜訊忽略。
+    /// 基準線在測試時用**同一套工具鏈**算出來，所以只有真正多出來的東西會被抓到。
+    static func baselineModules(importing imports: [String]) throws -> Set<String> {
+        try withTemporaryDirectory { dir in
+            let probe = dir.appendingPathComponent("Baseline.swift")
+            let src = imports.map { "import \($0)" }.joined(separator: "\n")
+                + "\npublic enum Baseline { public static let v = 1 }\n"
+            try src.write(to: probe, atomically: true, encoding: .utf8)
+            return try loadedModules(compiling: [probe])
+        }
+    }
+
+    /// 編譯器內部產物，不是框架依賴。
+    ///
+    /// `SwiftOnoneSupport` 來自用 `-Onone` 建出來的依賴 `.swiftmodule`
+    /// （實測：不加 `-I` 的 probe 不會產生它，加了才會）。把它列在這裡是
+    /// 一個**明確且極小**的例外，不是「反正多出來的都放行」。
+    static let compilerInternalModules: Set<String> = ["SwiftOnoneSupport"]
 }
