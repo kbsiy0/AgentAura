@@ -107,9 +107,12 @@ swift test --filter <測試函式名>     # 單一測試
 
 ## 狀態
 
-M0–M5 的最小可用版完成。**下一個里程碑 M4**：icon 形態 A/B 原型 + 打分決定
-—— spec 的 R5 要求形態由證據決定而非預設，目前只實作了形態 A（8 顆 LED 燈條），
-所以 R5 尚未滿足。已知缺口完整列在 [PR #2](https://github.com/kbsiy0/AgentAura/pull/2)。
+M0–M5 完成，[PR #2](https://github.com/kbsiy0/AgentAura/pull/2) 已 merge。**M4 icon 形態決策已完成**：
+persona-tester 對兩個原型（8 顆 LED 燈條 A2、光環點 B2）打分，選定 **A2**（8 顆 LED ＋ 不透明底板）
+——spec 的 R5「形態由證據決定而非預設」已滿足，決策細節見
+[`docs/2026-09-09-m4-ab-decision.md`](docs/2026-09-09-m4-ab-decision.md)。
+下一步：**Change 2** `panel-legend-palette`（面板圖例列＋改色入口）與 A2 淺色模式微調
+（決策報告 known gap F-02：底板在淺色模式偏重）。
 
 ## 授權
 

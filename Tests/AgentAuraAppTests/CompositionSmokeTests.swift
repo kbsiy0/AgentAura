@@ -102,4 +102,63 @@ struct CompositionSmokeTests {
             的唯一防線。
             """)
     }
+
+    /// spec `2026-09-09-m4-icon-form-design.md` §4.3／§8.2：A/B 決定（`docs/2026-09-09-m4-ab-decision.md`
+    /// 選 A2）後，開發期形態切換用的型別與 key 已刪，`StatusItemController` 直接建贏家。
+    /// 這條測試的 tested≠wired 守門角色不變：實跑真 controller，斷言真的建出 `LEDStripView`，
+    /// 不是斷言「型別存在」就收工。
+    @MainActor
+    @Test("StatusItemController 建出的 drawing 是贏家 LEDStripView")
+    func statusItemBuildsTheWinner() throws {
+        let controller = StatusItemController()
+        defer { controller.removeFromStatusBar() }
+
+        #expect(controller.drawing is LEDStripView, """
+            StatusItemController 應建出 LEDStripView（A/B 已定案選 A2），實際 \(type(of: controller.drawing))
+            """)
+    }
+
+    /// spec `2026-09-09-m4-icon-form-design.md` §6：`statusItemWidthFollowsRenderer`。
+    ///
+    /// **A/B 收斂後的誠實註記（review-t09 I-1）**：只剩一個 `IconDrawing` conformer、一個 `preferredWidth`，
+    /// 「derived 而非 hardcoded」已不可觀測——把 `item.length`／frame 寫死成贏家的正確數字（50／42）這條仍綠
+    /// （reviewer 實測）。它現在守的是「等於 42+8／4／42／thickness」，寫死成錯的數字仍會紅。
+    /// 要恢復「跟著 renderer 走」的觀測性，需注入第二個 conformer——那與 R9／§4.3「評後刪」相反，不做。
+    /// A/B 定案後只剩一種形態，迴圈收斂為單一案例；三條 frame 斷言不變。
+    @MainActor
+    @Test("status item 長度 = preferredWidth + 8，安裝 frame 為 x 4／width preferredWidth／height bar thickness")
+    func statusItemWidthFollowsRenderer() throws {
+        let controller = StatusItemController()
+        defer { controller.removeFromStatusBar() }
+
+        #expect(controller.statusItemLength == controller.drawing.preferredWidth + 8, """
+            statusItemLength(\(controller.statusItemLength)) 應為 \
+            drawing.preferredWidth(\(controller.drawing.preferredWidth)) + 8
+            """)
+        let frame = try #require(controller.drawing as? NSView).frame
+        #expect(frame.width == controller.drawing.preferredWidth, "frame.width 應等於 preferredWidth，實際 \(frame.width)")
+        #expect(frame.origin.x == 4, "frame.origin.x 應為 4，實際 \(frame.origin.x)")
+        #expect(frame.height == NSStatusBar.system.thickness, "frame.height 應等於 bar thickness，實際 \(frame.height)")
+    }
+
+    /// review-t01-0203 I4（tested ≠ wired）：像素 gate 全部直接呼叫 `view.update`、
+    /// `launchDeliversIconStateToRenderer` 用 SpyRenderer 取代整個 controller——刪掉
+    /// `StatusItemController.apply` 裡的 `drawing.update(...)` 全套件仍綠，產品是一顆永不更新的 icon。
+    /// 這條走真的 controller：apply(error) 之後離屏渲 `drawing`，LED 像素必須是 error 色。
+    @MainActor
+    @Test("StatusItemController.apply 真的把 appearance 交給 drawing（像素為證）")
+    func applyReachesDrawing() throws {
+        let controller = StatusItemController()
+        defer { controller.removeFromStatusBar() }
+
+        let error = IconState(activity: .error, counts: [.error: 1], liveCount: 1)
+        controller.apply(AppearancePolicy.appearance(for: error, reduceMotion: true), phase: 0)
+
+        let led = try #require(controller.drawing as? LEDStripView)
+        let px = try (try OffscreenRender.render(led, over: .black)).pixel(at: led.ledRect(at: 3).center)
+        let expected = OffscreenRender.expected(IconPalette.default.error, curveAlpha: 1, over: RGBA(r: 20.0/255, g: 20.0/255, b: 22.0/255, a: 1))
+        #expect(px.maxComponentDelta(expected) <= 2.0 / 255, """
+            apply(.error) 之後 LED 像素是 \(px)，不是 error 色 \(expected) —— controller 沒把 appearance 交給 drawing。
+            """)
+    }
 }

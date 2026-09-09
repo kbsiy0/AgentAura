@@ -6,8 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 把 Claude Code 的運行狀態顯示在 macOS 選單列。plugin hook → 狀態檔 → FSEvents → 一顆聚合燈 + 面板。
 
-> **狀態（2026-09-09）：M0–M5 的最小可用版完成，`change/agentaura-pipeline` 已開 PR #2 待 merge。**
-> 下一個里程碑 **M4**：icon 形態 A/B 原型 + persona-tester 打分（R5 尚未滿足）。
+> **狀態（2026-09-09）：M0–M5 完成；PR #2 已 merge（2026-09-09）；M4 形態決策完成，選定 A2**
+> （8 顆 LED ＋ 不透明底板，`change/m4-icon-form`），決策見 `docs/2026-09-09-m4-ab-decision.md`。
+> 下一步 **Change 2** `panel-legend-palette`（圖例列＋改色）與 A2-light 微調
+> （淺色模式底板過重，見決策報告的 F-02）。
 > 重啟指標：`docs/superpowers/specs/2026-09-08-agentaura-design.md` §8 里程碑表。
 
 ## Tech Stack
@@ -21,7 +23,7 @@ Sources/
   AuraCore/         純邏輯，零 AppKit/SwiftUI 依賴（由編譯器 gate 強制）
   AuraHookFile/     flock 讀寫、FSEvents、PipelineGraph（composition root）
   aura-hook/        被 hook 呼叫的 CLI，一律 exit 0
-  AgentAuraApp/     AppKit：選單列、動畫、面板
+  AgentAuraApp/     AppKit：選單列、動畫、面板（`IconDrawing` 為 view 契約 protocol）
 Tests/AuraCoreTests/
   Gate.swift            ★ 跨層 gate 的共用機制（問編譯器、問 dump-package）
   IsolationTests.swift  ★ module 白名單基準 + 行數上限

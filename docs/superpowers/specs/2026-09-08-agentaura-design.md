@@ -24,6 +24,9 @@
 | R4 | **注意力預算：只有需要你行動的狀態才會動** | 前一個同類專案 前一個專案 失敗於「太吵」。常態一直動 → 「動起來」失去訊號價值（§3.6） |
 | R5 | **形態用證據決定，不預先鎖定** | 前一個專案 失敗於「形態不對」。M4 同時做兩個原型打分再選（§8） |
 | R6 | **一步安裝、一步移除、自我健檢** | 前一個專案 失敗於「安裝維護太麻煩」，且移除後在 settings.json 留下 7 個指向不存在執行檔的死 hook（§3.8） |
+| R7 | **快速上手**：裝好就知道四種燈是什麼 | Change 2 `panel-legend-palette`（圖例列）落地；Change 1 `m4-icon-form` 只保證贏家形態（A2）的四態在視覺上可分 |
+| R8 | **面板可客製化** | Change 2 `panel-legend-palette`（改色 UI）落地；Change 1 鋪 `IconPalette` 讓顏色成為資料而非 view 內的 switch 並驗證消費端真的吃它 |
+| R9 | **極輕量、盡可能簡單** | Change 1 的可量測落點：零新依賴、零新 target、無使用者可見設定、執行檔增量 < 150 KB、`Sources/` 淨增 ≤ 250 行、落選形態不保留 |
 
 R4-R6 三條直接來自使用者對 前一個專案 的失敗歸因（形態不對／狀態語意不準太吵／安裝維護麻煩）。
 「狀態語意不準」已由 §2.2.1 的 `Notification` 型別分流與 §2.5 的 main/sub 分槽處理。
@@ -463,11 +466,13 @@ protocol EventSource {
 }
 
 protocol AggregatePolicy { func aggregate(_ s: [SessionState]) -> IconState }
-protocol IconRenderer    { func render(_ s: IconState) }
+protocol IconRendering   { func render(_ s: IconState) }
 protocol LivenessProber  { func isAlive(pid: pid_t, startedAt: time_t) -> Bool }
 ```
 
-`EventSource` 是方案 3 未來接入點。`IconRenderer` 讓核心邏輯測試不需要 AppKit。
+`EventSource` 是方案 3 未來接入點。`IconRendering` 讓核心邏輯測試不需要 AppKit
+（設計期草圖，簽章與實作不同；M4 落地後實際簽章見 `StatusItemController.swift` 的 `IconRendering`；view 層另有
+`IconDrawing`，見 §6 檔案佈局）。
 
 `AuraCore` 不 import AppKit —— **此約束由測試強制，不靠自律**。
 
@@ -481,7 +486,7 @@ app 比對 pid **與**啟動時戳，兩者皆符才算活著。
 
 ### 3.6 Menu bar 渲染
 
-- `NSStatusItem` + 自繪 `NSView`（`LEDStripView`，8 顆 LED）。
+- `NSStatusItem` + 自繪 `NSView`（`LEDStripView`，8 顆 LED ＋ 不透明底板）。
   不用 SwiftUI `MenuBarExtra` —— 自繪動畫的控制權需要 AppKit 層級。
 - **狀態動畫語言 —— 注意力預算（R4）**
 
@@ -489,7 +494,7 @@ app 比對 pid **與**啟動時戳，兩者皆符才算活著。
 
   | activity | 是否常態 | 呈現 | 動畫 |
   |---|---|---|---|
-  | `idle` | 常態 | 極暗單點，近乎不可見 | 無 |
+  | `idle` | 常態 | 極暗 LED 疊在恆在的底板上 | 無 |
   | `working` | **常態** | 低對比暗藍，極慢呼吸（4s 週期、透明度 0.35→0.6） | 極微 · ≤10 fps |
   | `done` | 需注意但不急 | 恆亮綠 | **無 · 0 fps** |
   | `waiting` | **需要行動** | 橘色明顯呼吸（1.1s 週期） | 有 |
@@ -507,7 +512,7 @@ app 比對 pid **與**啟動時戳，兩者皆符才算活著。
   前一版把 `working` 設成 comet 跑動是設計錯誤，已在此修正。
 - `AnimationDriver` 在以下情況停止重繪：螢幕睡眠（`NSWorkspace` 通知）、
   `NSStatusItem.isVisible == false`、系統開啟「減少動態效果」（改為靜態色塊）。
-- 跟隨深淺色外觀。
+- 顏色為固定 RGBA（`IconPalette.default`），不隨深淺色翻轉；理由見 Change 1 `m4-icon-form` spec §2 選擇 2。
 
 ### 3.7 面板內容
 
@@ -659,6 +664,8 @@ AgentAura/
 │   ├─ AggregatePolicy.swift         [SessionState] → IconState（D1 優先序在此）
 │   ├─ PanelViewModel.swift          排序 · 相對時間格式化
 │   ├─ Liveness.swift                pid + 啟動時戳驗證
+│   ├─ IconPalette.swift             RGBA + 五態調色盤（M4，`.default` 為釘死數字）
+│   ├─ AnimationCurve.swift          alpha(for:phase:) / period(of:)（M4，自 App 層搬入）
 │   └─ EventSource.swift             protocol
 ├─ Sources/AuraHookFile/
 │   ├─ HookFileSource.swift          FSEvents watch + bootstrap
@@ -669,7 +676,8 @@ AgentAura/
 ├─ Sources/AgentAuraApp/             AppKit / SwiftUI
 │   ├─ AppDelegate.swift             composition root（唯一組裝點）
 │   ├─ StatusItemController.swift    NSStatusItem
-│   ├─ LEDStripView.swift            8 顆 LED 繪製
+│   ├─ IconDrawing.swift             view 契約 protocol（`LEDStripView` 遵守）
+│   ├─ LEDStripView.swift            8 顆 LED ＋ 底板繪製（M4 A/B 定案 A2，`docs/2026-09-09-m4-ab-decision.md`）
 │   ├─ AnimationDriver.swift         省電節流
 │   └─ Panel/PanelView.swift         SwiftUI 面板
 ├─ plugin/                           Claude Code plugin
@@ -721,7 +729,7 @@ AgentAura/
 | **M1** 測試底座 | §5.1 對抗式 double + §5.2 composition-root smoke。零生產碼 | 測試全部 RED 且理由正確 |
 | **M2** AuraCore | Reducer / Registry / AggregatePolicy / Liveness · TDD | M1 全綠 + §5.3 mutation 驗證通過 |
 | **M3** hook 管線 | `aura-hook` + plugin + `HookFileSource` | 端到端 wired-gate 綠（真二進位、真檔案、真 FSEvents） |
-| **M4** Menu bar 形態決策 | **同時**做兩個原型：(A) 8 顆迷你 LED 燈條、(B) 單一符號 + 顏色 + 動畫。兩者共用同一份 `IconState`，只換 `IconRenderer` 實作 | persona-tester 對 A/B 打分（含**餘光辨識**與**遠距辨識**項目）→ 依證據選定一個。CPU／重繪率 DoD 達標 + 兩形態截圖 |
+| **M4** Menu bar 形態決策 | **同時**做兩個原型：(A) 8 顆迷你 LED 燈條、(B) 單一符號 + 顏色 + 動畫。兩者共用同一份 `IconState`，只換 `IconDrawing` 實作 | persona-tester 對 A/B 打分（含**餘光辨識**與**遠距辨識**項目）→ 依證據選定一個；E1 實機截圖為必要。CPU／重繪率 DoD 達標 + 兩形態截圖。**已完成，選定 A2**（CPU：idle／done 達標且優於基線；working／waiting／error 與 `main` 同值超標——既有 30 fps 全 view 重繪所致，記為 known gap，見 `docs/superpowers/plans/2026-09-09-m4-icon-form-dod.md`）（8 顆 LED ＋ 不透明底板），決策見 `docs/2026-09-09-m4-ab-decision.md` |
 | **M5** 面板 + 自我健檢 | SwiftUI 詳細面板 + acknowledge + §3.8 死 hook 健檢 | Tier 1 → persona-tester 過門檻；死 hook 偵測 DoD 達標 |
 | **M6** 開源 | 安裝器 · README · 移除流程 · ad-hoc 簽章說明 | 乾淨機器上照 README 從零裝起來能跑 |
 

@@ -15,6 +15,8 @@ public struct IconAppearance: Equatable, Sendable {
     public let targetFPS: Int
     public let attentionCount: Int
     public let liveCount: Int
+    /// 由 `AppearancePolicy` 依 `palette[activity]` 解析出來的顏色（m4）。
+    public let color: RGBA
 
     public var needsAnimation: Bool { targetFPS > 0 }
 }
@@ -29,6 +31,7 @@ public struct IconAppearance: Equatable, Sendable {
 public enum AppearancePolicy {
 
     public static func appearance(for icon: IconState,
+                                 palette: IconPalette = .default,
                                  reduceMotion: Bool = false) -> IconAppearance {
         let (animation, fps) = reduceMotion
             ? (IconAnimation.none, 0)
@@ -37,7 +40,8 @@ public enum AppearancePolicy {
                               animation: animation,
                               targetFPS: fps,
                               attentionCount: icon.attentionCount,
-                              liveCount: icon.liveCount)
+                              liveCount: icon.liveCount,
+                              color: palette[icon.activity])
     }
 
     static func motion(for activity: Activity) -> (IconAnimation, Int) {

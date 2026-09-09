@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Change 1 · m4-icon-form 設計</title>
+<style>
+  :root { --bg:#f5f5f7; --fg:#1d1d1f; --muted:#6e6e73; --card:#fff; --line:#d2d2d7; --accent:#0071e3;
+          --new:#34c759; --mod:#ff9500; --del:#ff3b30; --box:#e8e8ed; --box2:#dfe8f5; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1d1f; --fg:#f5f5f7; --muted:#a1a1a6; --card:#2c2c2e; --line:#3a3a3c;
+            --new:#30d158; --mod:#ff9f0a; --del:#ff453a; --box:#3a3a3c; --box2:#2f3d52; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.65 -apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:32px 20px 80px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  h2 { font-size:18px; margin:44px 0 10px; padding-top:18px; border-top:1px solid var(--line); }
+  h2 small { color:var(--muted); font-weight:500; font-size:12px; margin-left:8px; }
+  h3 { font-size:14px; margin:18px 0 6px; color:var(--muted); font-weight:600; }
+  p { margin:6px 0; } .lead { color:var(--muted); }
+  table { border-collapse:collapse; width:100%; font-size:13px; margin:8px 0 12px; }
+  th,td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  code { font:12px ui-monospace,"SF Mono",Menlo,monospace; background:var(--card); padding:1px 5px; border-radius:4px; }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 14px; overflow-x:auto; font:12px/1.5 ui-monospace,"SF Mono",Menlo,monospace; }
+  .tag { display:inline-block; font-size:11px; padding:0 6px; border-radius:4px; color:#fff; vertical-align:1px; }
+  .tag.new{background:var(--new)} .tag.mod{background:var(--mod)} .tag.del{background:var(--del)}
+  .decision { border-left:3px solid var(--accent); background:var(--card); padding:8px 14px; border-radius:0 8px 8px 0; margin:12px 0; }
+  .ask { font-weight:600; color:var(--accent); margin-top:10px; }
+  svg { max-width:100%; height:auto; display:block; margin:10px 0; }
+  svg text { font:12px -apple-system,"PingFang TC",system-ui,sans-serif; fill:var(--fg); }
+  svg .box { fill:var(--card); stroke:var(--line); stroke-width:1; rx:6; }
+  svg .layer { fill:var(--box); stroke:none; rx:8; opacity:.55; }
+  svg .core { fill:var(--box2); }
+  svg .new { stroke:var(--new); stroke-width:2; } svg .mod { stroke:var(--mod); stroke-width:2; } svg .del { stroke:var(--del); stroke-width:2; stroke-dasharray:4 3; }
+  svg .arrow { stroke:var(--muted); stroke-width:1.4; fill:none; marker-end:url(#m); }
+  svg .mono { font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:11px; }
+  svg .muted { fill:var(--muted); font-size:11px; }
+  .wide { overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Change 1 · <code>change/m4-icon-form</code> 設計</h1>
+  <p class="lead">2026-09-09 · 方案乙的第一個 change。目的：**用證據決定 icon 形態（R5）**，順手修掉今天實測的紅字（working 藍在藍桌布上看不見）。每節末尾有一個問題，回「1 OK / 2 OK…」或「第 N 節：…」。</p>
+    <div class="decision" style="border-left-color:var(--mod)">
+    <b>r2 修訂（2026-09-09 14:40，回應 spec-review-r1）</b>——本頁是使用者逐節核准的 r1 圖版，保留為歷史；
+    <b>權威版本為 <code>docs/superpowers/specs/2026-09-09-m4-icon-form-design.md</code></b>。r2 改了五件事（詳見 .md §11）：
+    ① 底板改<b>不透明</b>、working 預設色改 <code>#50a8ff</code>（r1 參數下 3:1 對 working 數學上不可達）；
+    ② 實機截圖 E1 改回<b>必要</b>（最小 4 張），只有離屏合成圖不得 go；
+    ③ 決策 tie-break 改「最壞背景下的餘光辨識」＋單項硬下限；
+    ④ <code>IconPalette</code> 改 5 欄位 struct，新增 4 條 gate（palette 消費端、曲線來源掃描、寬度、環動核心不動）；
+    ⑤ 正典回寫逐句列舉。
+  </div>
+  <p class="lead">圖例：<span class="tag new">新增</span> <span class="tag mod">修改</span> <span class="tag del">評分後刪除</span></p>
+
+  <!-- ============================================================ -->
+  <h2>1. 目標與範圍</h2>
+  <table>
+    <tr><th>做</th><th>不做（留給 Change 2 或明確排除）</th></tr>
+    <tr><td>
+      <ul style="margin:0;padding-left:18px">
+        <li>調色盤抽象 <code>IconPalette</code>（純資料、只有預設色、無 UI）</li>
+        <li>形態 <b>A2</b>：現有 8 顆 LED ＋ 深色底板</li>
+        <li>形態 <b>B2</b>：6pt 核心 ＋ 14pt 細環的光環點</li>
+        <li>兩個 renderer 共用同一份 <code>IconState → IconAppearance</code>，只換畫法</li>
+        <li>啟動時的隱藏切換鍵（開發用，評分後刪）</li>
+        <li>persona-tester A/B 打分協議 ＋ 決策規則</li>
+        <li>刪輸家；spec §3.6 / §8 更新；CLAUDE.md／README 過時句修正</li>
+      </ul>
+    </td><td>
+      <ul style="margin:0;padding-left:18px">
+        <li>圖例列、點圖例改色、<code>UserDefaults</code> 持久化 → <b>Change 2</b></li>
+        <li>「亮幾顆 = 幾個 session」→ 裁決 #5 否決</li>
+        <li>使用者可切換形態 → 裁決 #1 否決（形態單選）</li>
+        <li>動畫規則調整（R4）→ 不動</li>
+        <li>淺色模式的淺底板變體 → 先不做，等 persona 回饋（§10 風險）</li>
+      </ul>
+    </td></tr>
+  </table>
+  <p class="ask">§1 範圍這樣切 OK？</p>
+
+  <!-- ============================================================ -->
+  <h2>2. 元件切分 <small>誰負責什麼、誰依賴誰</small></h2>
+  <div class="wide">
+  <svg viewBox="0 0 940 400" width="940" height="400" role="img" aria-label="元件圖">
+    <defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+    <!-- layers -->
+    <rect class="layer core" x="10" y="10" width="440" height="380"/>
+    <text x="22" y="32" class="muted">Sources/AuraCore —— 純邏輯，零 AppKit（編譯器 gate）</text>
+    <rect class="layer" x="470" y="10" width="460" height="380"/>
+    <text x="482" y="32" class="muted">Sources/AgentAuraApp —— AppKit</text>
+
+    <!-- core boxes -->
+    <rect class="box" x="30" y="50" width="180" height="46"/>
+    <text x="40" y="70" class="mono">IconState</text><text x="40" y="86" class="muted">activity · counts · liveCount</text>
+
+    <rect class="box new" x="30" y="120" width="180" height="62"/>
+    <text x="40" y="140" class="mono">IconPalette</text><text x="40" y="156" class="muted">[Activity: RGBA]，.default</text><text x="40" y="172" class="muted">RGBA = 4 個 Double，Codable</text>
+
+    <rect class="box mod" x="240" y="50" width="190" height="62"/>
+    <text x="250" y="70" class="mono">AppearancePolicy</text><text x="250" y="86" class="muted">(icon, palette, reduceMotion)</text><text x="250" y="102" class="muted">→ IconAppearance</text>
+
+    <rect class="box mod" x="240" y="136" width="190" height="78"/>
+    <text x="250" y="156" class="mono">IconAppearance</text><text x="250" y="172" class="muted">activity · animation · targetFPS</text><text x="250" y="188" class="muted">attentionCount · liveCount</text><text x="250" y="204" class="mono" fill="var(--new)">+ color: RGBA</text>
+
+    <rect class="box new" x="240" y="238" width="190" height="62"/>
+    <text x="250" y="258" class="mono">AnimationCurve</text><text x="250" y="274" class="muted">alpha(animation, phase)</text><text x="250" y="290" class="muted">從 LEDStripView 搬來，兩 renderer 共用</text>
+
+    <rect class="box" x="30" y="238" width="180" height="46"/>
+    <text x="40" y="258" class="mono">AnimationSchedule</text><text x="40" y="274" class="muted">不動</text>
+
+    <!-- app boxes -->
+    <rect class="box mod" x="490" y="50" width="200" height="78"/>
+    <text x="500" y="70" class="mono">StatusItemController</text><text x="500" y="86" class="muted">NSStatusItem · popover · panel</text><text x="500" y="102" class="muted">依 IconForm 建一個 IconDrawing</text><text x="500" y="118" class="muted">寬度問 view 的 preferredWidth</text>
+
+    <rect class="box new" x="710" y="50" width="200" height="62"/>
+    <text x="720" y="70" class="mono">IconDrawing (protocol)</text><text x="720" y="86" class="muted">update(appearance, phase)</text><text x="720" y="102" class="muted">static preferredWidth</text>
+
+    <rect class="box mod" x="490" y="160" width="200" height="62"/>
+    <text x="500" y="180" class="mono">LEDStripView  ＝ A2</text><text x="500" y="196" class="muted">8 顆 LED ＋ 底板</text><text x="500" y="212" class="muted">顏色改吃 appearance.color</text>
+
+    <rect class="box new" x="710" y="160" width="200" height="62"/>
+    <text x="720" y="180" class="mono">HaloView  ＝ B2</text><text x="720" y="196" class="muted">6pt 核心 ＋ 14pt 環</text><text x="720" y="212" class="muted">環動、核心不動</text>
+
+    <rect class="box del" x="490" y="252" width="200" height="62"/>
+    <text x="500" y="272" class="mono">IconForm</text><text x="500" y="288" class="muted">.ledStrip / .halo</text><text x="500" y="304" class="muted">UserDefaults "AgentAuraIconForm"</text>
+
+    <rect class="box" x="710" y="252" width="200" height="46"/>
+    <text x="720" y="272" class="mono">AnimationDriver</text><text x="720" y="288" class="muted">不動</text>
+
+    <rect class="box" x="490" y="336" width="420" height="40"/>
+    <text x="500" y="356" class="mono">AppDelegate（composition root）</text><text x="760" y="356" class="muted">不動：仍只認 IconRendering</text>
+
+    <!-- arrows -->
+    <path class="arrow" d="M210 73 L238 73"/>
+    <path class="arrow" d="M210 150 L238 90"/>
+    <path class="arrow" d="M335 112 L335 134"/>
+    <path class="arrow" d="M430 175 L488 175"/>
+    <path class="arrow" d="M430 175 Q470 175 470 191 L708 191"/>
+    <path class="arrow" d="M335 238 L335 216" />
+    <path class="arrow" d="M590 128 L590 158"/>
+    <path class="arrow" d="M690 96 L708 96"/>
+    <path class="arrow" d="M810 112 L810 158"/>
+    <path class="arrow" d="M590 252 L590 224"/>
+  </svg>
+  </div>
+  <table>
+    <tr><th>單元</th><th>做什麼</th><th>怎麼用</th><th>依賴</th></tr>
+    <tr><td><code>RGBA</code> / <code>IconPalette</code> <span class="tag new">新</span></td><td>四個狀態各一色 ＋ idle 色；<code>.default</code> 取自 macOS 深色 system palette 的固定值</td><td><code>palette[.waiting]</code></td><td>無</td></tr>
+    <tr><td><code>AppearancePolicy</code> <span class="tag mod">改</span></td><td>多一個 <code>palette</code> 參數（預設 <code>.default</code>），把顏色解析進 <code>IconAppearance.color</code></td><td>既有呼叫點不變（有預設值）</td><td>IconPalette</td></tr>
+    <tr><td><code>AnimationCurve</code> <span class="tag new">新</span></td><td><code>LEDStripView.alpha(for:phase:)</code> 原封搬到 AuraCore</td><td>兩個 view 都呼叫它</td><td>IconAnimation</td></tr>
+    <tr><td><code>IconDrawing</code> <span class="tag new">新</span></td><td>renderer 對「畫」的最小契約：收 appearance＋phase、報寬度</td><td><code>StatusItemController</code> 只認這個</td><td>AppKit</td></tr>
+    <tr><td><code>LEDStripView</code> <span class="tag mod">改</span></td><td>加底板、顏色改吃 <code>appearance.color</code>、conform <code>IconDrawing</code></td><td>—</td><td>IconDrawing</td></tr>
+    <tr><td><code>HaloView</code> <span class="tag new">新</span></td><td>B2 畫法</td><td>—</td><td>IconDrawing</td></tr>
+    <tr><td><code>IconForm</code> <span class="tag del">評後刪</span></td><td>啟動時讀 <code>UserDefaults</code> 決定建哪個 view；預設 <code>.ledStrip</code></td><td><code>defaults write io.agentaura.app AgentAuraIconForm halo</code> 再重啟</td><td>Foundation</td></tr>
+  </table>
+  <div class="decision">
+    <b>兩個設計選擇</b><br>
+    ① 顏色解析放 <code>AppearancePolicy</code>（AuraCore），不放 view：兩個 renderer 不各自查表、顏色邏輯可單元測試、Change 2 換調色盤時 view 一行不用改。<br>
+    ② 預設色是<b>固定 RGBA</b>，不是 <code>NSColor.systemX</code> 的深淺自適應：A2 有底板、背景已固定，自適應沒意義；B2 用深色 palette 值在淺 bar 上也夠亮（mockup §1 淺色那條可對照）。代價：放棄系統色的自動翻轉——這是 R9「簡單」換來的。Change 2 使用者自選色本來就是固定值，兩者一致。
+  </div>
+  <p class="ask">§2 切法與兩個選擇 OK？</p>
+
+  <!-- ============================================================ -->
+  <h2>3. 資料流 <small>從 IconState 到像素，A/B 只在最後一段分岔</small></h2>
+  <div class="wide">
+  <svg viewBox="0 0 940 170" width="940" height="170" role="img" aria-label="資料流">
+    <rect class="box" x="10" y="50" width="120" height="50"/><text x="20" y="72" class="mono">IconState</text><text x="20" y="88" class="muted">PipelineGraph 產出</text>
+    <path class="arrow" d="M130 75 L160 75"/>
+    <rect class="box mod" x="162" y="40" width="170" height="70"/><text x="172" y="62" class="mono">AppearancePolicy</text><text x="172" y="78" class="muted">＋ IconPalette.default</text><text x="172" y="94" class="muted">＋ reduceMotion</text>
+    <path class="arrow" d="M332 75 L362 75"/>
+    <rect class="box mod" x="364" y="40" width="170" height="70"/><text x="374" y="62" class="mono">IconAppearance</text><text x="374" y="78" class="muted">color · animation · fps</text><text x="374" y="94" class="muted">形態無關</text>
+    <path class="arrow" d="M534 75 L564 75"/>
+    <rect class="box" x="566" y="40" width="130" height="70"/><text x="576" y="62" class="mono">AnimationDriver</text><text x="576" y="78" class="muted">phase 0…1</text><text x="576" y="94" class="muted">照 targetFPS 排程</text>
+    <path class="arrow" d="M696 60 L740 30"/><path class="arrow" d="M696 90 L740 120"/>
+    <rect class="box mod" x="742" y="8" width="185" height="46"/><text x="752" y="28" class="mono">LEDStripView (A2)</text><text x="752" y="44" class="muted">底板 → 8 顆 · alpha=AnimationCurve</text>
+    <rect class="box new" x="742" y="98" width="185" height="46"/><text x="752" y="118" class="mono">HaloView (B2)</text><text x="752" y="134" class="muted">核心恆亮 · 環 alpha=AnimationCurve</text>
+    <text x="700" y="160" class="muted">← 分岔點只有這裡；上游任何 gate 兩形態共用</text>
+  </svg>
+  </div>
+  <p>關鍵性質：<b>A/B 的差異被壓到最後一個 view 類別</b>。注意力預算（R4）、聚合（D1）、動畫排程、幀率 DoD 全部在分岔前——所以已有的 31 條純邏輯測試對兩形態同時成立，persona 比的真的只有「形狀」。</p>
+  <p class="ask">§3 OK？</p>
+
+  <!-- ============================================================ -->
+  <h2>4. A2 底板規格</h2>
+  <table>
+    <tr><th>參數</th><th>值</th><th>理由</th></tr>
+    <tr><td>底板矩形</td><td>燈條 bounds 外擴 x 4pt、y 3pt；圓角 5pt</td><td>mockup §2 的比例</td></tr>
+    <tr><td>底板色</td><td>固定 <code>rgba(20,20,22,0.82)</code>，深淺模式一律</td><td>「一律深殼」讓四色永遠疊同一背景；淺模式偏重是已知代價，交 persona 判</td></tr>
+    <tr><td>底板描邊</td><td>0.5pt <code>rgba(255,255,255,0.10)</code></td><td>淺 bar 上邊緣不糊</td></tr>
+    <tr><td>status item 寬度</td><td><code>preferredWidth + 8</code> → 由 view 自報，含底板</td><td>現在寫死 <code>LEDStripView.preferredWidth + 8</code>，改問 <code>IconDrawing</code></td></tr>
+    <tr><td>LED 顏色／alpha</td><td>顏色 = <code>appearance.color</code>；alpha = <code>AnimationCurve.alpha</code></td><td>不再自己 switch activity</td></tr>
+    <tr><td>idle</td><td>LED 用 palette 的 idle 色（極暗灰），底板照畫</td><td>底板恆在，「app 活著」有個錨點；idle 燈近乎不可見維持原設計</td></tr>
+  </table>
+  <p class="ask">§4 OK？（特別是「idle 也畫底板」——另一個選擇是 idle 時整個不畫，menu bar 完全乾淨）</p>
+
+  <!-- ============================================================ -->
+  <h2>5. B2 光環規格</h2>
+  <table>
+    <tr><th>參數</th><th>值</th><th>理由</th></tr>
+    <tr><td>幾何</td><td>外環直徑 14pt、線寬 1.5pt；核心直徑 6pt；同心</td><td>mockup §3 B2</td></tr>
+    <tr><td>顏色</td><td>環與核心同色 = <code>appearance.color</code></td><td>單一訊號</td></tr>
+    <tr><td>動畫</td><td><b>只有環</b>套 <code>AnimationCurve.alpha</code>；核心 alpha 固定 1.0</td><td>餘光抓「環在動」，核心保住「有東西在」；working 的低對比呼吸只在環上，更安靜</td></tr>
+    <tr><td>idle</td><td>環與核心都用 idle 色、alpha 0.35</td><td>與 A2 idle 同等存在感</td></tr>
+    <tr><td>status item 寬度</td><td>14 + 8</td><td>—</td></tr>
+    <tr><td>無底板</td><td>—</td><td>B 的假設是「像素少、像系統 icon」；要底板就沒有存在理由（mockup §3 註）</td></tr>
+  </table>
+  <p class="ask">§5 OK？</p>
+
+  <!-- ============================================================ -->
+  <h2>6. A/B 切換機制 <small>開發期專用</small></h2>
+  <pre>defaults write io.agentaura.app AgentAuraIconForm halo   # 或 led（預設）
+pkill -f AgentAuraApp && open build/AgentAura.app</pre>
+  <ul>
+    <li>只在啟動時讀一次；無 UI、不寫進 INSTALL.md、README 不提</li>
+    <li>評分決定後：刪輸家 view、刪 <code>IconForm</code>、<code>StatusItemController</code> 直接 <code>new</code> 贏家——這是 tasks.md 的最後一個 task，不是「之後再說」</li>
+    <li>不做「兩個 .app」（方案排除：兩份簽章、兩份驗收）；不做面板內切換（裁決 #1）</li>
+  </ul>
+  <p class="ask">§6 OK？</p>
+
+  <!-- ============================================================ -->
+  <h2>7. 打分協議 <small>persona-tester 怎麼比、怎麼決</small></h2>
+  <h3>7.1 證據來源（persona 拿到什麼）</h3>
+  <table>
+    <tr><th>#</th><th>證據</th><th>誰產出</th><th>覆蓋維度</th></tr>
+    <tr><td>E1</td><td><b>實機截圖</b>：兩形態 × {深色＋藍桌布, 淺色＋暖桌布} × {working, done, waiting, error} = 16 張，⌘⇧4 截 menu bar 右側</td><td>你（我用 demo.sh 造狀態、下 <code>defaults</code> 切形態，你按快門）</td><td>對比、違和度、遠距（縮圖看）</td></tr>
+    <tr><td>E2</td><td><b>10 秒螢幕錄影</b>×2：waiting 與 error 各一段，兩形態</td><td>你（⌘⇧5）</td><td>餘光、動畫形狀可分性</td></tr>
+    <tr><td>E3</td><td>mockup HTML（真實動畫時序）</td><td>已有</td><td>補 E2 不足處</td></tr>
+    <tr><td>E4</td><td>round-1 人眼紀錄</td><td>已有（scratchpad → 進 docs）</td><td>基準線</td></tr>
+  </table>
+  <h3>7.2 Persona（3 個並行）</h3>
+  <table>
+    <tr><th>Persona</th><th>權重</th><th>看重</th></tr>
+    <tr><td><b>P1 整夜 pipeline 操作員</b>（R1/R4 的原型使用者：多 agent、餘光掃）</td><td>0.45</td><td>餘光辨識、遠距辨識、working 夠不夠安靜</td></tr>
+    <tr><td><b>P2 色弱使用者</b></td><td>0.30</td><td>不辨色能否分 waiting／error／done；形狀資訊夠不夠</td></tr>
+    <tr><td><b>P3 極簡 menu bar 使用者</b>（Bartender 那種人）</td><td>0.25</td><td>與系統 icon 列協調度、佔寬、「像不像一個 macOS app」</td></tr>
+  </table>
+  <h3>7.3 評分維度（每 persona 對兩形態各打 0–10）</h3>
+  <p>餘光辨識 · 遠距辨識 · 不辨色可分 · 常態安靜 · 系統協調 · 資訊清晰。加權信心指數 = Σ(persona 權重 × persona 平均分)。</p>
+  <h3>7.4 決策規則（寫死，不事後解釋）</h3>
+  <ol>
+    <li>信心指數高者勝</li>
+    <li>差距 &lt; 0.5（10 分制）視為平手 → 取 <b>P2 不辨色可分</b> 高者（可及性優先）</li>
+    <li>仍平手 → 取程式碼較少者（R9）</li>
+    <li>贏家指數 &lt; 6.0 → <b>不選</b>，回 brainstorm（表示兩個都不夠好，可能要 A3/B3）</li>
+  </ol>
+  <p class="ask">§7 OK？特別是 persona 名單與權重、還有第 4 條「兩個都不到 6 就不選」。</p>
+
+  <!-- ============================================================ -->
+  <h2>8. 測試策略 <small>T01 先行：對抗式 double ＋ composition smoke</small></h2>
+  <table>
+    <tr><th>Gate</th><th>層</th><th>守什麼</th><th>Mutation（改壞 → 幾秒內紅）</th></tr>
+    <tr><td><code>paletteCoversEveryActivity</code></td><td>AuraCore</td><td><code>IconPalette.default</code> 對 <code>Activity.allCases</code> 每一個都有值——從型別推導，不列舉</td><td>刪掉 default 裡一個 key → &lt;1s</td></tr>
+    <tr><td><code>appearanceCarriesPaletteColor</code></td><td>AuraCore</td><td>對每個 activity，<code>appearance.color == palette[activity]</code>；換一個非預設 palette 也成立</td><td><code>AppearancePolicy</code> 寫死回 default → &lt;1s</td></tr>
+    <tr><td><code>animationCurveBoundaries</code></td><td>AuraCore</td><td>phase 0／0.5／1 的 alpha；double blink 的四個窗口邊界；breathe 對稱</td><td>改 0.14 → 0.15 → &lt;1s（這段從 view 搬出來的唯一理由就是讓它可測）</td></tr>
+    <tr><td><code>renderersDrawEveryActivityWithoutCrash</code></td><td>App</td><td>兩個 view 對 5 個 activity × phase {0, .5} 離屏繪製到 <code>NSBitmapImageRep</code>，無 crash、有非透明像素</td><td>view 的 draw 提早 return → &lt;2s</td></tr>
+    <tr><td><b><code>plateGuaranteesContrast</code></b>（對抗式）</td><td>App</td><td>A2 離屏繪製，取 LED 中心像素與底板像素，WCAG 相對亮度對比 <b>≥ 3:1</b>，四色都要——這條直接對應今天的紅字</td><td>底板 alpha 改 0.0 → 藍色那組紅 &lt;2s</td></tr>
+    <tr><td><code>iconFormSelectionIsWired</code></td><td>App smoke</td><td>設 <code>UserDefaults</code> 為 halo → <code>StatusItemController</code> 建的是 <code>HaloView</code>；設 led → <code>LEDStripView</code>。<b>tested ≠ wired</b> 的守門</td><td><code>IconForm</code> 讀完不用 → &lt;2s</td></tr>
+    <tr><td>既有 31 條 R4 測試</td><td>AuraCore</td><td>不動、必須繼續綠</td><td>—</td></tr>
+    <tr><td>既有 isolation gate</td><td>—</td><td><code>RGBA</code>／<code>IconPalette</code>／<code>AnimationCurve</code> 不得載入 AppKit——編譯器 gate 自動涵蓋新檔</td><td>已有</td></tr>
+  </table>
+  <div class="decision">
+    <b>去相關化</b>：<code>plateGuaranteesContrast</code> 是這個 change 唯一「語意不同於樂於配合 fixture」的關卡——它不問「有沒有畫」，問「畫出來看得見嗎」，用數字（3:1）取代肉眼。刪輸家的 task 要一併刪它對應的 view 測試，並確認贏家的測試仍在。
+  </div>
+  <p class="ask">§8 OK？</p>
+
+  <!-- ============================================================ -->
+  <h2>9. DoD <small>可量測</small></h2>
+  <table>
+    <tr><th>項目</th><th>門檻</th><th>量法</th></tr>
+    <tr><td>A2 對比</td><td>四色 vs 底板 ≥ 3:1</td><td><code>plateGuaranteesContrast</code></td></tr>
+    <tr><td>CPU（兩形態各量）</td><td>idle／done &lt;0.1% · working &lt;0.3% · waiting／error &lt;1.5%</td><td><code>top -pid</code> 60s，demo.sh 造狀態</td></tr>
+    <tr><td>幀率</td><td>不變：0 / ≤10 / ≥30</td><td>既有測試</td></tr>
+    <tr><td>RSS</td><td>&lt; 60 MB（不變）</td><td>Activity Monitor／<code>ps -o rss</code></td></tr>
+    <tr><td>執行檔增量</td><td>&lt; +150 KB（universal）</td><td><code>ls -l</code> 前後</td></tr>
+    <tr><td>persona</td><td>贏家信心指數 ≥ 6.0，決策依 §7.4</td><td>persona-tester 報告</td></tr>
+    <tr><td>行數</td><td>Sources 每檔 ≤ 200</td><td>既有 gate</td></tr>
+    <tr><td>AuraCore 覆蓋率</td><td>≥ 90%</td><td><code>--enable-code-coverage</code></td></tr>
+    <tr><td>輸家已刪</td><td>repo 內 grep 不到輸家類名與 <code>AgentAuraIconForm</code></td><td>tasks 最後一條的驗收</td></tr>
+  </table>
+  <p class="ask">§9 OK？</p>
+
+  <!-- ============================================================ -->
+  <h2>10. 檔案佈局、spec 修訂、風險</h2>
+  <pre>Sources/AuraCore/IconPalette.swift        <span class="tag new">新</span>  RGBA + IconPalette + .default（~50 行）
+Sources/AuraCore/AnimationCurve.swift     <span class="tag new">新</span>  alpha(for:phase:)（~25 行）
+Sources/AuraCore/IconAppearance.swift     <span class="tag mod">改</span>  + color；AppearancePolicy 多 palette 參數
+Sources/AgentAuraApp/IconDrawing.swift    <span class="tag new">新</span>  protocol + IconForm（IconForm 部分評後刪）
+Sources/AgentAuraApp/LEDStripView.swift   <span class="tag mod">改</span>  底板、吃 color、conform
+Sources/AgentAuraApp/HaloView.swift       <span class="tag new">新</span>  B2（~70 行）
+Sources/AgentAuraApp/StatusItemController.swift <span class="tag mod">改</span>  依 IconForm 建 view、寬度問 view
+Tests/AuraCoreTests/IconPaletteTests.swift / AnimationCurveTests.swift  <span class="tag new">新</span>
+Tests/AgentAuraAppTests/RendererPixelTests.swift  <span class="tag new">新</span>  離屏繪製 + 對比
+Tests/AgentAuraAppTests/CompositionSmokeTests.swift <span class="tag mod">改</span>  + iconFormSelectionIsWired
+docs/superpowers/specs/2026-09-08-agentaura-design.md <span class="tag mod">改</span>  §0 加 R7–R9、§3.6 形態定案、§8 M4 列
+docs/2026-09-09-m4-round1-human-eye.md    <span class="tag new">新</span>  scratchpad 那份進版控（證據 E4）
+CLAUDE.md · README.md                     <span class="tag mod">改</span>  「PR #2 待 merge」→ 已 merge；M4 狀態</pre>
+  <h3>Migration</h3>
+  <p>無持久資料。<code>AgentAuraIconForm</code> 是開發期 key，最後一個 task 連同 <code>defaults delete</code> 指令一起清；不留給使用者。</p>
+  <h3>風險</h3>
+  <table>
+    <tr><th>風險</th><th>緩解</th></tr>
+    <tr><td>淺色模式深底板太重，P3 打低分</td><td>先接受；若 A2 因此輸給 B2，決策仍成立（那正是證據）。若 A2 贏但 P3 單項 &lt;5，開 A2-light 微調 task</td></tr>
+    <tr><td>B2 14pt 在 22pt bar 內偏大</td><td>截圖階段若明顯，改 12pt 重截一次，不算另一輪</td></tr>
+    <tr><td>兩個都不到 6.0</td><td>§7.4 第 4 條：不選、回 brainstorm，不硬選</td></tr>
+    <tr><td>persona 對「動畫」只能看錄影，感受打折</td><td>E2 錄影 ＋ E3 mockup 雙源；round-1 你的親眼紀錄當基準線校正</td></tr>
+  </table>
+  <p class="ask">§10 OK？全部 OK 我就寫 spec 檔（<code>docs/superpowers/specs/2026-09-09-m4-icon-form-design.md</code>）、開 <code>change/m4-icon-form</code> branch commit 進去、再進 tasks。</p>
+</main>
+</body>
+</html>

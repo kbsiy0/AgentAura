@@ -19,19 +19,35 @@ protocol IconRendering: AnyObject {
     var onOpen: (() -> Void)? { get set }
 }
 
-/// 擁有 `NSStatusItem`，把 `IconAppearance` 交給 view 畫。
+/// 擁有 `NSStatusItem`，把 `IconAppearance` 交給 `drawing` 畫。
+///
+/// `drawing` 型別是 `any IconDrawing`，但只有一個 conformer（`LEDStripView`，A2 定案
+/// 於 `docs/2026-09-09-m4-ab-decision.md`）——protocol 仍在是因為 composition-root
+/// smoke 與像素 gate 經 `@testable import` 讀 `drawing` 斷言接線與繪製；protocol 的存在理由是 controller 不綁死 view 型別（spec §2）。
 @MainActor
 final class StatusItemController: IconRendering {
     private let item: NSStatusItem
-    private let strip = LEDStripView()
+    let drawing: any IconDrawing
 
     init() {
-        item = NSStatusBar.system.statusItem(withLength: LEDStripView.preferredWidth + 8)
-        strip.frame = NSRect(x: 4, y: 0,
-                             width: LEDStripView.preferredWidth,
-                             height: item.statusBar?.thickness ?? 22)
-        item.button?.addSubview(strip)
+        item = NSStatusBar.system.statusItem(withLength: 0)
+        let view = LEDStripView()
+        drawing = view
+        item.length = drawing.preferredWidth + 8
+        view.frame = NSRect(x: 4, y: 0,
+                            width: drawing.preferredWidth,
+                            height: NSStatusBar.system.thickness)
+        item.button?.addSubview(view)
         item.button?.toolTip = "AgentAura"
+    }
+
+    /// 測試讀取用（`statusItemWidthFollowsRenderer`）。
+    var statusItemLength: CGFloat { item.length }
+
+    /// 測試 teardown 用；生產 controller 活到 app 結束，不需要呼叫。
+    /// 不用 `deinit`——nonisolated deinit 碰非 Sendable 的 `NSStatusItem` 在 Swift 6 編不過。
+    func removeFromStatusBar() {
+        NSStatusBar.system.removeStatusItem(item)
     }
 
     private let popover = NSPopover()
@@ -62,7 +78,7 @@ final class StatusItemController: IconRendering {
     var isVisible: Bool { item.isVisible }
 
     func apply(_ appearance: IconAppearance, phase: Double) {
-        strip.update(appearance, phase: phase)
+        drawing.update(appearance, phase: phase)
         item.button?.toolTip = Self.tooltip(for: appearance)
     }
 

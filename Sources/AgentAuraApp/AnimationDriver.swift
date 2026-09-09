@@ -60,21 +60,13 @@ final class AnimationDriver {
         onFrame(appearance, 0)
 
         guard let interval = AnimationSchedule.interval(for: icon, in: env) else { return }
-        let period = Self.period(of: appearance.animation) ?? 1.0
+        let period = AnimationCurve.period(of: appearance.animation) ?? 1.0
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.phase = (self.phase + interval / period).truncatingRemainder(dividingBy: 1)
                 self.onFrame(appearance, self.phase)
             }
-        }
-    }
-
-    static func period(of animation: IconAnimation) -> Double? {
-        switch animation {
-        case .none: return nil
-        case .breathe(let p, _, _): return p
-        case .doubleBlink(let p): return p
         }
     }
 }
