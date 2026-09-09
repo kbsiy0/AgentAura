@@ -245,4 +245,26 @@ enum Gate {
     /// （實測：不加 `-I` 的 probe 不會產生它，加了才會）。把它列在這裡是
     /// 一個**明確且極小**的例外，不是「反正多出來的都放行」。
     static let compilerInternalModules: Set<String> = ["SwiftOnoneSupport"]
+
+    /// manifest 宣告的 macOS 最低版本（`"13.0"`），沒有宣告則回 nil。
+    static func macOSPlatformVersion() throws -> String? {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aura-dump-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["swift", "package", "--scratch-path", scratch.path, "dump-package"]
+        task.currentDirectoryURL = repoRoot()
+        let pipe = Pipe(); task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+        try task.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+        guard task.terminationStatus == 0,
+              let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw GateFailure("dump-package 讀不到平台宣告 —— gate 無法作答")
+        }
+        let platforms = (obj["platforms"] as? [[String: Any]]) ?? []
+        return platforms.first { ($0["platformName"] as? String) == "macos" }?["version"] as? String
+    }
 }

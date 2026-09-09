@@ -1,10 +1,22 @@
+// Sources/AgentAuraApp/StatusItemController.swift
 import AppKit
-import SwiftUI
+import SwiftUI      // NSHostingController
 import AuraCore
 
+/// `AppDelegate` 依賴的選單列介面。
+///
+/// **這個 protocol 存在的理由是可測性，不是抽象癖。** spec §5.2 要求一條
+/// composition-root smoke：「`StatusItemController` **真的**收到 `IconState` 更新
+/// （spy 斷言呼叫確實發生，不是被 catch-all 吞掉）」。沒有這個縫，
+/// `AppDelegate` 就無法被注入 spy —— 而最終 review 實測：把 `graph.start()`
+/// 與 liveness timer 整段註解掉（產品完全不動），220/220 全綠。
 @MainActor
 protocol IconRendering: AnyObject {
     func apply(_ appearance: IconAppearance, phase: Double)
+    var isVisible: Bool { get }
+    func attachPopover()
+    func setPanel(title: String, rows: [PanelRow])
+    var onOpen: (() -> Void)? { get set }
 }
 
 /// 擁有 `NSStatusItem`，把 `IconAppearance` 交給 view 畫。

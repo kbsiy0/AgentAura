@@ -10,6 +10,10 @@ let package = Package(
         .executableTarget(name: "aura-hook", dependencies: ["AuraCore", "AuraHookFile"]),
         .executableTarget(name: "AgentAuraApp", dependencies: ["AuraCore", "AuraHookFile"]),
         .testTarget(
+            name: "AgentAuraAppTests",
+            dependencies: ["AgentAuraApp", "AuraCore", "AuraHookFile"]
+        ),
+        .testTarget(
             name: "AuraCoreTests",
             dependencies: ["AuraCore", "AuraHookFile"],
             resources: [.copy("Fixtures")]

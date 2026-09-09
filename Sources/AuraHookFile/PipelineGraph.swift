@@ -79,7 +79,20 @@ public final class PipelineGraph: @unchecked Sendable {
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
         for id in ids {
+            // **解析失敗與檔案不存在必須分開。**
+            //
+            // `SnapshotIO.read` 對「檔案不存在」與「內容解析失敗」回同一個 nil
+            // （`garbageFileReturnsNil` / `truncatedFileReturnsNil` 正是在釘死後者）。
+            // spec §3.3 / §4 第 3 列：「解析失敗時保留上一次已知狀態並重試，
+            // **絕不當成 session 不存在**」。`HookFileSource.emit` 做對了，
+            // 這條路徑先前做反了 —— `aura-hook` 若在 truncate 與 write 之間被
+            // SIGKILL，磁碟上留下永久損壞的檔，5 秒後這裡就會把一個**真的在等你
+            // 批准**的 session 移除，而使用者還沒回答 → 不會再有事件重建它 →
+            // 橘燈永久熄滅。
+            let fileExists = (try? SnapshotIO.url(for: id, root: root))
+                .map { FileManager.default.fileExists(atPath: $0.path) } ?? false
             guard let snap = SnapshotIO.read(sessionID: id, root: root) else {
+                guard !fileExists else { continue }   // 解析失敗 → 保留舊狀態，下一輪重試
                 // 檔案已不存在。檔案是狀態的唯一真實來源，沒有檔案就沒有 session。
                 // 若該 session 其實還活著，下一個 hook 事件會重建它。
                 // 不處理這條會讓外部刪檔（rm ~/.agentaura/sessions/*）後

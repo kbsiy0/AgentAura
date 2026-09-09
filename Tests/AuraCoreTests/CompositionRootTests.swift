@@ -116,4 +116,57 @@ struct CompositionRootTests {
         #expect(g.iconState.activity == .idle,
                 "terminal 被強制關掉、SessionEnd 沒來 → 不得永遠卡 working")
     }
+
+    /// **解析失敗 ≠ 檔案不存在**（spec §3.3 / §4 第 3 列）。
+    ///
+    /// `aura-hook` 若在 `truncate(0)` 與 `write` 之間被 SIGKILL（睡眠、OOM、
+    /// 強制關 terminal），磁碟上會留下**永久損壞**的檔。若 `refreshLiveness`
+    /// 把它當成「檔案不存在」而移除 session，一個**真的在等你批准**的
+    /// session 就會從面板消失 —— 而使用者還沒回答，不會再有任何 hook 事件
+    /// 把它重建回來（§2.4.1 實測：按 Deny 不產生事件）。橘燈永久熄滅。
+    @Test("狀態檔損壞時保留上次已知狀態，不得當成 session 不存在")
+    func refreshLivenessKeepsStateOnParseFailure() throws {
+        let root = try makeRoot()
+        try SnapshotIO.update(sessionID: "wait1", root: root) { _ in
+            var s = SessionSnapshot(sessionID: "wait1")
+            s.mainActivity = .waiting
+            s.pid = getpid(); s.pidStartedAt = SysctlLiveness().startTime(ofPID: getpid())
+            s.writtenAt = Date(); return s
+        }
+        let g = PipelineGraph.production(root: root)
+        g.start(); defer { g.stop() }
+        #expect(g.iconState.activity == .waiting)
+
+        // 模擬被 SIGKILL 打斷的寫入：檔案還在，但內容是半截的
+        let url = try SnapshotIO.url(for: "wait1", root: root)
+        let full = try Data(contentsOf: url)
+        try full.prefix(full.count / 2).write(to: url)
+        #expect(SnapshotIO.read(sessionID: "wait1", root: root) == nil, "前提：損壞檔應讀不出來")
+
+        g.refreshLiveness()
+        #expect(g.iconState.activity == .waiting, """
+            損壞的檔被當成「session 不存在」而移除了。
+            spec §3.3 / §4 第 3 列：解析失敗時保留上一次已知狀態並重試，
+            絕不當成 session 不存在。使用者還在等你批准，而橘燈熄了。
+            """)
+    }
+
+    /// 對照組：檔案**真的**不存在時仍然要移除（否則會留下幽靈 session）。
+    @Test("檔案真的不存在時仍然移除 —— 兩種情況必須分開")
+    func refreshLivenessStillRemovesMissingFiles() throws {
+        let root = try makeRoot()
+        try SnapshotIO.update(sessionID: "gone2", root: root) { _ in
+            var s = SessionSnapshot(sessionID: "gone2")
+            s.mainActivity = .waiting
+            s.pid = getpid(); s.pidStartedAt = SysctlLiveness().startTime(ofPID: getpid())
+            s.writtenAt = Date(); return s
+        }
+        let g = PipelineGraph.production(root: root)
+        g.start(); defer { g.stop() }
+        #expect(g.iconState.activity == .waiting)
+
+        try SnapshotIO.delete(sessionID: "gone2", root: root)
+        g.refreshLiveness()
+        #expect(g.iconState.activity == .idle, "檔案消失 → 不得留下幽靈 session")
+    }
 }

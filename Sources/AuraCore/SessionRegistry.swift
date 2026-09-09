@@ -19,7 +19,14 @@ public struct SessionRegistry: Sendable {
         }
         states[s.id] = s
         if s.liveness == .ended, acknowledged.contains(s.id) {
-            states[s.id] = nil                  // 已看過又已結束 → 直接清掉
+            // 已看過又已結束 → 直接清掉。**兩個表都要清。**
+            //
+            // 只清 `states` 會讓 id 永遠留在 `acknowledged` 裡：`refreshLiveness`
+            // 只走訪 `states.keys`，所以它再也不會被 `remove(_:)` 掃到。之後同一個
+            // id（`claude --resume` 會沿用）若第一個被觀察到的 snapshot 已是
+            // `.ended`，這一行會**再次**把它刪掉 —— 而且救不回來，因為上面撤銷
+            // 確認的分支需要 `states[s.id]` 非 nil。使用者永遠看不到那個結果。
+            remove(s.id)
         }
     }
 
@@ -37,7 +44,7 @@ public struct SessionRegistry: Sendable {
     public mutating func acknowledgeAll() -> [String] {
         acknowledged.formUnion(states.keys)
         let removable = states.values.filter { $0.liveness == .ended }.map(\.id)
-        for id in removable { states[id] = nil }
+        for id in removable { remove(id) }      // 兩個表都清 —— 呼叫端接著會刪檔
         return removable
     }
 

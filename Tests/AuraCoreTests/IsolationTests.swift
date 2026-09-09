@@ -149,18 +149,31 @@ struct IsolationTests {
         }
     }
 
-    /// 編譯器 gate 用單獨的 `swiftc` 跑，前提是 AuraCore 沒有 target dependency（否則
-    /// 要補 `-I`）。把前提釘在 manifest 上：一旦長出依賴或平台版本調動，這個測試要紅在
-    /// 「請補 -I／同步 triple」，而不是讓 gate 安靜地編不動。字串比對對排版敏感，但
-    /// 敏感的方向是安全的（改格式會紅，不會靜默放行）。
-    @Test("Package.swift 仍撐得住編譯器 gate 的假設")
+    /// 把編譯器 gate 的前提釘在 **manifest 的結構**上，而不是它的原始文字。
+    ///
+    /// 先前這條比對 `Package.swift` 的字串（`.target(name: "AuraCore"),`）——
+    /// 對排版敏感（多一個空格、換行位置變了就失準），而且答不出依賴關係。
+    /// `swift package dump-package` 給的是 SwiftPM 自己解析出來的結構，那才是契約。
+    ///
+    /// 註：`Gate.packageTargets()` 用 `--scratch-path` 開自己的暫存目錄 ——
+    /// 從 `swift test` 的子行程跑預設 `.build` 會撞上 SwiftPM 的 package lock 而死結。
+    @Test("Package.swift 的結構仍撐得住編譯器 gate 的假設")
     func manifestPinsGateAssumptions() throws {
-        let manifest = try String(contentsOf: Gate.repoRoot().appendingPathComponent("Package.swift"),
-                                  encoding: .utf8)
-        #expect(manifest.contains(#".target(name: "AuraCore"),"#),
-                "AuraCore 有了 target dependency：gate 的 swiftc 需要對應的 -I 路徑")
-        #expect(manifest.contains(".macOS(.v13)"),
-                "平台最低版本變了：請同步 IsolationTests.gateTarget")
+        let targets = try Gate.packageTargets()
+        let core = try #require(targets.first { $0.name == "AuraCore" }, "找不到 AuraCore target")
+        #expect(core.dependencies.isEmpty,
+                "AuraCore 有了 target dependency \(core.dependencies) —— gate 的 swiftc 需要對應的 -I 路徑")
+
+        // `try` 必須在 `#require` 之外求值 —— 巨集展開會把引數包進 autoclosure，
+        // 裡面的 try 會變成「call can throw, but it is not marked with 'try'」。
+        let declared = try Gate.macOSPlatformVersion()
+        let version = try #require(declared, "manifest 沒有宣告 macOS 平台")
+        // triple 寫 `macos13`，manifest 寫 `13.0` —— 格式不同，比對主版本號。
+        let major = version.split(separator: ".").first.map(String.init) ?? version
+        #expect(Gate.gateTarget.hasSuffix("-macos\(major)"), """
+            manifest 的 macOS 最低版本是 \(version)，但 gateTarget 是 \(Gate.gateTarget)。
+            兩者必須同步，否則 gate 用的 SDK 版本與實際建置不一致。
+            """)
     }
 
     // MARK: - 檔案長度

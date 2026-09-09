@@ -73,16 +73,30 @@ struct SessionRegistryTests {
         #expect(r.visible.isEmpty, "跑到一半被砍掉、沒有結果可看 → 不需要佔用注意力")
     }
 
-    @Test("acknowledgeAll 一次確認全部未確認的，不論是否可見")
+    /// `acknowledgeAll` 對**還活著**的 session 留下「已確認」標記；
+    /// 對**已結束**的直接整筆移除（回傳的 id 由呼叫端刪檔）。
+    ///
+    /// 這條先前斷言 `isAcknowledged("a")` / `isAcknowledged("b")`——
+    /// 而 a / b 是已結束、會被移除的 session。那等於在斷言
+    /// 「移除之後 `acknowledged` 仍留著它們」，也就是把**洩漏當成契約**。
+    /// 對一個已經不存在、檔案也被刪掉的 id 問「確認過了嗎」沒有意義。
+    /// 改成斷言真正的結果（移除 + 不留痕跡 + 活著的有標記），比原本更強。
+    @Test("acknowledgeAll：活著的留標記，已結束的整筆移除且不留痕跡")
     func acknowledgeAllMarksEverything() {
         var r = SessionRegistry()
         r.upsert(state("a", .error, live: false))
         r.upsert(state("b", .done, live: false))
         r.upsert(state("c", .waiting))
-        _ = r.acknowledgeAll()
-        #expect(r.isAcknowledged("a"))
-        #expect(r.isAcknowledged("b"))
-        #expect(r.isAcknowledged("c"))
+        let removable = r.acknowledgeAll()
+
+        #expect(Set(removable) == ["a", "b"], "已結束的才需要刪檔")
+        for id in ["a", "b"] {
+            #expect(r.states[id] == nil, "\(id) 應已從 states 移除")
+            #expect(!r.isAcknowledged(id), "\(id) 也應從 acknowledged 移除 —— 否則就是洩漏")
+        }
+        #expect(r.states["c"] != nil, "還活著的不移除")
+        #expect(r.isAcknowledged("c"), "還活著的留下已確認標記")
+        #expect(r.visible.map(\.id) == ["c"], "確認後只剩活著的那個")
     }
 
     @Test("acknowledgeAll 回傳「已結束且已確認」的 id，供刪檔")
@@ -185,5 +199,53 @@ struct SessionRegistryTests {
         _ = r.acknowledgeAll()
         r.upsert(state("a", .done, live: false))     // 同時戳 → 不撤銷確認
         #expect(r.states["a"] == nil, "已看過又已結束 → 立即清掉，不等下一次 acknowledgeAll")
+    }
+
+    // MARK: - acknowledged 的回收（最終 review 的 C1）
+
+    /// `acknowledged` 必須跟著 `states` 一起回收。
+    ///
+    /// 只清 `states` 會讓 id 永遠留在 `acknowledged` 裡 —— `refreshLiveness` 只走訪
+    /// `states.keys`，所以它再也不會被 `remove(_:)` 掃到。
+    @Test("acknowledgeAll 移除已結束的 session 時，acknowledged 也要清掉")
+    func acknowledgeAllReclaimsAcknowledged() {
+        var r = SessionRegistry()
+        r.upsert(state("a", .done, live: false))
+        _ = r.acknowledgeAll()
+        #expect(r.states["a"] == nil)
+        #expect(!r.isAcknowledged("a"), "states 清了但 acknowledged 留著 —— 這就是洩漏")
+    }
+
+    @Test("upsert 的立即清除路徑，acknowledged 也要清掉")
+    func inlineRemovalReclaimsAcknowledged() {
+        var r = SessionRegistry()
+        r.upsert(state("a", .done))          // 活著
+        _ = r.acknowledgeAll()               // 看過了（活著，所以留在 states）
+        #expect(r.isAcknowledged("a"))
+        r.upsert(state("a", .done, live: false))   // 同時戳結束 → 立即清除
+        #expect(r.states["a"] == nil)
+        #expect(!r.isAcknowledged("a"), "states 清了但 acknowledged 留著 —— 這就是洩漏")
+    }
+
+    /// **回訪 session 的新結果不得被靜默吞掉。**
+    ///
+    /// `claude --resume` 會沿用同一個 session_id。若上一輪已被 ack 並移出 `states`，
+    /// 而 `acknowledged` 還留著，那麼這一輪的**第一個**被觀察到的 snapshot 若已是
+    /// `.ended`（事件被 FSEvents 合併、或 crash 得很快），`upsert` 會直接刪掉它 ——
+    /// 而且救不回來，因為撤銷確認的分支需要 `states[id]` 非 nil。
+    /// 整夜 pipeline 失敗、早上看過、下午 resume 又失敗 → **紅燈從來沒亮過**。
+    @Test("回訪的 session 若一開始就是已結束，結果仍必須被看見")
+    func revisitedSessionResultIsNotSwallowed() {
+        var r = SessionRegistry()
+        r.upsert(state("a", .error))         // 第一輪，活著
+        _ = r.acknowledgeAll()               // 使用者看過
+        r.upsert(state("a", .error, live: false))   // 第一輪結束 → 立即清除
+
+        // 第二輪（resume 同一個 id），只觀察到最終的已結束檔
+        r.upsert(state("a", .error, live: false, at: 1_788_700_000))
+        #expect(r.visible.map(\.id) == ["a"], """
+            回訪 session 的新結果被吞掉了。
+            acknowledged 沒有跟著 states 一起回收，於是這個 id 永遠帶著「已看過」的標記。
+            """)
     }
 }
