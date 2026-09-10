@@ -58,7 +58,7 @@ public final class PipelineGraph: @unchecked Sendable {
         source.stop()
     }
 
-    /// 面板開啟：確認全部，並刪除已結束且已確認的狀態檔。
+    /// 面板**關閉**（`NSPopover` didClose）：確認全部，並刪除已結束且已確認的狀態檔。開啟路徑不得呼叫（S1-3）。
     public func acknowledgeAll() {
         lock.lock()
         let removable = registry.acknowledgeAll()

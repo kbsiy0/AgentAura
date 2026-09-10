@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         status.attachPopover()
-        status.onOpen = { [weak self] in
+        status.onClose = { [weak self] in
             guard let self else { return }
             self.graph.acknowledgeAll()
             self.refreshPanel()

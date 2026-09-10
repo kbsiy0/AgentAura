@@ -53,6 +53,33 @@ struct PanelViewModelTests {
         #expect(rows.map { $0.id } == ["alive", "ended"], "活著的優先，即使它更久沒動")
     }
 
+    // ---- 副行整行（S1-B：「已結束」在行首）----
+
+    @Test("已結束的列：副行以「已結束 · 」起頭，後接 detail 與相對時間")
+    func endedFooterLeadsWithEnded() {
+        let rows = PanelViewModel.rows(from: [state("e", .done, turnStart: 192, updated: 120, live: false)], now: now)
+        let f = rows[0].footer
+        #expect(f.hasPrefix("已結束 · "), "「已結束」是唯一的存活訊號，要在行首，實際：\(f)")
+        #expect(!rows[0].detail.isEmpty && f.contains(rows[0].detail), "行首之後要有 detail，實際：\(f)")
+        #expect(f.hasSuffix(rows[0].relativeTime), "最後是相對時間，實際：\(f)")
+    }
+
+    @Test("已結束但沒有 detail：不留懸空分隔符")
+    func endedFooterWithoutDetail() {
+        let rows = PanelViewModel.rows(from: [state("e", .done, updated: 120, live: false)], now: now)
+        #expect(rows[0].detail.isEmpty, "前提：無本輪、無 subagent、無失敗 → detail 空，實際：\(rows[0].detail)")
+        #expect(rows[0].footer == "已結束 · \(rows[0].relativeTime)", "實際：\(rows[0].footer)")
+    }
+
+    @Test("活著的列副行不含「已結束」；活著且無 detail 時整行空（view 不畫，既有行為）")
+    func aliveFooter() {
+        let rows = PanelViewModel.rows(from: [state("a", .working, turnStart: 30), state("b", .working)], now: now)
+        let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        let a = byID["a"]!, b = byID["b"]!
+        #expect(!a.footer.contains("已結束") && a.footer.hasPrefix(a.detail), "實際：\(a.footer)")
+        #expect(b.detail.isEmpty && b.footer.isEmpty, "活著且無 detail 不畫副行，實際 detail「\(b.detail)」footer「\(b.footer)」")
+    }
+
     // ---- 內容 ----
 
     @Test("waiting 的主行說出在等什麼，不只是 tool 名")

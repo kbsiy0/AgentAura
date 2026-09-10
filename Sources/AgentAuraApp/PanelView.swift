@@ -63,9 +63,10 @@ struct PanelRowView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(row.activity == .error ? .red : .primary)
                     .lineLimit(1).truncationMode(.middle)
-                if !row.detail.isEmpty || row.isEnded {
-                    Text([row.detail, row.isEnded ? "已結束 · \(row.relativeTime)" : row.relativeTime]
-                            .filter { !$0.isEmpty }.joined(separator: " · "))
+                // 副行字串由 model 拼（`PanelRow.footer`，「已結束」在行首）；view 不得自己拼——
+                // `AppLayerSourceScanTests.panelFooterComesFromModel` 守這條。
+                if !row.footer.isEmpty {
+                    Text(row.footer)
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }

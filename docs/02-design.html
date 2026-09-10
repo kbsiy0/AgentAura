@@ -265,7 +265,7 @@
 
       <rect x="706" y="128" width="208" height="50" rx="7" fill="#fff" fill-opacity=".04" stroke="#c4c2b9" stroke-width="1.3"/>
       <text x="810" y="148" text-anchor="middle" fill="#55585e" font-size="11" font-weight="700">PanelView (SwiftUI)</text>
-      <text x="810" y="163" text-anchor="middle" fill="#8a8e96" font-size="9">開啟即 acknowledge</text>
+      <text x="810" y="163" text-anchor="middle" fill="#8a8e96" font-size="9">關閉即 acknowledge</text>
     </g>
     <g fill="none" stroke="#8a8e96" stroke-width="1.4" color="#8a8e96" marker-end="url(#m2)">
       <line x1="194" y1="88" x2="252" y2="90"/>
@@ -368,7 +368,7 @@ protocol IconRenderer    { func render(_ s: IconState) }
       <div class="t3">2h 14m 前 · 未確認</div>
     </div>
   </div>
-  <div class="pf">打開面板即確認 · 尾巴清空</div>
+  <div class="pf">關面板即確認 · 尾巴清空</div>
 </div>
 <p>排序：<span class="kv">error → waiting → working → done</span>（與聚合優先序一致），同組內最近活動優先。已結束但未確認的保留在各組下半部，打開面板就清掉。</p>
 
@@ -487,8 +487,8 @@ protocol IconRenderer    { func render(_ s: IconState) }
 <ol>
   <li><b>聚合優先序 = <code>error &gt; waiting &gt; working &gt; done &gt; idle</code></b><br>
   <span style="color:var(--ink-3);font-size:.9rem">使用者裁決（未採用我建議的 waiting 優先）：紅色絕對優先，最不易錯過。實作為 <code>Activity</code> enum 的 rawValue 順序 + 對應 mutation 測試。面板排序同步跟進。</span></li>
-  <li><b>打開面板即 acknowledge</b><br>
-  <span style="color:var(--ink-3);font-size:.9rem">面板開啟瞬間，registry 中所有未確認 session 一律標為已確認（不論是否可見）。已結束且已確認者移出 registry 並刪檔。</span></li>
+  <li><b>看過面板即 acknowledge——在關閉時</b><br>
+  <span style="color:var(--ink-3);font-size:.9rem">面板<b>關閉</b>瞬間（didClose），registry 中所有未確認 session 一律標為已確認（不論是否可見）。已結束且已確認者移出 registry 並刪檔。開啟時不動——否則已結束的列在畫出前就被移掉（2026-09-10 實測，S1-3）。</span></li>
   <li><b>設計核准，已寫成 spec</b><br>
   <span style="color:var(--ink-3);font-size:.9rem"><code>docs/superpowers/specs/2026-09-08-agentaura-design.md</code> 為正典；本文件為討論呈現記錄。</span></li>
 </ol>

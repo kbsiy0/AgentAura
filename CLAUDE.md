@@ -7,9 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 把 Claude Code 的運行狀態顯示在 macOS 選單列。plugin hook → 狀態檔 → FSEvents → 一顆聚合燈 + 面板。
 
 > **狀態（2026-09-10）：M0–M5 完成；M4 形態決策完成選定 A2**（決策見 `docs/2026-09-09-m4-ab-decision.md`）；
-> **Change 2 `panel-legend-palette`**（面板常駐圖例列、點色點改色、四色持久化）開發與測試完成、persona GO-with-conditions，
-> **三件離屏不可驗的事待使用者實測**（DoD 帳本 `docs/superpowers/plans/2026-09-09-panel-legend-palette-dod.md`）。
-> 下一步：A2-light 微調（淺色底板過重，F-02）、動畫態 CPU、S1-3（acknowledge 順序）待證實。
+> **Change 2 `panel-legend-palette`**（面板常駐圖例列、點色點改色、四色持久化）完成並通過 2026-09-10 實機驗收
+> （DoD 帳本 `docs/superpowers/plans/2026-09-09-panel-legend-palette-dod.md` 的實測表）；驗收 ⑥ 證實 S1-3 為 S0，
+> 已在 `change/ack-on-close` 修（acknowledge 改到面板關閉）。
+> 下一步：A2-light 微調（淺色底板過重，F-02）、動畫態 CPU。
 > PR／branch 的 merge 狀態屬易腐事實，**不記本檔**，用 `gh pr list --state all` 現場查。
 > 重啟指標：`docs/superpowers/specs/2026-09-08-agentaura-design.md` §8 里程碑表。
 
@@ -65,6 +66,7 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 - **絕不修改 `~/.claude/settings.json`**（D3/R6 —— 安裝走 `~/.claude/skills/agentaura` symlink；`claude plugin marketplace add` 會寫 `extraKnownMarketplaces`，那條路已從計畫移除）。`verify-install.sh` 掃**整個**檔案而不只 `hooks` 鍵。
 - **`waiting` 不得進入「已結束但未確認」的尾巴**（spec §2.4.1 / `e90931c` —— 實測按 Deny 不產生任何 hook 事件，否則早已回答過的 session 會讓 icon 一直亮橘燈）。
 - **`Notification(idle_prompt)` 不得映射到 `waiting`**（spec §2.2.1 / `IdlePromptTests` —— 一輪結束 60s 後 Claude Code 必送它；歸 waiting 等於每個講完話的 session 都亮橘、terminal 收掉後結果消失、聚合被拖成橘）。
+- **acknowledge 只在面板關閉（`NSPopover.didClose`），開啟路徑不得 acknowledge**（spec §3.7 / `acknowledgeFiresOnCloseNotOpen` —— 舊順序先 acknowledge 再 `show`，已結束的 done/error 列在面板畫出前就被移出 registry，§2.4 的尾巴形同不存在；2026-09-10 實測證實）。
 - **主／副槽分開，activity 取優先序 max；主槽靜止時完全忽略 subagent 事件**（spec §2.5 / §2.5.1 / `efccc03` —— subagent 與父 session 共用 `session_id`，實測最密相鄰 20ms）。
 - **`aura-hook` 一律 `exit 0`，stdout / stderr 一律空**（觀測性絕不可干擾 agent。代價：exit code 無法用來驗收，所以驗收必須看產物）。
 - **解析失敗 ≠ 檔案不存在**（spec §3.3 / §4 第 3 列 / `dae435d` —— 損壞檔要保留上次已知狀態並重試；只有檔案真的消失才移除 session）。

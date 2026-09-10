@@ -19,7 +19,7 @@
 | R2 | **按開源標準寫，先自用跑起來** | 不寫死路徑、安裝可逆；不進 App Store，故不受 App Sandbox 限制，可自由讀 `~/.claude/` |
 | R3 | **read-only（只看）** | 不做遠端核准、不跳回 terminal。事件單向流入，架構乾淨、無雙向通道 |
 | D1 | **聚合優先序 `error > waiting > working > done > idle`** | 使用者裁決。紅色絕對優先，最不易錯過 |
-| D2 | **打開面板即 acknowledge** | scope 是只看，面板是唯一互動面（Change 2 起面板內含改色入口，仍不觸碰 agent），用它當確認手勢摩擦最低 |
+| D2 | **看過面板即 acknowledge——在面板關閉時** | scope 是只看，面板是唯一互動面（Change 2 起面板內含改色入口，仍不觸碰 agent），用它當確認手勢摩擦最低。時點是**關閉**不是開啟：開啟瞬間就確認會把已結束的列在面板畫出來之前移出 registry，使用者永遠看不到（2026-09-10 實測，S1-3） |
 | D3 | **方案 1（plugin + 單檔狀態信箱）** | 見 §3.1 |
 | R4 | **注意力預算：只有需要你行動的狀態才會動** | 前一個同類專案 前一個專案 失敗於「太吵」。常態一直動 → 「動起來」失去訊號價值（§3.6） |
 | R5 | **形態用證據決定，不預先鎖定** | 前一個專案 失敗於「形態不對」。M4 同時做兩個原型打分再選（§8） |
@@ -291,7 +291,7 @@ struct IconState {
 
 session 進入靜止態（`waiting` / `done` / `error`）時 `acknowledged = false`。
 即使 `SessionEnd` 抵達或 pid 死亡，該 session 仍留在 `SessionRegistry` 並**參與 icon 聚合**，
-直到使用者打開面板（D2）。
+直到使用者打開面板看過、**面板關閉**的那一刻（D2）。
 
 理由：整夜跑 pipeline、terminal 自行收掉的情境下，若不保留，使用者早上回來看到暗燈，
 產品最大價值被抵銷。
@@ -522,7 +522,7 @@ app 比對 pid **與**啟動時戳，兩者皆符才算活著。
 **面板底部常駐圖例列**（Change 2 `panel-legend-palette`）：四態色點＋標籤（錯誤·等你·執行中·已完成，D1 高→低）與提示行
 「燈固定 8 顆，與 session 數無關 · 點色點可改顏色」。點色點以系統色板改色：icon 即時生效、面板釘住期間（`.semitransient`，色板關閉即解除）
 圖例與列色點即時更新、持久化於 `UserDefaults`（`AgentAuraColor.<activity>`，四 key）；「重設」常駐、預設 palette 時 disabled。
-**面板列色點與圖例色點皆取自 `IconPalette`，與選單列同一份資料。** 面板內的圖例互動不影響 acknowledge 語意（開啟瞬間已確認）。
+**面板列色點與圖例色點皆取自 `IconPalette`，與選單列同一份資料。** 面板內的圖例互動不影響 acknowledge 語意（關閉時才確認；改色期間面板釘住，尾巴列一路看得到）。
 
 每列顯示：專案名（`cwd` 的 basename）、effort、permission_mode、
 當前 tool 或等待原因（含 tool 耗時）、subagent 的 tool（附註行）、本輪已跑多久、
@@ -537,9 +537,19 @@ subagent 數、tool 失敗數、完成訊息摘要（done）、相對時間。
 帶 `to_model` 更新它。面板的 meta 行顯示「模型 · effort · permission_mode」，
 缺值整段省略不留懸空分隔符。
 
-打開面板即 acknowledge（D2）。語意明確定義為：**面板開啟的瞬間，registry 中所有
-`acknowledged == false` 的 session 一律標為已確認**（不論是否捲動到、是否可見）。
+看過面板即 acknowledge（D2）。語意明確定義為：**面板關閉的瞬間（`NSPopover` `didClose`），
+registry 中所有 `acknowledged == false` 的 session 一律標為已確認**（不論是否捲動到、是否可見）。
 已結束且已確認者隨即移出 registry 並刪除狀態檔。
+
+**為什麼是關閉不是開啟（2026-09-10 實測修正，S1-3）**：本節原本寫「面板開啟的瞬間」，實作也照做——
+`togglePopover` 先 acknowledge 再 `show`。結果已結束的 done/error 列在面板畫出來之前就被移出 registry，
+使用者點開只看到活著的 session；§2.4 的尾巴形同不存在。spec 把 bug 寫成了契約。
+用 `didClose` 而非 `willClose`：後者在淡出動畫中就抽掉列，會閃。開啟路徑**不得**有任何 acknowledge。
+
+平台探針（2026-09-10，reviewer 以 standalone AppKit 真 `show`／真關閉實測）：`performClose`、`.transient` 點外面、
+`.semitransient` 切 app 都會發 `didCloseNotification`，`object` 就是那顆 popover、在 main thread（所以
+`MainActor.assumeIsolated` 安全）、在淡出動畫結束後（>0.4s）才到。**不發**的兩條：process 直接結束、positioning
+window 被抽掉——只造成尾巴留到下次開關面板（狀態檔仍在），方向 fail-safe。
 
 ### 3.8 安裝可逆性與自我健檢（R6）
 

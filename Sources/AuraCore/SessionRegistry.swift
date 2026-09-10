@@ -39,7 +39,8 @@ public struct SessionRegistry: Sendable {
         acknowledged.remove(id)
     }
 
-    /// 面板開啟：所有未確認一律標為已確認（不論是否捲動到、是否可見）。
+    /// 面板**關閉**時呼叫（spec §3.7；不是開啟——開啟就確認會把已結束的列在畫出前移掉，S1-3）：
+    /// 所有未確認一律標為已確認（不論是否捲動到、是否可見）。
     /// 回傳「已結束且已確認」的 id —— 呼叫端據此刪除狀態檔。
     public mutating func acknowledgeAll() -> [String] {
         acknowledged.formUnion(states.keys)

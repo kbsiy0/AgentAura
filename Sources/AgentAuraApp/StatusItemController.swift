@@ -20,7 +20,7 @@ protocol IconRendering: AnyObject {
     var isVisible: Bool { get }
     func attachPopover()
     func setPanel(_ model: PanelModel)
-    var onOpen: (() -> Void)? { get set }
+    var onClose: (() -> Void)? { get set }
     var onPickColor: ((Activity) -> Void)? { get set }
     var onResetColors: (() -> Void)? { get set }
     func setPopoverPinned(_ pinned: Bool)
@@ -56,11 +56,17 @@ final class StatusItemController: IconRendering {
     /// 測試 teardown 用；生產 controller 活到 app 結束，不需要呼叫。
     /// 不用 `deinit`——nonisolated deinit 碰非 Sendable 的 `NSStatusItem` 在 Swift 6 編不過。
     func removeFromStatusBar() {
+        if let didCloseToken { NotificationCenter.default.removeObserver(didCloseToken) }
+        didCloseToken = nil     // 測試 teardown 後若再 attach 才能重新註冊（review-ack S2）
         NSStatusBar.system.removeStatusItem(item)
     }
 
-    private let popover = NSPopover()
-    var onOpen: (() -> Void)?
+    /// internal（原為 `private`）：`acknowledgeFiresOnCloseNotOpen` 要能對**這個** popover 送 `didCloseNotification`。
+    let popover = NSPopover()
+    /// 面板**關閉**時呼叫——這是 acknowledge 手勢（D2）。不是開啟：舊版在 `show` 之前 acknowledge，
+    /// 已結束的 done/error 列在面板出現前就被移出 registry，尾巴（spec §2.4）形同不存在（S1-3，2026-09-10 實測證實）。
+    var onClose: (() -> Void)?
+    private var didCloseToken: NSObjectProtocol?
     var onPickColor: ((Activity) -> Void)?
     var onResetColors: (() -> Void)?
 
@@ -81,6 +87,16 @@ final class StatusItemController: IconRendering {
         popover.behavior = .transient
         item.button?.target = self
         item.button?.action = #selector(togglePopover)
+        // 關面板才 acknowledge。用 `didClose` 不用 `willClose`——後者在淡出動畫中就把列抽掉，會閃。
+        // `queue: nil`＝在 post 的那條執行緒同步跑（NSPopover 一律 main），gate 才能同步斷言；
+        // `object: popover` 過濾掉別的 popover（色板等）。這個類別不是 NSObject 子類，走 delegate 得改繼承，不值。
+        if didCloseToken == nil {
+            didCloseToken = NotificationCenter.default.addObserver(
+                forName: NSPopover.didCloseNotification, object: popover, queue: nil
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.onClose?() }
+            }
+        }
         // review-t01 I3：先掛一個空 model，讓 `popover.contentViewController` 從一開始就非 nil——
         // `togglePopover` 在 `contentViewController == nil` 時呼叫 `NSPopover.show` 會丟
         // NSException 殺掉整個行程，不是「這次點擊沒反應」。
@@ -121,8 +137,7 @@ final class StatusItemController: IconRendering {
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            // 開啟即 acknowledge（D2）—— 面板是唯一互動，用它當確認手勢
-            onOpen?()
+            // 這裡**不**acknowledge——見 `onClose` 的說明；acknowledge 在 didClose。
             // fail-soft（review-t01 I3）：`attachPopover()` 已經預掛過空 model，這裡是
             // 保底第二層——沒有內容就別呼叫 `NSPopover.show`（否則整個行程被 NSException 殺掉）。
             guard popover.contentViewController != nil else { return }

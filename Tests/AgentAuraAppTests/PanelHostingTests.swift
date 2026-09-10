@@ -70,6 +70,28 @@ struct PanelHostingTests {
         #expect(controller.popoverBehavior == .transient, "togglePopover 應無條件解除釘住")
     }
 
+    /// S1-3（persona 讀碼推論，2026-09-10 使用者實測證實為 S0）：舊 `togglePopover` 先 `onOpen`→acknowledge
+    /// 再 `show`，已結束的 done/error 列在面板出現前就被刪——尾巴（spec §2.4）形同不存在。
+    /// 離屏 `show` 靜默無效（`isShown` 恆 false），所以三段分別驗：(a) 開的路徑不得呼叫 `onClose`；
+    /// (b) 對**這個** popover 送 `didCloseNotification` 恰好呼叫一次；(c) 對別的 popover 送不得呼叫（object 過濾）。
+    @Test("acknowledge 手勢是關面板：togglePopover 開時不呼叫 onClose，popover didClose 才呼叫一次")
+    func acknowledgeFiresOnCloseNotOpen() {
+        let controller = StatusItemController()
+        defer { controller.removeFromStatusBar() }
+        var closes = 0
+        controller.onClose = { closes += 1 }
+        controller.attachPopover()
+
+        controller.togglePopover()
+        #expect(closes == 0, "開面板不得 acknowledge——那會把已結束的列在面板出現前刪掉（S1-3），實際呼叫 \(closes) 次")
+
+        NotificationCenter.default.post(name: NSPopover.didCloseNotification, object: NSPopover())
+        #expect(closes == 0, "別的 popover 關掉不算，實際呼叫 \(closes) 次")
+
+        NotificationCenter.default.post(name: NSPopover.didCloseNotification, object: controller.popover)
+        #expect(closes == 1, "面板關閉應恰好呼叫一次 onClose，實際 \(closes) 次")
+    }
+
     /// review-t0406 B2：tooltip 的「N 個在跑」曾用 live − attention 而無 guard；已結束未確認的 error 在尾巴裡、
     /// 不算 live → 「1 個需要你 · -1 個在跑」。與 `PanelViewModel.title` 同一套三元式。
     @Test("tooltip 永不出現負數，且與面板標題同定義", arguments: [

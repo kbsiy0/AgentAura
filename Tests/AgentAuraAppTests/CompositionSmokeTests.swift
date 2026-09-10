@@ -17,7 +17,7 @@ final class SpyRenderer: IconRendering {
     private(set) var pinned: [Bool] = []
     private(set) var attachedPopover = false
     var isVisible = true
-    var onOpen: (() -> Void)?
+    var onClose: (() -> Void)?
     var onPickColor: ((Activity) -> Void)?
     var onResetColors: (() -> Void)?
 
@@ -106,6 +106,39 @@ struct CompositionSmokeTests {
             spec §3.5 要求每 5s 重驗 pid，那是「terminal 被強制關掉、SessionEnd 沒來」
             的唯一防線。
             """)
+    }
+
+    /// 接縫 gate（不是 S1-3 的回歸 gate——那是 `PanelHostingTests.acknowledgeFiresOnCloseNotOpen`，
+    /// 對舊順序實跑為 RED）。這條守兩件事：(1) 已結束的 done 進得了面板 model（`isEnded` 沒被濾掉）；
+    /// (2) composition root 真的把 `onClose` 接到 `acknowledgeAll`——少接這條尾巴永遠清不掉（mutation m4）。
+    /// 第 (1) 段在修前也綠，是刻意的：它守的是另一個失效，不是這次的 bug（review-ack QA）。
+    @MainActor
+    @Test("已結束的 done 留在面板 model 直到 onClose；onClose 之後燈回 idle、檔案刪除、列消失")
+    func endedRowSurvivesUntilClose() async throws {
+        let root = try makeRoot()
+        try SnapshotIO.update(sessionID: "ended1", root: root) { _ in
+            var s = SessionSnapshot(sessionID: "ended1")
+            s.mainActivity = .done; s.terminated = true; s.writtenAt = Date(); return s
+        }
+        let spy = SpyRenderer()
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, makeRenderer: { spy })
+        delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
+        defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
+
+        await wait(upTo: 5) { spy.panels.last?.rows.contains { $0.isEnded } == true }
+        #expect(spy.panels.last?.rows.contains { $0.isEnded } == true, """
+            已結束的 done 沒有進面板 model —— 尾巴（spec §2.4）不存在，整夜跑完的 session 早上看不到。
+            """)
+
+        let close = try #require(spy.onClose, "composition root 沒有接 onClose —— 關面板永遠不會 acknowledge，尾巴永不清")
+        close()
+        await wait(upTo: 5) {
+            spy.panels.last?.rows.isEmpty == true && spy.applied.last?.activity == .idle
+                && SnapshotIO.allSessionIDs(root: root).isEmpty
+        }
+        #expect(spy.panels.last?.rows.isEmpty == true, "關面板後那列應消失，實際 \(spy.panels.last?.rows.count ?? -1) 列")
+        #expect(spy.applied.last?.activity == .idle, "關面板後燈應回 idle，實際 \(String(describing: spy.applied.last?.activity))")
+        #expect(SnapshotIO.allSessionIDs(root: root).isEmpty, "已結束且已確認 → 狀態檔應刪除")
     }
 
     /// spec `2026-09-09-m4-icon-form-design.md` §4.3／§8.2：A/B 決定（`docs/2026-09-09-m4-ab-decision.md`

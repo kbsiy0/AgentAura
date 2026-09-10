@@ -40,12 +40,12 @@ reviewer 實測抓到，改成 `object: nil` ＋ block 內過濾後回到 11 MB�
 
 | # | 操作 | 預期 | 實際（請填） |
 |---|---|---|---|
-| ① | 有 session 在跑時開面板 → 點「等你」色點 | 系統色板出現；**面板仍在**（釘住） | |
-| ② | 拖色 | icon（若當前聚合狀態就是 waiting）與面板圖例、列色點**同時**變 | |
-| ③ | 關色板 → 點面板外 | 面板關閉；切到別的 app 再回來 → 面板不會卡在釘住 | |
-| ④（順帶） | 「重設」 | 四色回預設、按鈕變灰 | |
-| ⑤ | 游標停在圖例上時點面板外讓面板消失 | 指標**不會**卡在手形（`NSCursor.set()` 而非 push/pop） | |
-| ⑥ | 讓一個 session 跑完、關掉那個 terminal、等綠燈 → 點開面板 | 面板裡有沒有那一列？persona 讀碼推論**沒有**（既有的 acknowledge 順序，S1-3）——證實即開獨立 change | |
+| ① | 有 session 在跑時開面板 → 點「等你」色點 | 系統色板出現；**面板仍在**（釘住） | ✅ 2026-09-10 使用者實測 |
+| ② | 拖色 | icon（若當前聚合狀態就是 waiting）與面板圖例、列色點**同時**變 | ✅ 三處同步、無閃動 |
+| ③ | 關色板 → 點面板外 | 面板關閉；切到別的 app 再回來 → 面板不會卡在釘住 | ✅ |
+| ④（順帶） | 「重設」 | 四色回預設、按鈕變灰 | ✅（另測「重開 app 顏色保留」✅） |
+| ⑤ | 游標停在圖例上時點面板外讓面板消失 | 指標**不會**卡在手形（`NSCursor.set()` 而非 push/pop） | 未單獨測（使用者照聊天清單測，未含此項）；未回報異常 |
+| ⑥ | 讓一個 session 跑完、關掉那個 terminal、等綠燈 → 點開面板 | 面板裡有沒有那一列？persona 讀碼推論**沒有**（既有的 acknowledge 順序，S1-3）——證實即開獨立 change | ❌ **證實**（截圖：面板只剩活著的 session）→ `change/ack-on-close` 修 |
 
 ## 證據
 - 面板渲染圖：`docs/evidence/change2/index.html`（預設 palette × {空, 三列}、自訂 palette × 三列；淺／深底各一；淺底 `.aqua`、深底 `.darkAqua` 明確指定）
@@ -56,7 +56,9 @@ reviewer 實測抓到，改成 `object: nil` ＋ block 內過濾後回到 11 MB�
 | # | 內容 | 性質 | 落點 |
 |---|---|---|---|
 | S1-2 | 預覽面 ≠ 被客製化的面：拖色時看的是 10pt 圓點疊面板底色，真正被改的是 8pt LED 疊 `#141416`；idle 時 icon 不會變 | 本 change 設計代價（spec §9 已揭露） | 下一個 change：圖例旁迷你 LED×底板預覽（~20 行），或色板開著時 icon 跑 demo 迴圈 |
-| **S1-3** | `togglePopover` 先 `acknowledgeAll()` 再 `show` → 已結束的 done/error 列在面板出現前就被移除，使用者永遠看不到「哪個專案完成了」 | **既有**（M5 的 D2 語意），圖例的「已完成」讓它顯眼 | 使用者實測 ⑤ 證實後**立即開獨立 change**（最小修：`onOpen` 移到 `show` 之後，或 acknowledge 延到面板關閉） |
+| **S1-3** | `togglePopover` 先 `acknowledgeAll()` 再 `show` → 已結束的 done/error 列在面板出現前就被移除，使用者永遠看不到「哪個專案完成了」 | **既有**（M5 的 D2 語意），圖例的「已完成」讓它顯眼 | 2026-09-10 實測 ⑥ **證實為 S0** → `change/ack-on-close`：acknowledge 改到 `NSPopover` didClose；canon D2／§2.4／§3.7 改字。reviewer 平台探針：didClose 在 main thread、淡出後才到；process 直接結束／positioning window 被抽掉不發，只讓尾巴留到下次開關（fail-safe） |
+| S1-A（ack-on-close persona） | 關閉時 `acknowledgeAll` 是全表：面板開著期間（尤其改色釘住的幾分鐘）才結束的 session 也一併確認＋刪檔，畫面上只存在那一小段 | 修法帶來的窄幅 regression | **判 S2、known gap**：那段時間面板本來就在眼前；若要收窄，`show` 時記 `visibleSessions` id、didClose 只確認該集合（R9 下暫不做） |
+| S1-B（ack-on-close persona） | 列尾「已結束 · 2m 前」排在 10pt `.tertiary` 那行中段（`[detail, "已結束 · …"]`），色點又與活著的同態列同色；已結束的列夾在活的列之間不顯眼 | **既有**，尾巴列第一次真的畫得出來才可觀察 | 使用者裁決順修（2026-09-10）：`PanelRow.footer` 在 model 層拼字串、「已結束」行首；gates `endedFooterLeadsWithEnded`／`endedFooterWithoutDetail`／`aliveFooter` ＋ wired gate `panelFooterComesFromModel`（view 不得自己拼）；mutation mA 行尾→RED 1s、mB 舊寫法→RED 0s |
 | S2-7 | 「重設」無確認、無 undo | 復原成本分鐘級 | 記錄；若使用者反映再加二次確認 |
 | S2-9 | 色弱：能力有效（黃色 waiting 讓 deutan ΔE 9.7→15.3）但零導引；預設 palette deutan 最小 ΔE 7.9（錯誤 vs 已完成） | F-01 家族 | Change 3 候選：亮度差／ΔE 提示 |
 | S3-10/11/12 | 空面板重複句、版面偏左、提示行永久教學 | 打磨 | 記錄 |

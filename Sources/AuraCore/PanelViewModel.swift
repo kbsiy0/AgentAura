@@ -9,6 +9,14 @@ public struct PanelRow: Equatable, Sendable, Identifiable {
     public let meta: String
     public let relativeTime: String
     public let isEnded: Bool
+
+    /// 副行整行（S1-B，persona-ack）。已結束時「已結束」**在行首**——那是這列唯一的存活訊號，
+    /// 舊版拼成 `[detail, "已結束 · 2m 前"]` 落在 10pt 灰字中段，夾在活的列之間看不到。
+    /// 活著且無 detail → 空字串（view 不畫這行，維持既有行為）。字串在 model 層拼，view 只印。
+    public var footer: String {
+        let parts = isEnded ? ["已結束", detail, relativeTime] : (detail.isEmpty ? [] : [detail, relativeTime])
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
 }
 
 /// 面板的呈現邏輯。純函數，所以排序、截斷、時間格式化都可測 ——

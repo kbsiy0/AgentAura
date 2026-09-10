@@ -36,6 +36,16 @@ struct AppLayerSourceScanTests {
             """)
     }
 
+    /// S1-B（persona-ack）：副行字串在 model 層拼（`PanelRow.footer`），view 只印。tested≠wired 的守門：
+    /// model 測試證明 `footer` 對，這條證明 `PanelView` 真的用它、沒有自己再拼一份「已結束」。
+    @Test("PanelView 的副行必須來自 PanelRow.footer，不得自己拼「已結束」")
+    func panelFooterComesFromModel() throws {
+        let url = Gate.repoRoot().appendingPathComponent("Sources/AgentAuraApp/PanelView.swift")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        #expect(text.contains("row.footer"), "PanelView 沒有用 row.footer——model 層的字串順序修了也到不了畫面")
+        #expect(!text.contains("\"已結束"), "PanelView 自己拼「已結束」字串——副行內容只准活在 PanelRow.footer")
+    }
+
     /// 正向對照：gate 真的抓得到違規。probe 放暫存目錄，**絕不寫進 `Sources/`**
     /// （會弄壞建置、中斷時留垃圾）。
     @Test("掃描函式對真違規會紅（正向對照）")
