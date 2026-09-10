@@ -34,3 +34,11 @@ extension Activity: Comparable {
         lhs.priority < rhs.priority
     }
 }
+
+extension Activity {
+    /// 可被使用者改色的四態，依 D1 優先序高→低（Change 2 D-a／D-b）：
+    /// `[.error, .waiting, .working, .done]`。從 `allCases` 去 idle、依 priority 降序推導。
+    public static var customizable: [Activity] {
+        allCases.filter { $0 != .idle }.sorted { $0.priority > $1.priority }
+    }
+}

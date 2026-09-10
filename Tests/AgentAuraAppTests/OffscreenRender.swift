@@ -56,6 +56,34 @@ enum OffscreenRender {
                        b: Double(buf[offset + 2]) / 255,
                        a: Double(buf[offset + 3]) / 255)
         }
+
+        /// 掃整張畫布，數有幾個像素落在 `color` 的容差內。
+        ///
+        /// 面板／圖例像素 gate（Change 2）不知道色點的確切座標（SwiftUI 版面），
+        /// 用「畫出多少符合色的像素」取代單點取樣——`pixel(at:)` 需要精確座標，
+        /// 這個不需要。非不透明像素直接跳過（同 `pixel(at:)` 的規則，見 `translucentSample`）。
+        /// **目標色的 `a` 必須是 1**：比較含 alpha，而畫布像素恆 α=255——傳 `a < 1` 的目標色會靜默回 0。
+        func count(near color: RGBA, tolerance: Double = 2.0 / 255) -> Int {
+            guard let data = context.data else { return 0 }
+            let width = context.width
+            let height = context.height
+            let bytesPerRow = context.bytesPerRow
+            let buf = data.bindMemory(to: UInt8.self, capacity: bytesPerRow * height)
+            var hits = 0
+            for y in 0..<height {
+                let rowStart = y * bytesPerRow
+                for x in 0..<width {
+                    let offset = rowStart + x * 4
+                    guard buf[offset + 3] == 255 else { continue }
+                    let px = RGBA(r: Double(buf[offset]) / 255,
+                                 g: Double(buf[offset + 1]) / 255,
+                                 b: Double(buf[offset + 2]) / 255,
+                                 a: Double(buf[offset + 3]) / 255)
+                    if px.maxComponentDelta(color) <= tolerance { hits += 1 }
+                }
+            }
+            return hits
+        }
     }
 
     /// 疊在 `background` 上離屏繪製一次。`view.frame` 必須先設好（決定 bounds）。

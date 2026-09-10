@@ -12,14 +12,19 @@ import AuraHookFile
 @MainActor
 final class SpyRenderer: IconRendering {
     private(set) var applied: [IconAppearance] = []
-    private(set) var panels: [(String, [PanelRow])] = []
+    private(set) var panels: [PanelModel] = []
+    /// Change 2：每次 `setPopoverPinned` 呼叫的參數，依序記錄。
+    private(set) var pinned: [Bool] = []
     private(set) var attachedPopover = false
     var isVisible = true
     var onOpen: (() -> Void)?
+    var onPickColor: ((Activity) -> Void)?
+    var onResetColors: (() -> Void)?
 
     func apply(_ appearance: IconAppearance, phase: Double) { applied.append(appearance) }
     func attachPopover() { attachedPopover = true }
-    func setPanel(title: String, rows: [PanelRow]) { panels.append((title, rows)) }
+    func setPanel(_ model: PanelModel) { panels.append(model) }
+    func setPopoverPinned(_ pinned: Bool) { self.pinned.append(pinned) }
 }
 
 @Suite("Composition root smoke（spec §5.2）", .serialized)

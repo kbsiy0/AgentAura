@@ -111,8 +111,14 @@ M0–M5 完成，[PR #2](https://github.com/kbsiy0/AgentAura/pull/2) 已 merge�
 persona-tester 對兩個原型（8 顆 LED 燈條 A2、光環點 B2）打分，選定 **A2**（8 顆 LED ＋ 不透明底板）
 ——spec 的 R5「形態由證據決定而非預設」已滿足，決策細節見
 [`docs/2026-09-09-m4-ab-decision.md`](docs/2026-09-09-m4-ab-decision.md)。
-下一步：**Change 2** `panel-legend-palette`（面板圖例列＋改色入口）與 A2 淺色模式微調
-（決策報告 known gap F-02：底板在淺色模式偏重）。
+**Change 2 `panel-legend-palette` 開發與測試完成（待使用者實機驗收）**：面板底部常駐圖例列（錯誤·等你·執行中·已完成）、點色點以系統色板改色、四色持久化。
+下一步：A2 淺色模式微調（決策報告 known gap F-02：底板在淺色模式偏重）。
+
+## 改顏色
+
+點選單列燈條開面板，底部圖例列的四個色點就是四種狀態的顏色。**點色點**會開系統色板，拖色時選單列的燈（若當前狀態就是那一態）
+與面板圖例即時變；色板開著時面板設計為不自動關（此行為尚待實機驗收）。顏色存在 `UserDefaults`（`io.agentaura.app` 的 `AgentAuraColor.*` 四個 key），
+「重設」一鍵回預設。idle 的極暗灰不可改。
 
 ## 授權
 

@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 把 Claude Code 的運行狀態顯示在 macOS 選單列。plugin hook → 狀態檔 → FSEvents → 一顆聚合燈 + 面板。
 
-> **狀態（2026-09-09）：M0–M5 完成；PR #2 已 merge（2026-09-09）；M4 形態決策完成，選定 A2**
-> （8 顆 LED ＋ 不透明底板，`change/m4-icon-form`），決策見 `docs/2026-09-09-m4-ab-decision.md`。
-> 下一步 **Change 2** `panel-legend-palette`（圖例列＋改色）與 A2-light 微調
-> （淺色模式底板過重，見決策報告的 F-02）。
+> **狀態（2026-09-10）：M0–M5 完成；M4 形態決策完成選定 A2**（決策見 `docs/2026-09-09-m4-ab-decision.md`）；
+> **Change 2 `panel-legend-palette`**（面板常駐圖例列、點色點改色、四色持久化）開發與測試完成、persona GO-with-conditions，
+> **三件離屏不可驗的事待使用者實測**（DoD 帳本 `docs/superpowers/plans/2026-09-09-panel-legend-palette-dod.md`）。
+> 下一步：A2-light 微調（淺色底板過重，F-02）、動畫態 CPU、S1-3（acknowledge 順序）待證實。
+> PR／branch 的 merge 狀態屬易腐事實，**不記本檔**，用 `gh pr list --state all` 現場查。
 > 重啟指標：`docs/superpowers/specs/2026-09-08-agentaura-design.md` §8 里程碑表。
 
 ## Tech Stack
@@ -84,7 +85,7 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 SDD 流程框架（agent 職責、Tier 判定、Gate 分層、N-round checkpoint、git 工作流、mutation 標準程序）定義在 user-level CLAUDE.md，**本檔不重複**，只記專案特化。
 
 **Tier 1 觸發（動到以下任一檔案即派 persona-tester）：**
-`Sources/AgentAuraApp/**`、`Sources/AuraCore/IconAppearance.swift`、`Sources/AuraCore/AnimationSchedule.swift`、`Sources/AuraCore/PanelViewModel.swift`、`plugin/hooks/hooks.json`
+`Sources/AgentAuraApp/**`（含 `LegendRowView.swift`、`PaletteStore.swift`、`ColorPickerCoordinator.swift`）、`Sources/AuraCore/IconAppearance.swift`、`Sources/AuraCore/AnimationSchedule.swift`、`Sources/AuraCore/PanelViewModel.swift`、`Sources/AuraCore/LegendModel.swift`、`plugin/hooks/hooks.json`
 
 ## 易腐事實
 

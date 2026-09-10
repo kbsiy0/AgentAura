@@ -19,13 +19,13 @@
 | R2 | **按開源標準寫，先自用跑起來** | 不寫死路徑、安裝可逆；不進 App Store，故不受 App Sandbox 限制，可自由讀 `~/.claude/` |
 | R3 | **read-only（只看）** | 不做遠端核准、不跳回 terminal。事件單向流入，架構乾淨、無雙向通道 |
 | D1 | **聚合優先序 `error > waiting > working > done > idle`** | 使用者裁決。紅色絕對優先，最不易錯過 |
-| D2 | **打開面板即 acknowledge** | scope 是只看，面板是唯一互動，用它當確認手勢摩擦最低 |
+| D2 | **打開面板即 acknowledge** | scope 是只看，面板是唯一互動面（Change 2 起面板內含改色入口，仍不觸碰 agent），用它當確認手勢摩擦最低 |
 | D3 | **方案 1（plugin + 單檔狀態信箱）** | 見 §3.1 |
 | R4 | **注意力預算：只有需要你行動的狀態才會動** | 前一個同類專案 前一個專案 失敗於「太吵」。常態一直動 → 「動起來」失去訊號價值（§3.6） |
 | R5 | **形態用證據決定，不預先鎖定** | 前一個專案 失敗於「形態不對」。M4 同時做兩個原型打分再選（§8） |
 | R6 | **一步安裝、一步移除、自我健檢** | 前一個專案 失敗於「安裝維護太麻煩」，且移除後在 settings.json 留下 7 個指向不存在執行檔的死 hook（§3.8） |
-| R7 | **快速上手**：裝好就知道四種燈是什麼 | Change 2 `panel-legend-palette`（圖例列）落地；Change 1 `m4-icon-form` 只保證贏家形態（A2）的四態在視覺上可分 |
-| R8 | **面板可客製化** | Change 2 `panel-legend-palette`（改色 UI）落地；Change 1 鋪 `IconPalette` 讓顏色成為資料而非 view 內的 switch 並驗證消費端真的吃它 |
+| R7 | **快速上手**：裝好就知道四種燈是什麼 | **已由 Change 2 `panel-legend-palette`（圖例列）落地**；Change 1 `m4-icon-form` 只保證贏家形態（A2）的四態在視覺上可分 |
+| R8 | **面板可客製化** | **已由 Change 2 `panel-legend-palette`（點圖例改色＋持久化）落地**；Change 1 鋪 `IconPalette` 讓顏色成為資料而非 view 內的 switch 並驗證消費端真的吃它 |
 | R9 | **極輕量、盡可能簡單** | Change 1 的可量測落點：零新依賴、零新 target、無使用者可見設定、執行檔增量 < 150 KB、`Sources/` 淨增 ≤ 250 行、落選形態不保留 |
 
 R4-R6 三條直接來自使用者對 前一個專案 的失敗歸因（形態不對／狀態語意不準太吵／安裝維護麻煩）。
@@ -518,6 +518,11 @@ app 比對 pid **與**啟動時戳，兩者皆符才算活著。
 
 排序：`error → waiting → working → done`（與 D1 優先序一致），同組內最近活動優先。
 已結束但未確認者置於各組下半部。
+
+**面板底部常駐圖例列**（Change 2 `panel-legend-palette`）：四態色點＋標籤（錯誤·等你·執行中·已完成，D1 高→低）與提示行
+「燈固定 8 顆，與 session 數無關 · 點色點可改顏色」。點色點以系統色板改色：icon 即時生效、面板釘住期間（`.semitransient`，色板關閉即解除）
+圖例與列色點即時更新、持久化於 `UserDefaults`（`AgentAuraColor.<activity>`，四 key）；「重設」常駐、預設 palette 時 disabled。
+**面板列色點與圖例色點皆取自 `IconPalette`，與選單列同一份資料。** 面板內的圖例互動不影響 acknowledge 語意（開啟瞬間已確認）。
 
 每列顯示：專案名（`cwd` 的 basename）、effort、permission_mode、
 當前 tool 或等待原因（含 tool 耗時）、subagent 的 tool（附註行）、本輪已跑多久、

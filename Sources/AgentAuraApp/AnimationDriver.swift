@@ -10,6 +10,7 @@ final class AnimationDriver {
     private var timer: Timer?
     private var phase: Double = 0
     private var icon: IconState = .empty
+    private var palette: IconPalette = .default
     private var env = DisplayEnvironment()
     private let onFrame: (IconAppearance, Double) -> Void
 
@@ -43,6 +44,12 @@ final class AnimationDriver {
         reschedule()
     }
 
+    /// Change 2：換 palette 要觸發重排（m4 交接 M9）。
+    func setPalette(_ palette: IconPalette) {
+        self.palette = palette
+        reschedule()
+    }
+
     func setIconVisible(_ visible: Bool) {
         update { $0.iconVisible = visible }
     }
@@ -55,7 +62,7 @@ final class AnimationDriver {
     private func reschedule() {
         timer?.invalidate()
         timer = nil
-        let appearance = AppearancePolicy.appearance(for: icon, reduceMotion: env.reduceMotion)
+        let appearance = AppearancePolicy.appearance(for: icon, palette: palette, reduceMotion: env.reduceMotion)
         // 靜態狀態也要畫一次，否則停止動畫後畫面留在上一格
         onFrame(appearance, 0)
 

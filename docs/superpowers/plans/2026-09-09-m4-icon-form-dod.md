@@ -51,7 +51,7 @@ CALayer `opacity` 動畫（GPU 合成、零 draw），那是獨立的效能 chan
 
 | # | 內容 | 性質 | 落點 |
 |---|---|---|---|
-| F-01 | reduceMotion＋色弱：`waiting`（8.95:1）與 `done`（9.10:1）亮度差 1.7%，不辨色時是同一顆燈；working 5.04 vs error 5.40 亦近 | 兩形態共有，本 change 未引入亦未修；spec §9 已列代價 | **Change 2 自選色的驗收條件**：waiting 與 done 的亮度要拉開（不是只換色相） |
+| F-01 | reduceMotion＋色弱：`waiting`（8.95:1）與 `done`（9.10:1）亮度差 1.7%，不辨色時是同一顆燈；working 5.04 vs error 5.40 亦近 | 兩形態共有，本 change 未引入亦未修；spec §9 已列代價 | Change 2 提供自選色**能力**（可把兩者拉開，證據圖 `docs/evidence/change2/` 的 custom palette 示範黃色 waiting），不做 UI 檢查；**F-01 仍為 known gap** |
 | F-02 | A2 淺色外觀底板 vs bar 10–12:1，idle 亦然；P3 兩項 <5 | spec §10 預授權 | **A2-light 微調 change**：淺色底板落在 4–6:1，且 LED/底板對比深淺差 ≤0.1（不准把 round-1 買回來） |
 | F-03 | A2 深色模式：亮 glyph 列中一塊比 bar 更暗的板（極性反轉），像 widget | 新發現、只有 E1′ 支撐 | 補一張含鄰近系統 icon 的 E1 再確認，併入 A2-light |
 | F-05 | working 絕對位準 1.62–2.55:1 未變 | spec §3 註 4 已揭露 | Change 2 自選色 |
