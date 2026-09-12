@@ -137,14 +137,15 @@ public struct IconAppearance { /* 既有欄位不動 */ public let color: RGBA }
 
 | 參數 | 值 | 理由 |
 |---|---|---|
-| view 尺寸 | `preferredWidth = 42`（8×3 + 7×2 = 34 燈條 + 左右各 4）；高 = bar thickness（22） | **view bounds 含底板**，離屏畫布與生產畫布一致；r1 的「bounds 外擴」會被裁掉 |
-| 底板矩形 | `NSRect(x: 0, y: (h−18)/2, w: 42, h: 18)`，圓角 5pt；LED（3×12）在其中垂直置中、水平從 x=4 起 | LED 上下各 3pt、左右各 4pt 邊距 = mockup §2 比例 |
+| view 尺寸 | ~~`preferredWidth = 42`（8×3 + 7×2 = 34 燈條 + 左右各 4）~~ **2026-09-11（T16）修正**：8×3 + 7×2 = **38**，不是 34——原數字是算術錯誤，`preferredWidth` 曾照著硬寫死成 42，導致左邊距 4pt、右邊距卻是 0pt（見下一列）。改為 `preferredWidth = ledSpan + plateInset×2 = 38 + 3×2 = 44`（推導，不寫字面值）；高 = bar thickness（22） | **view bounds 含底板**，離屏畫布與生產畫布一致；r1 的「bounds 外擴」會被裁掉 |
+| 底板矩形 | ~~`NSRect(x: 0, y: (h−18)/2, w: 42, h: 18)`，圓角 5pt；LED（3×12）在其中垂直置中、水平從 x=4 起~~ **T16 修正**：`w: 44`；`plateInset` 4→3（與垂直邊距 `(18-12)/2=3` 對齊，四邊等寬）。上一版「LED 上下各 3pt、左右各 4pt 邊距」這句宣稱本身就與 42 的算術矛盾——套算下來右邊距實際是 0pt（第八顆燈右邊界貼齊 42pt 右緣），不是 4pt；這個矛盾直到使用者實測回報「底面板其實在圖片的右邊，有點跑版」才被抓到。**根因**：`statusItemWidthFollowsRenderer`（見 §6 表）在 A/B 收斂成單一形態後退化成「等於固定值 50／42」，把錯的數字凍住而非驗證它——寫死的數字不會自己說出「這是錯的」。修法見下方 T16 一列與 `CLAUDE.md` gate 哲學第 2 條 | LED 上下左右四邊邊距一律 = `plateInset`（3pt），mockup §2 比例的精神不變，數字更正 |
 | 底板色 | **不透明** `#141416`（20,20,22，alpha 1.0），深淺模式一律 | 背景無關 → 離屏量測等於現實；淺模式更「重」是已知代價，交 persona 判（§10） |
 | 底板描邊 | 0.5pt `rgba(255,255,255,0.10)`，路徑取 `plateRect.insetBy(dx: 0.25, dy: 0.25)`（否則外側 0.25pt 被 bounds 裁掉） | 淺 bar 上邊緣不糊 |
 | LED 顏色／alpha | 顏色 `appearance.color`；alpha = `appearance.color.a × AnimationCurve.alpha(for:phase:)` | 不再自己 switch activity、不再自己算曲線、無 per-state alpha 特例 |
 | idle | LED 用 palette idle 色 `#48484a × a 0.35`，底板照畫 | 底板恆在＝「app 活著」的錨點；idle 燈刻意近乎隱形（靜態 2.02:1 再乘 0.35），**不納入 3:1 gate**。r4 起 alpha 來自 palette 而非 view |
-| status item | `item.length = drawing.preferredWidth + 8`；view frame `x: 4, width: 42` | 4pt 是 bar 外邊距（controller 一處），底板內 4pt 是 LED 邊距（view 一處）——不是雙重邊距 |
+| status item | `item.length = drawing.preferredWidth + 8`；view frame `x: 4, width: 44`（T16 修正，原 42） | 4pt 是 bar 外邊距（controller 一處），底板內 `plateInset`（3pt）是 LED 邊距（view 一處）——不是雙重邊距 |
 | 幾何常數 | `static let ledSize/ledGap/plateInset/plateHeight`，`func ledRect(at index:) -> NSRect` internal | 測試從幾何推導取樣點，不寫魔術數字 |
+| T16（2026-09-11） | 補「四邊邊距相等」對稱性 gate（`LEDPlateSymmetryTests`，直接讀 `plateRect`／`ledRect(at:)` 現場算，不寫魔術數字）；`statusItemWidthFollowsRenderer` 改成從 `ledSpan`／`plateInset` 推導期望值，不再跟 `drawing.preferredWidth` 比對自己——恢復被 A/B 收斂凍住的「derived」守門力。另加使用者可關的「燈條底板」開關（`OptionsMenuModel` 設定群，`UserDefaults` 鍵 `AgentAuraIconPlate`，預設 `true`）：關閉時 `LEDStripView.showsPlate == false`，只畫 LED、不畫底板填色與描邊，寬度／LED 位置不變 | 使用者回報「底面板其實在圖片的右邊，有點跑版」；同時满足「讓使用者自行決定要不要底板」的要求 |
 
 ### 4.2 B2 光環
 
@@ -240,7 +241,7 @@ gate 訊息印出色彩空間名與取樣座標。**不用** `bitmapImageRepForC
 | **`workingIsQuietestColor`（R4 的顏色半邊）** | App | 同一 harness、**以 `IconPalette.default` 繪製**（不是那個五色差異極大的測試 palette——否則變成拿隨機顏色比大小）：`contrast(working)` 在靜態與峰值兩點都 **< `contrast(error)`**（5.04 < 5.40、2.55 < 5.40）。既有 R4 suite 只守 alpha 與週期；本 change 動了顏色，這是顏色那半邊的 gate | working 改 `#50a8ff`（靜態 7.35）→ <2s |
 | `haloRingAnimatesCoreDoesNot` | App | B2 waiting 在 phase 0 與 0.5：核心像素相同、環像素不同；預期 alpha 由 `AnimationCurve` 算 | 核心也套 alpha → <2s |
 | `iconFormSelectionIsWired` | App smoke | `UserDefaults(suiteName: "io.agentaura.tests.<UUID>")`（**絕不可**是 `io.agentaura.app`），三案例在**同一個** `@Test` 內：`halo` → `controller.drawing is HaloView`；`led` → `is LEDStripView`；垃圾值 → `is LEDStripView`。走真的 `StatusItemController.init(defaults:)`，`@MainActor` + `.serialized`，teardown `removePersistentDomain` + `removeStatusItem` | `IconForm` 讀完不用 → <2s |
-| `statusItemWidthFollowsRenderer` | App | 兩形態下 `controller.statusItemLength == drawing.preferredWidth + 8`，且安裝的 frame：`drawing.frame.width == drawing.preferredWidth`、`origin.x == 4`、`frame.height == NSStatusBar.system.thickness`（bounds 含底板後 frame 是承重值） | 寬度或 frame 寫死 34 → <2s。**T09 後**：只剩一個 conformer，寫死成贏家的正確數字（50／42）不再紅——「derived」結構性不可觀測，gate 退化為「等於固定值」（review-t09 I-1） |
+| `statusItemWidthFollowsRenderer` | App | 兩形態下 `controller.statusItemLength == drawing.preferredWidth + 8`，且安裝的 frame：`drawing.frame.width == drawing.preferredWidth`、`origin.x == 4`、`frame.height == NSStatusBar.system.thickness`（bounds 含底板後 frame 是承重值） | 寬度或 frame 寫死 34 → <2s。**T09 後**：只剩一個 conformer，寫死成贏家的正確數字（50／42）不再紅——「derived」結構性不可觀測，gate 退化為「等於固定值」（review-t09 I-1）。**T16（2026-09-11）**：這條退化正是 42 這個算術錯誤能一路凍到使用者實測才被抓到的原因——改成從 `LEDStripView.ledSpan`／`plateInset` 現場推導期望值（`expectedWidth = ledSpan + plateInset*2`），不再跟 `drawing.preferredWidth` 比對自己；mutation：`preferredWidth` 寫死回 42 → 兩處斷言在 <1s 內變紅 |
 | `updateRequestsRedraw`（r7，review-t04-06 I-A） | App | 兩 view 掛進**自建 NSWindow**（裸 view 與 status-item-hosted view 的 `needsDisplay` 恆 false、不可觀測），`update` 後 `needsDisplay == true`。刪掉 `needsDisplay = true` 全套件仍綠、而 driver 每格 apply 之後沒人要求重繪、icon 停在上一格 | 刪 `needsDisplay = true` → <1s |
 | `applyReachesDrawing`（r6，review I4） | App smoke | 真 `StatusItemController`：`apply(error 靜態)` 後離屏渲 `drawing`，LED 像素 = `.default.error` 疊底板（±2/255）。既有像素 gate 全部直呼 `view.update`、smoke 用 SpyRenderer 取代 controller——刪掉 `apply` 裡的 `drawing.update` 全套件仍綠、產品是永不更新的 icon（tested ≠ wired） | 刪 `drawing.update(...)` → <2s |
 | 既有 `@Suite("注意力預算（R4）")`、`@Suite("動畫排程與省電")` | AuraCore | 不動、繼續綠 | — |

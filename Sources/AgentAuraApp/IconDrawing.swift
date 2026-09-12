@@ -14,4 +14,6 @@ import AuraCore
 protocol IconDrawing: AnyObject {
     func update(_ appearance: IconAppearance, phase: Double)
     var preferredWidth: CGFloat { get }
+    /// T16：使用者控制的底板可見度（預設 true）——`false` 時只畫 LED，不畫底板填色／描邊。
+    func setShowsPlate(_ shows: Bool)
 }

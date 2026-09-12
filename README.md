@@ -22,7 +22,14 @@
 
 ## 安裝
 
-需要 macOS 13+、Swift 6 工具鏈（`xcode-select --install`）、Claude Code。
+需要 macOS 13+、Claude Code。
+
+大部分使用者：拿到 `AgentAura.app`（目前還沒有現成下載版本，先用下方開發者步驟建一份）
+→ 拖進「應用程式」→ 打開 → 面板裡按「接上」→ **開一個新的 Claude Code session**。
+接上只會建一條指到 App 的捷徑，不動 Claude Code 既有設定；App 內建「說明」是一份
+離線白話文件。開機自動啟動、關於、一鍵移除掛載都在面板 Options 裡。
+
+開發者：
 
 ```bash
 git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
@@ -31,15 +38,17 @@ claude plugin validate --strict ./plugin             # 官方 validator
 ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura     # 掛載
 ./scripts/verify-install.sh                          # 驗證整條鏈路
 
-./scripts/build-app.sh                               # 組出 build/AgentAura.app
+./scripts/build-app.sh                               # 組出 build/AgentAura.app（含 plugin/ bundle 化）
 open build/AgentAura.app
 ```
 
-**下一個** Claude Code session 起生效（skills-dir 的 plugin 在 session 啟動時載入）。
-要開機自動啟動：把 `build/AgentAura.app` 拖進「系統設定 → 一般 → 登入項目」。
+（這條路徑需要 Swift 6 工具鏈：`xcode-select --install`。）
 
-移除是一行 `rm ~/.claude/skills/agentaura`（狀態目錄 `rm -rf ~/.agentaura`）。
-細節與疑難排解見 [`docs/INSTALL.md`](docs/INSTALL.md)。
+**下一個** Claude Code session 起生效（skills-dir 的 plugin 在 session 啟動時載入，
+已在執行中的 session 不會中途載入新 plugin，已實測——細節見 `docs/INSTALL.md`「什麼時候生效」）。
+
+移除：面板 Options 一鍵移除掛載，或手動 `rm ~/.claude/skills/agentaura`
+（狀態目錄 `rm -rf ~/.agentaura`）。細節與疑難排解見 [`docs/INSTALL.md`](docs/INSTALL.md)。
 
 > **`~/.claude/settings.json` 全程零改動。** 不是「移除後清乾淨」，是從頭到尾沒被寫過 ——
 > 所以不可能留下指向已刪除執行檔的死 hook。（`claude plugin marketplace add` 會寫
@@ -114,13 +123,58 @@ persona-tester 對兩個原型（8 顆 LED 燈條 A2、光環點 B2）打分，�
 **Change 2 `panel-legend-palette` 已 merge 並通過實機驗收**：面板底部常駐圖例列（錯誤·等你·執行中·已完成）、點色點以系統色板改色、四色持久化。
 實機驗收同時證實一個既有 bug（S1-3）：已結束的 session 在面板畫出來之前就被 acknowledge 掉，使用者永遠看不到「哪個專案完成了」——
 已修正為**關面板才 acknowledge**（點開看到已結束的列，關掉面板燈才熄）。
-下一步：A2 淺色模式微調（決策報告 known gap F-02：底板在淺色模式偏重）。
+
+**Change 3 `app-shell`（操作層）＋ phase 2（UI/UX 完整化）完成，persona GO 7.55**：在此之前面板只有裸狀態列表，沒有「離開」、
+「開機自動啟動」、「接不上時怎麼辦」這類一般 App 都有的外殼——非工程師開起來看到八顆暗燈，
+分不出「沒 session 在跑」／「Claude Code 沒開」／「hook 根本沒裝」。這個 change 補上
+一鍵接上（含真的跑一次的 exec 驗證，不是自洽檢查）、健康狀態常駐、開機自動啟動、關於、
+設定入口、一鍵移除掛載、去工程師化文案，並把 `docs/INSTALL.md`、本檔與離線 `help.html`
+一併改成「下載 app → 拖進應用程式 → 按接上」的一般使用者路徑。
+phase 2 再補上兩個成熟選單列 app 該有而我們缺的：右鍵開 Options、回報問題、
+**`⌘Q` 真的接線**（之前那個字樣是假的）、關於的實際內容、「減少動態」開關，
+以及一輪 UX 修正（填色 CTA、tooltip 不再說謊、banner 生命週期、分組分隔線…）。
+Tier 1 → persona-tester 兩輪：6.30 NO-GO → **7.55 GO**。
+量測與逐條 gate／mutation 見 [`docs/superpowers/plans/2026-09-10-app-shell-dod.md`](docs/superpowers/plans/2026-09-10-app-shell-dod.md)。
 
 ## 改顏色
 
 點選單列燈條開面板，底部圖例列的四個色點就是四種狀態的顏色。**點色點**會開系統色板，拖色時選單列的燈（若當前狀態就是那一態）
-與面板圖例即時變；色板開著時面板不會自動關。顏色存在 `UserDefaults`（`io.agentaura.app` 的 `AgentAuraColor.*` 四個 key），
-「重設」一鍵回預設。idle 的極暗灰不可改。
+與面板圖例即時變；色板開著時面板不會自動關。顏色存在 `UserDefaults`（`io.agentaura.app` 的 `AgentAuraColor.*` 四個 key）。
+「重設顏色」在 **Options** 裡（不再佔著圖例列的位置）。idle 的極暗灰不可改。
+
+## 面板長什麼樣
+
+```
+沒有活著的 session                          ← 標題＝狀態，不會與內文重複
+  Claude Code 開起來、開始跑之後，這裡會列出每個 session。
+● 錯誤  ● 等你  ● 執行中  ● 已完成          ← 常駐圖例，點色點改色
+八顆燈一起代表全部 session · 點色點改顏色
+● 已接上 · v0.1.0                Options ⌄  ← 健康狀態 ＋ 版本 ＋ 設定入口
+```
+
+按下 **Options ⌄**（或**右鍵**點選單列圖示）展開，分五群：
+
+```
+說明與快速上手…
+──────────────
+開機自動啟動          開      ← 開／關字樣，不只依賴系統控制項的外觀
+減少動態              關      ← 與系統的「減少動態」取 OR；系統已開時此列鎖住並說明
+重設顏色
+──────────────
+重新接上 Claude Code
+再檢查一次                    ← 只在「已接上但未驗證」時出現
+移除掛載…
+──────────────
+關於 AgentAura
+回報問題…
+──────────────
+離開 AgentAura   ⌘Q           ← ⌘Q 真的能用（面板開著時裝 key monitor，關閉時移除）
+```
+
+**沒接上時**面板會換成一張說明畫面（標題、說明、填色的［接上］按鈕、［這是什麼？］），
+第一次啟動且從未成功接上過時會自動打開一次。接上成功的提示是
+「已接上 · **下一個 Claude Code session 起生效**（現在開著的視窗不受影響）」——
+新的 plugin 掛載要新 session 才載入，這點已實測，不會騙你說立即生效。
 
 ## 授權
 

@@ -96,12 +96,12 @@ struct PaletteWiringSmokeTests {
         // 行程級單例：不清會讓後面的測試收到這裡的 willClose／target（review-t01 I1）
         defer { delegate.colorCoordinator.detach(); NSColorPanel.shared.orderOut(nil) }
 
-        // (1) status.onPickColor 應該被接上（AppDelegate → coordinator.pick 的入口）。
-        #expect(spy.onPickColor != nil, "AppDelegate 應該把 status.onPickColor 接到 coordinator.pick —— 目前是 nil")
+        // (1) status.onAction 應該被接上（AppDelegate → coordinator.pick 的入口）。
+        #expect(spy.onAction != nil, "AppDelegate 應該把 status.onAction 接到 coordinator.pick —— 目前是 nil")
 
         // (2) 觸發它：NSColorPanel 應該變成 store 的顏色，且 popover 應被釘住。
-        //     用 `?()` 而非 `!()`——onPickColor 若真是 nil，呼叫應是安全的無動作，不是 crash。
-        spy.onPickColor?(.waiting)
+        //     用 `?()` 而非 `!()`——onAction 若真是 nil，呼叫應是安全的無動作，不是 crash。
+        spy.onAction?(.pickColor(.waiting))
         let panelColor = ColorPickerCoordinator.rgba(from: NSColorPanel.shared.color)
         #expect(panelColor == Optional(delegate.paletteStore.palette[.waiting]), """
             (2) 點圖例後系統色板顏色應變成 store.palette[.waiting]，\
@@ -128,22 +128,23 @@ struct PaletteWiringSmokeTests {
     // MARK: - controllerForwardsPanelCallbacks
 
     @MainActor
-    @Test("StatusItemController 把面板 callback 轉發給 onPickColor／onResetColors；popover 雙路徑解除 pinned")
+    @Test("StatusItemController 把面板 callback 轉發給 onAction；popover 雙路徑解除 pinned")
     func controllerForwardsPanelCallbacks() throws {
-        let controller = StatusItemController()
+        // T20：`setPopoverPinned(true)` 現在會裝滑鼠 dismiss monitor——注入假的
+        // install／remove，測試不得裝真的全域 monitor（spec §6.4）。
+        let controller = StatusItemController(dismissMonitor: PanelDismissMonitor(
+            installGlobal: { _ in "g" as AnyObject }, installLocal: { _ in "l" as AnyObject }, remove: { _ in }))
         defer { controller.removeFromStatusBar() }
         controller.attachPopover()   // 會預掛空 model 的 hosting controller（review-t01 I3），togglePopover 因此安全；gate 在 PanelHostingTests
         #expect(controller.popoverBehavior == .transient, "attachPopover 後初始值應為 .transient，實際 \(controller.popoverBehavior)")
 
-        var picked: Activity?
-        controller.onPickColor = { picked = $0 }
-        controller.panelOnPick(.error)
-        #expect(picked == .error, "panelOnPick 應轉發到 onPickColor，實際 \(String(describing: picked))")
+        var received: [PanelAction] = []
+        controller.onAction = { received.append($0) }
+        controller.panelOnAction(.pickColor(.error))
+        #expect(received.last == .pickColor(.error), "panelOnAction 應把 pickColor(.error) 轉發到 onAction，實際 \(String(describing: received.last))")
 
-        var resetCalled = false
-        controller.onResetColors = { resetCalled = true }
-        controller.panelOnReset()
-        #expect(resetCalled, "panelOnReset 應轉發到 onResetColors")
+        controller.panelOnAction(.resetColors)
+        #expect(received.last == .resetColors, "panelOnAction 應把 resetColors 轉發到 onAction，實際 \(String(describing: received.last))")
 
         controller.setPopoverPinned(true)
         #expect(controller.popoverBehavior == .semitransient, "setPopoverPinned(true) 後應為 .semitransient，實際 \(controller.popoverBehavior)")
@@ -236,8 +237,8 @@ struct PaletteWiringSmokeTests {
         delegate.applyColor(wild, for: .waiting)
         #expect(spy.panels.last?.isDefaultPalette == false, "前提：改色後 isDefaultPalette 應為 false")
 
-        let reset = try #require(spy.onResetColors, "AppDelegate 沒有接 status.onResetColors")
-        reset()
+        let onAction = try #require(spy.onAction, "AppDelegate 沒有接 status.onAction")
+        onAction(.resetColors)
         #expect(spy.applied.last?.color == IconPalette.default.waiting, "重設後 icon 應回預設 waiting 色，實際 \(String(describing: spy.applied.last?.color))")
         #expect(spy.panels.last?.isDefaultPalette == true, "重設後面板 isDefaultPalette 應為 true（唯一從 true 側見證 isDefault 的地方）")
         for a in Activity.allCases where a != .idle {

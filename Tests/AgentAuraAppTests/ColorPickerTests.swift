@@ -36,7 +36,7 @@ struct ColorPickerTests {
             #expect(ColorPickerCoordinator.rgba(from: pattern) == nil, "pattern image 應轉換失敗回 nil")
 
             let current = RGBA(r: 0.44, g: 0.19, b: 0.77, a: 1)
-            coordinator.pick(.waiting, current: current, present: false)
+            coordinator.pick(.waiting, current: current, anchor: nil, present: false)
             #expect(NSColorPanel.shared.showsAlpha == false, """
                 pick 後 showsAlpha 應關閉，實際 \(NSColorPanel.shared.showsAlpha)
                 """)
@@ -68,7 +68,7 @@ struct ColorPickerTests {
 
             // (c) sender 不是 NSColorPanel：要在 activeActivity 已設、色板色合法的狀態下測，
             // 否則會被 (a)／(b) 的 guard 巧合頂住（review 指出的遮蔽）。
-            coordinator.pick(.error, current: RGBA(r: 0.1, g: 0.1, b: 0.1, a: 1), present: false)
+            coordinator.pick(.error, current: RGBA(r: 0.1, g: 0.1, b: 0.1, a: 1), anchor: nil, present: false)
             coordinator.changeColor("not a panel")
             #expect(calls.isEmpty, "(c) sender 不是 NSColorPanel 時不該呼叫 onPick，實際 \(calls.count) 次")
 
@@ -78,7 +78,7 @@ struct ColorPickerTests {
             #expect(calls.isEmpty, "(b) pattern image 轉換失敗時不該呼叫 onPick，實際 \(calls.count) 次")
 
             // (d) 正常流程：pick 後給合法 sRGB 色——setter 自動觸發 action 恰好一次
-            coordinator.pick(.error, current: RGBA(r: 0.1, g: 0.1, b: 0.1, a: 1), present: false)
+            coordinator.pick(.error, current: RGBA(r: 0.1, g: 0.1, b: 0.1, a: 1), anchor: nil, present: false)
             NSColorPanel.shared.color = NSColor(srgbRed: 0.3, green: 0.6, blue: 0.9, alpha: 1)
             #expect(calls.count == 1, "(d) 設合法色應觸發 onPick 恰好一次，實際 \(calls.count) 次")
 
@@ -98,8 +98,8 @@ struct ColorPickerTests {
             var endCalls = 0
             coordinator.onEnd = { endCalls += 1 }
 
-            coordinator.pick(.error, current: RGBA(r: 0.1, g: 0.1, b: 0.1, a: 1), present: false)
-            coordinator.pick(.waiting, current: RGBA(r: 0.2, g: 0.2, b: 0.2, a: 1), present: false)
+            coordinator.pick(.error, current: RGBA(r: 0.1, g: 0.1, b: 0.1, a: 1), anchor: nil, present: false)
+            coordinator.pick(.waiting, current: RGBA(r: 0.2, g: 0.2, b: 0.2, a: 1), anchor: nil, present: false)
             NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: NSColorPanel.shared)
 
             #expect(coordinator.endCount == 1, "連呼兩次 pick 後 post 一次 willClose，endCount 應為 1，實際 \(coordinator.endCount)")

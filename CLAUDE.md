@@ -36,7 +36,8 @@ Tests/AgentAuraAppTests/  composition-root smoke（spec §5.2）
 plugin/                 Claude Code plugin（bin/ 是建置產物，gitignored）
 docs/superpowers/specs/2026-09-08-agentaura-design.md  ★ 正典設計，衝突以它為準
 docs/INSTALL.md         ★ 安裝／移除／疑難排解
-scripts/                build-plugin · build-app · verify-install · verify-app
+Resources/help.html     ★ bundle 內離線說明（D-l，隨 build-app.sh 複製進 app）
+scripts/                build-plugin · build-app · verify-install · verify-app · measure-cpu
 ```
 
 ## Commands
@@ -73,21 +74,63 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 - **`PipelineGraph.registry` 是 `internal` 且未加鎖，對外只走上鎖的 `visibleSessions`**（`7f9d7b8` —— `onIconStateChange` 從 FSEvents 背景 queue 上來）。
 - **`Sources/AuraCore/` 不得載入 Foundation 閉包以外的任何 module**（`58ea4b5` —— 白名單基準而非黑名單；黑名單漏掉 `CoreImage` 這類框架）。
 - **單檔上限：`Sources/` 200 行、`Tests/` 300 行**（`IsolationTests.fileLengthLimit` 從磁碟推導，新增 module 不會漏網）。
+- **`Installer` 只准碰 `<claudeHome>/skills/agentaura`（必要時加 `<claudeHome>/skills/`）這兩個路徑，判定一律以 `realpath` 解析後的位置為準；其餘 `~/.claude/` 唯讀；`~/.claude` 不存在時拒絕接上、不得建立它**（spec D-h —— `skills` 自己可能是指到別處的 symlink，用未解析的字串判定會誤殺合法的同步設定；gate `installerTouchesOnlyAllowedPaths`）。
 
 ## 這個 codebase 的 gate 哲學
 
 改動任何 gate 前先讀 `docs/2026-09-09-agentaura-audit.html`（八族「空轉的守衛」實證案例）。三條規則：
 
 1. **平台契約要問平台** —— 問編譯器（module trace）、問 `claude plugin validate --strict`、問 `swift package dump-package`。不要在它們外面再包一層自己的近似。
-2. **「涵蓋每一個 X」必須從型別／磁碟推導**，不能只寫在 doc-comment 裡（既有做法：`Mirror` 掃 stored property、`swiftFiles(under:)` 掃磁碟）。
+2. **「涵蓋每一個 X」必須從型別／磁碟推導**，不能只寫在 doc-comment 裡（既有做法：`Mirror` 掃 stored property、`swiftFiles(under:)` 掃磁碟）。**同族教訓（T16）**：數字也必須推導，寫死的數字會凍住錯誤——`LEDStripView.preferredWidth` 曾是 `8×3+7×2=34` 這個算術錯誤硬寫死成 42（正確是 38+3×2=44），`statusItemWidthFollowsRenderer` 又退化成「跟 `drawing.preferredWidth` 比對自己」，兩層一起把錯的數字凍住直到使用者實測才發現（見 spec §4.1 T16 一列、`LEDPlateSymmetryTests`）。
 3. **每個 gate 都要有 mutation 紀錄** —— 把生產碼改壞，指名的測試必須**在指定秒數內**變紅（不是掛住）。mutation 用完整字串取代、且先確認編譯成功再看測試結果。
+4. **離屏渲染裡的 SwiftUI／AppKit 橋接有兩個平台限制，會咬到任何新加的按鈕（T07 實測）**：
+   - `.bordered`／`.borderedProminent` 在離屏渲染下把真正的 `NSButton` 包進 `_FocusRingView`，
+     **沒有真 `NSWindow` 時該容器的 `subviews` 是空的**——遞迴走訪找不到、`performClick` 打不到。
+     要能從測試觸發的按鈕**必須用 `.borderless`**（`LegendRowView`／`NotConnectedView`／
+     `ConnectCTABannerView` 都因此改過或一開始就用它）。
+   - 離屏渲染下 SwiftUI 橋接出的 `NSButton` **讀不到 `.title` 也讀不到 `.accessibilityIdentifier`**
+     （連 `Button("重設"){}` 也一樣，實測皆為空）——測試定位按鈕只能用**位置索引**（`allButtons`
+     深度優先走 `subviews`，與宣告順序一致），而位置索引會被「新增按鈕」擠掉，所以新增按鈕時
+     要一併檢查既有索引斷言（例：`PanelPixelTests.panelViewForwardsAction` 加 `ConnectCTABannerView`
+     的按鈕就會多推一位）。
+5. **量時間的 gate 會被測試套件自己的負載打敗（phase 2 實測，代價是三次來回）**：
+   swift-testing 預設**跨 suite 並行**，`.serialized` 只序列化 suite **內部**。所以只要套件裡
+   真的 spawn 行程的測試變多，任何「絕對毫秒數」的斷言都會開始說謊——實測撞穿的有三條：
+   `Installer` 的 2 秒 exec 逾時（誤判成 `.hookUnconfirmed`）、`AuraHookCLITests` 的
+   「中位數 < 50 ms」（量到 **204 ms**，那條 gate 比這個 change 還老）、以及我自己加的
+   「100 次 probe ≤ 30 ms」（4/20 次紅）。三條的處置分別是：
+   - **可注入的逾時**（生產預設不動，測試注入寬鬆值；逾時那條 gate 反過來注入極小值，
+     不再依賴「機器夠慢」這個不可控前提）
+   - **跨 suite 的 spawn 閘門**（`Tests/*/Support/SpawnGate.swift`，**顯式鎖不是 actor 隱式序列化**
+     ——actor 在懸掛點可重入，只靠「呼叫 actor 方法」序列化不住跨 `await` 的臨界區），
+     並有來源掃描 gate 守「有 spawn 就必須經閘門」（觸發字面**不能用裸 `Process(`**，
+     那會連 `swiftc`／`lipo`／`claude` 一起誤判；要用只在 spawn `aura-hook` 時才設的環境變數鍵名）
+   - **相對比值取代絕對時間**：同一次執行量一個「已知必要工作」的控制組，斷言
+     `probe ≤ K × 控制組`。負載讓兩邊同時變慢、比值穩定；長出目錄列舉會讓比值爆掉
+     （實測 1.5x 基準 vs 4x 上限，mutation 衝到 11.39x）。
+   **絕不**用「重跑取最小值」或 `.disabled` 把 flake 藏起來——那會訓練出「再跑一次就好」，
+   比慢更糟。
+6. **先立基準再修**（A9 實測示範）：改任何「使用者看不看得到」的東西之前，**先寫一個診斷測試量出
+   修之前的數字**。A9 量到「`Toggle` 的 on/off 在離屏渲染下差 **0 px**」——那個 0 既是 bug 的證據，
+   也讓修完的 mutation（461 → 0）精準對得上基準。同一招在 A10（405pt）與 C2（411pt 的逐項分解）
+   都用上了。
+7. **單位要寫在 gate 的斷言旁**：evidence 圖是 @2x，`preferredContentSize` 是 pt。
+   我（主 session）就把 56 @2x 像素讀成 56pt、誤判「列高 57pt 太高」，而 spec review
+   早就抓過同一個錯（S2-7）。凡是斷言尺寸的地方，**單位寫進 doc comment**。
 
 ## 與 user-level 的分工
 
 SDD 流程框架（agent 職責、Tier 判定、Gate 分層、N-round checkpoint、git 工作流、mutation 標準程序）定義在 user-level CLAUDE.md，**本檔不重複**，只記專案特化。
 
 **Tier 1 觸發（動到以下任一檔案即派 persona-tester）：**
-`Sources/AgentAuraApp/**`（含 `LegendRowView.swift`、`PaletteStore.swift`、`ColorPickerCoordinator.swift`）、`Sources/AuraCore/IconAppearance.swift`、`Sources/AuraCore/AnimationSchedule.swift`、`Sources/AuraCore/PanelViewModel.swift`、`Sources/AuraCore/LegendModel.swift`、`plugin/hooks/hooks.json`
+`Sources/AgentAuraApp/**`（含 `LegendRowView.swift`、`PaletteStore.swift`、`ColorPickerCoordinator.swift`、
+`HookVerificationStore.swift` 及 change `app-shell` 新增的 view，如
+`PanelFooterView`／`OptionsSectionView`／`NotConnectedView`／`BannerView`／`LoginItem`）、
+`Sources/AuraCore/IconAppearance.swift`、`Sources/AuraCore/AnimationSchedule.swift`、
+`Sources/AuraCore/PanelViewModel.swift`、`Sources/AuraCore/LegendModel.swift`、
+`Sources/AuraCore/InstallState.swift`、`Sources/AuraCore/PanelAction.swift`、
+`Sources/AuraCore/OptionsMenuModel.swift`、`Sources/AuraCore/Jargon.swift`、
+`Sources/AuraHookFile/Installer.swift`、`plugin/hooks/hooks.json`
 
 ## 易腐事實
 

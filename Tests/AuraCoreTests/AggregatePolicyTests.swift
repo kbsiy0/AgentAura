@@ -8,7 +8,7 @@ struct AggregatePolicyTests {
     let policy = PriorityAggregatePolicy()
 
     func state(_ id: String, _ a: Activity, live: Bool = true) -> SessionState {
-        SessionState(id: id, projectName: id, projectPath: nil,
+        SessionState(id: id, projectName: id,
                      permissionMode: nil, effort: nil, model: nil,
                      activity: a, mainActivity: a, subActivity: nil,
                      currentTool: nil, subagentTool: nil, toolDurationMs: nil,

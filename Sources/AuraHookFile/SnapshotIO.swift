@@ -29,12 +29,15 @@ public enum SnapshotIO {
         return d
     }()
 
+    /// D1（/simplify 波次1，eff#7）：`CharacterSet` 建構一次共用，不是每次呼叫重建
+    /// （實測 3.44 µs → 0.42 µs／次）。純搬位置，字元集合與語意不變。
+    private static let allowedSessionIDCharacters = CharacterSet(charactersIn:
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+
     /// 只接受單一路徑片段的安全字元，長度 1...128。
     public static func isSafeSessionID(_ id: String) -> Bool {
         guard (1...128).contains(id.count), id != ".", id != ".." else { return false }
-        let allowed = CharacterSet(charactersIn:
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
-        return id.unicodeScalars.allSatisfy { allowed.contains($0) }
+        return id.unicodeScalars.allSatisfy { allowedSessionIDCharacters.contains($0) }
     }
 
     public static func url(for sessionID: String, root: URL = defaultRoot) throws -> URL {

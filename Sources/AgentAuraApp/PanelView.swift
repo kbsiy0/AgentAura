@@ -1,40 +1,96 @@
 import SwiftUI
 import AuraCore
 
+/// T15（app-shell）：V1「macOS 原生感」落地——`docs/superpowers/specs/2026-09-11-panel-visual-ab.md`
+/// §2 V1，使用者真渲圖 A/B 選定，§6 有決策紀錄。分組卡片＋字型層級＋原生材質，取代舊版
+/// 「不透明底、無層級、無間距節奏」。
+///
+/// **背景交回 popover**（`.background(Color.clear)`）：離屏渲染沒有真 `NSWindow`，
+/// 無法證明真 vibrancy 有沒有透出來——這條靠真 app 上肉眼確認（commit message 已標記）。
+/// 就算材質沒生效退回不透明底，文字全走 `.primary`／`.secondary`／`.tertiary` 這類語意色，
+/// 不靠這行本身撐對比，所以有讀得清楚的 fallback。
 struct PanelView: View {
     let model: PanelModel
-    var onPick: (Activity) -> Void = { _ in }
-    var onReset: () -> Void = {}
+    /// 沒有預設值：忘了傳 `onAction` 要是編譯錯，不是靜默沒反應（T04，D-j，
+    /// 同 `PanelRowView.palette` 的理由）。
+    let onAction: (PanelAction) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(model.title)
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.4))
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 14).padding(.top, 12)
 
-            if model.rows.isEmpty {
-                Text("沒有活著的 session")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .center)
+            // banner 依 §3.3 的優先序放在上方（`model.connectCTAStyle` 已經把 `.banner` 在
+            // `effectiveBanner != nil` 時降級為 `.none`，兩者不會同時要求這塊空間）。
+            // A7：讀 `effectiveBanner`（不是原始 `banner`）——`.connected` banner 在真的出現
+            // 第一個 session 之後自動退場，這裡只是顯示層，不改寫 `AppDelegate` 存的原始狀態。
+            if let banner = model.effectiveBanner {
+                BannerView(banner: banner, onAction: onAction)
+            }
+
+            // A3：`.explainOnly` 沒有 CTA 按鈕，但一樣要走大版說明（`NotConnectedView` 在
+            // `connectCTAText == nil` 時自然不畫按鈕，只印 chip 標題 ＋ `explanationDetail`）。
+            if model.connectCTAStyle == .fullPanel || model.showsExplanationPanel {
+                NotConnectedView(model: model, onAction: onAction)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(model.rows) { row in
-                            PanelRowView(row: row, palette: model.palette)
-                            Divider()
-                        }
+                // S1-P4 的一半：有活著的列時 CTA 不吃掉整個面板，縮成列上方一條窄條
+                // （`connectCTAStyle == .banner` 依 `PanelModel` 的定義恆搭配非空 rows）。
+                if model.connectCTAStyle == .banner,
+                   let cta = model.connectCTAText, let action = model.connectCTAAction {
+                    ConnectCTABannerView(label: model.install.healthLabel, subtitle: model.connectCTASubtitle,
+                                        ctaText: cta, action: action, onAction: onAction)
+                }
+                if model.rows.isEmpty {
+                    // A11（T11 A9–A11 批次）：讀 `model.emptyRowsMessage`，不再手搓
+                    // 「沒有活著的 session」——那句字面跟頂端 `model.title`（connected 時走
+                    // session 計數句子，空 session 也剛好是這句）一字不差，同一張畫面說了
+                    // 兩次同一句話。
+                    Text(model.emptyRowsMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    sessionsCard
+                }
+            }
+            LegendRowView(legend: model.legend, onAction: onAction)
+
+            PanelFooterView(model: model, onAction: onAction)
+
+            // A4：Options 展開插在 footer **下方**，不是上方——footer（含「Options ⌄」
+            // 自己）的螢幕位置因此不隨展開狀態改變。persona 實測舊版把 Options 插在 footer
+            // 上方，展開時 footer 被推下去 198pt，使用者第二下點擊（滑鼠沒動）會落在
+            // accordion 第一列上，若那列是開關（`setLaunchAtLogin`）就是靜默誤觸。
+            if model.optionsExpanded {
+                OptionsSectionView(model: model, onAction: onAction)
+            }
+        }
+        .padding(.bottom, 10)
+        .frame(width: 380)
+        .background(Color.clear)
+    }
+
+    /// T15（team-lead 看 T14 渲圖抓到的毛病之二）：分組卡片（圓角 10pt／1pt hairline）承載
+    /// session 列表，取代先前「三列擠成一團」的裸列表——卡片內用細分隔線把 session 隔開，
+    /// 縮進到與文字左緣對齊（`.padding(.leading, 40)`：圖示欄 20pt＋`HStack` 間距 8pt 再加
+    /// 文字內距，數字沿用已經真渲圖評過的 V1 原型，不重新湊）。
+    /// `ScrollView` 保留（V1 的 12 張渲圖只涵蓋 3 個 session，沒驗過超量情境，生產仍需要
+    /// 捲動避免 session 數一多就把 footer／Options 推出視窗）。
+    private var sessionsCard: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(model.rows.enumerated()), id: \.element.id) { index, row in
+                    PanelRowView(row: row, palette: model.palette)
+                    if index < model.rows.count - 1 {
+                        Divider().padding(.leading, 40)
                     }
                 }
-                .frame(maxHeight: 420)
             }
-            LegendRowView(legend: model.legend, isDefaultPalette: model.isDefaultPalette,
-                        onPick: onPick, onReset: onReset)
         }
-        .frame(width: 380)
+        .frame(maxHeight: 420)
+        .panelCard(filled: false)
     }
 }
 
@@ -49,30 +105,33 @@ struct PanelRowView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 9) {
+        HStack(alignment: .top, spacing: 8) {
             // 列色點只借色相，不借 alpha——idle 的 a=0.35 在面板上只是「看不見」（review-t0406 I3：白底 1.31:1）
+            // T19 配套 B：與 `LegendDot` 共用同一份 `DotRing`（見該檔理由）——白色 working 列在
+            // 白色卡片背景上沒有這圈邊線會直接消失。
             Circle().fill(Color(rgba: palette[row.activity], ignoringAlpha: true))
-                .frame(width: 8, height: 8).padding(.top, 5)
+                .overlay(DotRing())
+                .frame(width: 8, height: 8).padding(.top, 6).frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(row.projectName).font(.system(size: 12, weight: .semibold))
-                    Text(row.meta).font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                    Text(row.projectName).font(.system(size: 13, weight: .semibold))
+                    Text(row.meta).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
+                // T15：headline 拿掉等寬（V1 token「headline 12 非等寬」——六個現況問題之一
+                // 「等寬字太多」的來源，D-c 只保了 tool 名這句口吻，字型設計本身沒理由等寬）。
                 Text(row.headline)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 12))
                     .foregroundStyle(row.activity == .error ? .red : .primary)
                     .lineLimit(1).truncationMode(.middle)
                 // 副行字串由 model 拼（`PanelRow.footer`，「已結束」在行首）；view 不得自己拼——
                 // `AppLayerSourceScanTests.panelFooterComesFromModel` 守這條。
                 if !row.footer.isEmpty {
-                    Text(row.footer)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                    Text(row.footer).font(.system(size: 11)).foregroundStyle(.tertiary)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12).padding(.vertical, 7)
+        .padding(.horizontal, 10)
+        .frame(minHeight: 28)
     }
 }

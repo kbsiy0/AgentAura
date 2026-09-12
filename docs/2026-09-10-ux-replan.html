@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AgentAura 操作層重新規劃</title>
+<style>
+:root{
+  --bg:#0e0f12; --card:#16181d; --card2:#1b1e24; --line:#2a2e37;
+  --ink:#e8eaee; --ink2:#a8aeb9; --ink3:#6f7681;
+  --red:#ff453a; --orange:#ff9f0a; --blue:#0a84ff; --green:#30d158; --yellow:#ffd60a;
+  --accent:#7aa2ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.72 -apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang TC","Noto Sans TC",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:56px 28px 120px}
+h1{font-size:30px;line-height:1.3;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--ink3);font-size:13px;margin-bottom:40px}
+h2{font-size:20px;margin:56px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+h2 .n{color:var(--ink3);font-weight:400;margin-right:10px;font-variant-numeric:tabular-nums}
+h3{font-size:15px;margin:28px 0 8px;color:var(--ink)}
+p{margin:10px 0}
+.lede{font-size:16px;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:0 8px 8px 0;padding:16px 20px;margin:18px 0}
+code{font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#22262e;padding:1.5px 5px;border-radius:4px;color:#cfd6e2}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink3);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+tr:hover td{background:#14161b}
+.y{color:var(--green)}.n{color:var(--red)}.m{color:var(--orange)}
+.tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+.tag.do{background:rgba(48,209,88,.12);border-color:rgba(48,209,88,.35);color:#7ee29a}
+.tag.no{background:rgba(255,69,58,.1);border-color:rgba(255,69,58,.3);color:#ff8e86}
+.tag.later{background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.3);color:#ffc266}
+.grid{display:grid;gap:18px}
+@media(min-width:820px){.grid.c2{grid-template-columns:1fr 1fr}.grid.c3{grid-template-columns:repeat(3,1fr)}}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.box h4{margin:0 0 8px;font-size:13px;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
+ul{margin:8px 0;padding-left:20px}li{margin:5px 0}
+/* ── 面板 mockup ── */
+.mock{background:#1c1f26;border:1px solid #34394480;border-radius:12px;width:340px;overflow:hidden;
+  box-shadow:0 18px 40px -12px #000;font-size:12px;color:#e8eaee}
+.mock .hd{padding:8px 12px;background:#ffffff0a;font-weight:600;font-size:12px;display:flex;align-items:center;gap:8px}
+.mock .hd .sp{flex:1}
+.mock .gear{color:var(--ink3);font-size:13px}
+.mock .row{padding:7px 12px;border-top:1px solid #ffffff0d;display:flex;gap:9px}
+.mock .dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:5px}
+.mock .pn{font-weight:600;font-size:12px}
+.mock .meta{color:var(--ink3);font-size:10px;font-family:ui-monospace,Menlo,monospace}
+.mock .hl{font-size:11px;font-family:ui-monospace,Menlo,monospace;margin-top:2px}
+.mock .ft2{font-size:10px;color:#7b828d;font-family:ui-monospace,Menlo,monospace;margin-top:2px}
+.mock .lg{padding:7px 12px;border-top:1px solid #ffffff14;display:flex;gap:12px;align-items:center;font-size:11px}
+.mock .lg i{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:-1px}
+.mock .hint{padding:0 12px 7px;font-size:11px;color:var(--ink3);display:flex;align-items:center;gap:8px}
+.mock .bar{padding:7px 12px;border-top:1px solid #ffffff14;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3);background:#ffffff05}
+.mock .btn{margin-left:auto;border:1px solid #3a3f4a;border-radius:6px;padding:3px 9px;font-size:11px;color:var(--ink)}
+.mock .empty{padding:26px 18px;text-align:center;color:var(--ink3);font-size:11px}
+.mock .cta{padding:18px}
+.mock .cta b{display:block;font-size:13px;margin-bottom:6px}
+.mock .cta p{margin:0 0 12px;font-size:11px;color:var(--ink2);line-height:1.6}
+.mock .cta .bs{display:flex;gap:8px}
+.mock .prim{background:var(--blue);color:#fff;border-radius:6px;padding:5px 12px;font-size:11.5px;font-weight:600}
+.mock .sec{border:1px solid #3a3f4a;border-radius:6px;padding:5px 12px;font-size:11.5px}
+.chip{display:inline-flex;align-items:center;gap:5px}
+.chip i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.menu{background:#22252c;border:1px solid #3a3f4a;border-radius:8px;padding:5px;width:250px;font-size:12px;box-shadow:0 14px 30px -10px #000}
+.menu div{padding:5px 9px;border-radius:5px;display:flex;gap:10px}
+.menu div span{margin-left:auto;color:var(--ink3);font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.menu hr{border:0;border-top:1px solid #33373f;margin:5px 3px}
+.menu .hi{background:#ffffff0d}
+.cap{font-size:11.5px;color:var(--ink3);margin-top:9px;text-align:center}
+.led{display:inline-flex;gap:2px;padding:3px 4px;background:#141416;border-radius:5px;vertical-align:middle}
+.led b{width:3px;height:11px;border-radius:1px;display:block}
+.q{background:linear-gradient(180deg,#1a1d24,#16181d);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:18px 0}
+.q h3{margin:0 0 4px;font-size:15px;color:#fff}
+.q .why{font-size:13px;color:var(--ink2);margin:6px 0 12px}
+.opt{display:flex;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:#12141980}
+.opt .k{font-weight:700;color:var(--accent);flex:none;width:18px}
+.opt.rec{border-color:rgba(122,162,255,.45);background:rgba(122,162,255,.07)}
+.opt .t{font-size:13px}
+.opt .t em{display:block;font-style:normal;color:var(--ink3);font-size:12px;margin-top:2px}
+.note{font-size:12.5px;color:var(--ink3);border-top:1px dashed var(--line);margin-top:44px;padding-top:14px}
+svg{max-width:100%;height:auto;display:block;margin:14px auto}
+.frozen{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.frozen span{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:4px 9px;color:var(--ink2);background:#13151a}
+</style></head><body><div class="wrap">
+
+<h1>AgentAura 操作層重新規劃</h1>
+<div class="sub">2026-09-10 · brainstorm 階段（尚未寫 spec）· 參考 Amphetamine 5.x、OpenUsage 0.7.10</div>
+
+<div class="lede">
+現在的 AgentAura 是一個<b>只有主功能、沒有外殼</b>的 app。狀態顯示做到了像素級（八顆燈、聚合優先序、動畫曲線都有 gate 守著），
+但缺少每個選單列 app 都有的那一層：離開、設定、關於，以及最關鍵的一句——<b>「我到底有沒有接上？」</b>
+非工程師開起來看到八顆暗燈，無法分辨「沒 session 在跑」、「Claude Code 沒開」、「hook 根本沒裝」——
+<b>這三件事目前在畫面上長得一模一樣</b>。這是「太工程師」真正的來源，不是配色也不是字級。
+</div>
+
+<h2><span class="n">1</span>對照：兩個成熟的選單列 app 有什麼、我們缺什麼</h2>
+<table>
+<tr><th>基本功能</th><th>Amphetamine</th><th>OpenUsage</th><th>AgentAura（phase 2 前）</th><th>AgentAura（phase 2 後）</th></tr>
+<tr><td><b>離開 app</b></td><td class="y">✅ Quit ⌘Q</td><td class="y">✅ Options ⌄</td><td class="n">❌ 只能 <code>pkill</code> 或活動監視器</td><td class="y">✅ Options 的「離開 AgentAura ⌘Q」，<b>⌘Q 真的接線</b>（`QuitKeyMonitor`）</td></tr>
+<tr><td><b>設定入口</b></td><td class="y">✅ Settings…（9 個 tab 的視窗）</td><td class="y">✅ Options ⌄</td><td class="n">❌ 完全沒有</td><td class="y">✅ footer「Options ⌄」→ 面板內展開 10 列、五群分隔；右鍵圖示直接展開</td></tr>
+<tr><td><b>開機自動啟動</b></td><td class="y">✅ 勾選框</td><td class="y">✅</td><td class="n">❌ 要自己拖進「登入項目」</td><td class="y">✅ 開關（`SMAppService`），旁邊有自繪「開／關」字樣</td></tr>
+<tr><td><b>版本／關於</b></td><td class="y">✅ About</td><td class="y">✅ footer「OpenUsage 0.7.10」</td><td class="n">❌ 使用者不知道跑的是哪版</td><td class="y">✅ footer 印版本；「關於」有版本＋專案連結＋授權</td></tr>
+<tr><td><b>存活證明</b></td><td class="y">✅「Current Session Details / Manual Activation」</td><td class="y">✅「Next update in 5m」</td><td class="n">❌ 燈全暗時無從判斷是「沒事」還是「壞了」</td><td class="y">✅ 健康 chip（11 種狀態逐格不同文字）＋ tooltip 不再說謊；<b>接上時真的 spawn 一次 hook 看產物</b></td></tr>
+<tr><td><b>說明／回報</b></td><td class="y">✅ Feedback &amp; Support ▸ 、右下「?」</td><td class="y">✅ Status ↗ / Dashboard ↗</td><td class="n">❌ 只有 repo 裡的 markdown</td><td class="y">✅ bundle 內離線 `help.html`＋「回報問題…」開 GitHub issues</td></tr>
+<tr><td><b>安裝／移除</b></td><td class="y">拖進 /Applications 即可</td><td class="y">同上</td><td class="n">❌ 六行終端機指令（<code>git clone</code>／<code>ln -sfn</code>／三個 script）</td><td class="y">✅ 拖進「應用程式」→ 開起來 → 按［接上］；移除也是一鍵（確認框寫明會刪什麼）</td></tr>
+<tr><td><b>首次上手</b></td><td class="m">△ 靠設定預設值</td><td class="y">✅ 面板本身就是資料</td><td class="m">△ 圖例列（2026-09-10 剛做，有效）</td><td class="y">✅ 圖例列 ＋ 首次啟動未接上時自動開面板 ＋ 填色 CTA（對比 5.62:1）</td></tr>
+<tr><td><b>主要動作</b></td><td class="y">✅ End Current Session ⌘X</td><td>—</td><td>— <span class="tag">刻意沒有：scope 是只看，不觸碰 agent（D2）</span></td><td>— <span class="tag">同左，未改</span></td></tr>
+</table>
+
+<p class="lede" style="margin-top:18px"><b>phase 2 結果</b>：上表九列裡，原本 ❌ 的七列全部補齊，△ 的一列升級。
+唯一仍是「—」的是主要動作——那是刻意的（scope 是只看，不觸碰 agent，D2）。
+另外做了兩個參照 app 都沒有、但我們特別需要的東西：<b>接上時真的執行一次 hook 看產物才敢說成功</b>
+（因為我們的資料來自使用者看不見的 hook，而它可能被 macOS 隔離掉），以及
+<b>「減少動態」開關</b>（Amphetamine 有 Reduce motion，而它剛好就是 R4 注意力預算的使用者控制）。
+明確不做並記了理由：統計／歷史／成本、系統通知、熱鍵、重設全部設定。</p>
+
+<h2><span class="n">2</span>從它們身上抽出的五條模式</h2>
+<div class="grid c2">
+<div class="box"><h4>① 一個入口，全部東西</h4>
+兩個 app 都沒有 Dock icon、沒有主視窗。所有東西——資料、設定、關於、離開——都從點一下選單列圖示長出來。
+<b>我們的 <code>LSUIElement</code> 是對的，缺的是那個「長出來」的下半部。</b></div>
+
+<div class="box"><h4>② 無聊但必要的東西集中在底部</h4>
+OpenUsage 的 footer：左邊<code>OpenUsage 0.7.10 / Next update in 5m</code>，右邊一顆<code>Options ⌄</code>。
+Amphetamine 用分隔線把 About / Feedback / Quit 押在最下面。
+<b>模式是：把行政事務收成一格、視覺上壓低，不要跟主資料搶。</b></div>
+
+<div class="box"><h4>③ 存活證明是一等公民</h4>
+「Next update in 5m」不是裝飾——它讓你在數字看起來不對時，知道問題不在 app 死了。
+<b>我們更需要：因為我們的資料來自一個使用者看不見的 hook，而它可能根本沒裝。</b></div>
+
+<div class="box"><h4>④ 標準動詞、標準快捷鍵</h4>
+⌘Q 離開、⌘, 設定、⌘X 主要動作，而且<b>寫在選項旁邊</b>。幾乎零成本，但這是「這是一個真的 app」最便宜的訊號。</div>
+
+<div class="box"><h4>⑤ 設定的規模要配得上 app 的規模</h4>
+Amphetamine 有九個 tab，是因為它真的有九個子系統（觸發器、熱鍵、硬碟保活、統計…）。
+我們只有四個設定。<b>照抄一個設定視窗＝抄錯了那一半。</b></div>
+
+<div class="box"><h4>⑥（反例）不要抄的：資料野心</h4>
+OpenUsage 的 30 天趨勢、成本圓餅、用量進度條，來自它會存歷史、會打 API。
+我們的 scope 是「<b>現在</b>如何」，且刻意不存任何歷史。<b>抄了就要資料庫、保留政策、隱私說明——那是另一個產品。</b></div>
+</div>
+
+<h2><span class="n">3</span>底層不動（已定案，本輪不碰）</h2>
+<div class="frozen">
+<span>八顆 LED ＋ 不透明底板（A2，證據決定）</span><span>IconState 聚合與 D1 優先序</span>
+<span>主／副槽分離</span><span>waiting 不進尾巴（§2.4.1）</span><span>idle_prompt 不映射 waiting</span>
+<span>關面板才 acknowledge（§3.7）</span><span>hook 契約與 141 個實測 payload</span>
+<span>aura-hook 一律 exit 0、輸出全空</span><span>絕不寫 settings.json（D3/R6）</span><span>四色可改、idle 不可改</span>
+</div>
+<p>本輪只做「使用者的手指碰得到」的那一層。任何提案若需要改上面任一條，就不做。</p>
+
+<h2><span class="n">4</span>要做（七項）</h2>
+<table>
+<tr><th style="width:32px">#</th><th>項目</th><th>為什麼非做不可</th><th style="width:64px">成本</th></tr>
+<tr><td>M-1</td><td><b>離開 AgentAura</b>（⌘Q）</td><td>現在唯一的關閉方式是 <code>pkill</code>。這是「太工程師」最大的單一破口——一個裝好後<b>關不掉</b>的選單列常駐程式，對一般使用者是恐怖的。</td><td>極低</td></tr>
+<tr><td>M-2</td><td><b>「接不上」狀態面板 ＋ 一鍵接上</b></td><td>spec §3.8 寫了自我健檢、DoD 寫「死 hook 偵測 100%」，<b>但實際從來沒實作</b>（M5 漏掉，沒人抓到）。沒接上時面板長得跟「沒 session」一樣。<code>${CLAUDE_PLUGIN_ROOT}</code> 是相對路徑，所以把 <code>plugin/</code> 放進 app bundle、由 app 自己建 symlink，<b>技術上完全可行且零 hook 改動</b>。</td><td>中</td></tr>
+<tr><td>M-3</td><td><b>開機自動啟動</b></td><td>觀測工具重開機就消失＝壞的。目前只能手動拖進「系統設定 → 登入項目」。<code>SMAppService.mainApp</code>（macOS 13+）一個開關。</td><td>低</td></tr>
+<tr><td>M-4</td><td><b>關於／版本</b></td><td>使用者要能回答「我裝的是哪一版」。OpenUsage 直接印在 footer。</td><td>極低</td></tr>
+<tr><td>M-5</td><td><b>設定入口（Options ⌄）</b></td><td>承載 M-1／M-3／M-4 ＋ 重設顏色 ＋ 移除掛載 ＋ 說明。<b>一個選單，不是一個視窗。</b></td><td>低</td></tr>
+<tr><td>M-6</td><td><b>移除掛載（一鍵）</b></td><td>R6 是「一步安裝、一步移除」。有了一鍵接上就必須有一鍵移除，否則只做了一半。</td><td>低</td></tr>
+<tr><td>M-7</td><td><b>去工程師化文案</b></td><td><code>claude-fable-5-1 · xhigh · auto</code> → 「Fable 5.1 · 高強度」；「燈固定 8 顆，與 session 數無關」講的是實作細節；空狀態要能分辨三種原因。</td><td>極低</td></tr>
+</table>
+
+<h2><span class="n">5</span>不做（以及為什麼）</h2>
+<table>
+<tr><th>項目</th><th>判定</th><th>理由</th></tr>
+<tr><td>獨立的設定視窗（Amphetamine 九 tab）</td><td><span class="tag no">不做</span></td><td>我們只有四個設定。視窗＝新的 window controller、狀態雙向同步、<code>LSUIElement</code> 的 activate 例外處理。全部塞進 popover。</td></tr>
+<tr><td>統計／歷史／趨勢圖（OpenUsage）</td><td><span class="tag no">不做</span></td><td>刻意不存歷史。加了就要資料庫、保留政策、隱私說明。</td></tr>
+<tr><td>token／成本顯示</td><td><span class="tag no">不做</span></td><td>hook payload 裡沒有成本資料，要另接 API。那是 OpenUsage 的產品，不是我們的。</td></tr>
+<tr><td>熱鍵</td><td><span class="tag no">不做</span></td><td>我們沒有可觸發的動作（唯讀）。</td></tr>
+<tr><td>Dock icon／主視窗</td><td><span class="tag no">不做</span></td><td><code>LSUIElement</code> 是對的。</td></tr>
+<tr><td>自動更新（Sparkle）</td><td><span class="tag no">不做</span></td><td>開源自建；M6 的 README 足夠。</td></tr>
+<tr><td>右鍵直接開 Options</td><td><span class="tag later">加分項</span></td><td>約五行，工程師的快速路徑。但<b>不能當唯一入口</b>——非工程師不會右鍵。做完 M-5 再順手加。</td></tr>
+<tr><td><b>系統通知</b>（session 完成／出錯時 banner）</td><td><span class="tag later">下一輪</span></td><td>真正的候選，但它<b>改變產品性質</b>：從「餘光看得到」變成「主動打擾」，直接撞 R4 注意力預算。需要自己的 brainstorm（要不要分狀態、要不要免打擾時段、會不會變成第二個 Slack）。</td></tr>
+</table>
+
+<h2><span class="n">6</span>面板的三個狀態</h2>
+<p>版面提案（<b>Layout B</b>，見 §8 問題一）：保留現有的標題／列／圖例列，<b>底部加一條 utility bar</b>——
+左邊是健康狀態＋版本，右邊是 <code>Options ⌄</code>。原本永遠佔一格、且大多時間是灰掉的「重設」按鈕收進 Options。</p>
+
+<div class="grid c3" style="align-items:start;margin-top:22px">
+<div>
+  <div class="mock">
+    <div class="cta">
+      <b>還沒接上 Claude Code</b>
+      <p>AgentAura 需要一個 plugin hook 才能看到 session 狀態。<br>按下「接上」會在 <code style="font-size:10px">~/.claude/skills/</code> 建一個連結，<b>不會改動任何設定檔</b>。</p>
+      <div class="bs"><span class="prim">接上</span><span class="sec">這是什麼？</span></div>
+    </div>
+    <div class="bar"><span class="chip"><i style="background:var(--yellow)"></i>接不上</span><span style="color:#4d535c">·</span>v0.1.0<span class="btn">Options ⌄</span></div>
+  </div>
+  <div class="cap">① 接不上（含首次啟動）<br>首次啟動且未接上 → <b>自動打開一次</b></div>
+</div>
+
+<div>
+  <div class="mock">
+    <div class="hd">沒有 session 在跑</div>
+    <div class="empty">Claude Code 開起來、開始跑之後<br>這裡會列出每個 session</div>
+    <div class="lg"><span><i style="background:var(--red)"></i>錯誤</span><span><i style="background:var(--orange)"></i>等你</span><span><i style="background:var(--blue)"></i>執行中</span><span><i style="background:var(--green)"></i>已完成</span></div>
+    <div class="hint">八顆燈一起代表全部 session · 點色點改顏色</div>
+    <div class="bar"><span class="chip"><i style="background:var(--green)"></i>已接上</span><span style="color:#4d535c">·</span>v0.1.0<span class="btn">Options ⌄</span></div>
+  </div>
+  <div class="cap">② 已接上、沒事做<br>「已接上」就是存活證明</div>
+</div>
+
+<div>
+  <div class="mock">
+    <div class="hd">1 個需要你 · 2 個在跑</div>
+    <div class="row"><span class="dot" style="background:var(--orange)"></span><div>
+      <div><span class="pn">fitness-tracker</span> <span class="meta">Opus 5 · 高強度</span></div>
+      <div class="hl">在等你批准：刪除 build/ 舊產物</div>
+      <div class="ft2">本輪 2m 21s · 49 秒前</div></div></div>
+    <div class="row"><span class="dot" style="background:var(--blue)"></span><div>
+      <div><span class="pn">payments-api</span> <span class="meta">Sonnet 5 · 自動接受</span></div>
+      <div class="hl">正在編輯 strategy.py</div>
+      <div class="ft2">本輪 6m 20s · 2 個子代理 · 1 秒前</div></div></div>
+    <div class="row"><span class="dot" style="background:var(--green)"></span><div>
+      <div><span class="pn">AgentAura</span> <span class="meta">Fable 5.1</span></div>
+      <div class="hl">測試全綠，293 個通過</div>
+      <div class="ft2">已結束 · 本輪 3m 12s · 2 分前</div></div></div>
+    <div class="lg"><span><i style="background:var(--red)"></i>錯誤</span><span><i style="background:var(--orange)"></i>等你</span><span><i style="background:var(--blue)"></i>執行中</span><span><i style="background:var(--green)"></i>已完成</span></div>
+    <div class="hint">八顆燈一起代表全部 session · 點色點改顏色</div>
+    <div class="bar"><span class="chip"><i style="background:var(--green)"></i>已接上</span><span style="color:#4d535c">·</span>v0.1.0<span class="btn">Options ⌄</span></div>
+  </div>
+  <div class="cap">③ 日常（含 M-7 文案）<br><code>xhigh</code>→「高強度」、<code>auto</code>→「自動接受」</div>
+</div>
+</div>
+
+<h3 style="margin-top:34px">Options ⌄ 的內容（六項，一層，不再有子選單）</h3>
+<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start">
+<div class="menu">
+  <div class="hi">開機自動啟動<span>✓</span></div>
+  <div>說明與快速上手…</div>
+  <hr>
+  <div>重設顏色</div>
+  <div>重新接上 Claude Code</div>
+  <div>移除掛載…</div>
+  <hr>
+  <div>關於 AgentAura</div>
+  <div>離開 AgentAura<span>⌘Q</span></div>
+</div>
+<div style="flex:1;min-width:260px">
+<ul>
+<li><b>開機自動啟動</b>：<code>SMAppService</code>，勾選狀態即真實狀態（每次開啟選單重讀，不自己記）。</li>
+<li><b>說明與快速上手</b>：開一個 bundle 內的 HTML（離線可讀），不是 GitHub 連結。</li>
+<li><b>重設顏色</b>：從圖例列搬過來——它一年按一次，卻永遠佔一格且多半是灰的。</li>
+<li><b>重新接上</b>：symlink 斷了（app 被搬走／更新）時的修復鍵；平常也無害。</li>
+<li><b>移除掛載…</b>：確認對話框列出「會刪什麼、不會刪什麼」（R6 對稱）。</li>
+<li><b>離開</b>：<code>NSApp.terminate</code>。快捷鍵字樣照 macOS 慣例印在右邊。</li>
+</ul>
+</div>
+</div>
+
+<h2><span class="n">7</span>流程</h2>
+<svg viewBox="0 0 1000 340" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang TC,sans-serif">
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+<path d="M0,0 L7,3.2 L0,6.4 z" fill="#6f7681"/></marker></defs>
+<style>
+.bx{fill:#16181d;stroke:#2a2e37;rx:9}.bxa{fill:#1a2130;stroke:#3f5480;rx:9}
+.t{fill:#e8eaee;font-size:13px}.t2{fill:#a8aeb9;font-size:11.5px}.l{fill:#6f7681;font-size:11px}
+.ln{stroke:#6f7681;stroke-width:1.4;fill:none;marker-end:url(#a)}
+.dsh{stroke:#4a5060;stroke-width:1.3;fill:none;stroke-dasharray:4 4;marker-end:url(#a)}
+</style>
+<rect class="bx" x="14" y="24" width="150" height="58"/>
+<text class="t" x="30" y="48">拖進 /Applications</text><text class="t2" x="30" y="66">開起來</text>
+
+<path class="ln" d="M172,53 H214"/>
+<rect class="bxa" x="222" y="14" width="196" height="78"/>
+<text class="t" x="240" y="38">面板自動開一次</text>
+<text class="t2" x="240" y="57">「還沒接上 Claude Code」</text>
+<text class="t2" x="240" y="75">［接上］［這是什麼？］</text>
+
+<path class="ln" d="M426,53 H468"/>
+<rect class="bx" x="476" y="14" width="184" height="78"/>
+<text class="t" x="494" y="38">建立 symlink</text>
+<text class="t2" x="494" y="57">bundle 內的 plugin →</text>
+<text class="t2" x="494" y="75">~/.claude/skills/agentaura</text>
+
+<path class="ln" d="M668,53 H710"/>
+<rect class="bx" x="718" y="14" width="264" height="78"/>
+<text class="t" x="736" y="38">健檢：連結存在 · 二進位可執行</text>
+<text class="t2" x="736" y="57">✅「已接上 · 下一個 session 起生效」</text>
+<text class="t2" x="736" y="75">（不必重啟 Claude Code，已實測）</text>
+
+<path class="ln" d="M850,100 V138"/>
+<rect class="bx" x="640" y="146" width="342" height="72"/>
+<text class="t" x="658" y="172">日常：點燈 → 看列 → 關面板（＝確認）</text>
+<text class="t2" x="658" y="192">燈熄、已結束的列消失、狀態檔刪除</text>
+<text class="t2" x="658" y="210">Options ⌄ 承載設定／關於／離開</text>
+
+<path class="dsh" d="M640,182 H470"/>
+<rect class="bx" x="222" y="146" width="240" height="72"/>
+<text class="t" x="240" y="172">app 被搬走／更新 → 連結斷</text>
+<text class="t2" x="240" y="192">健檢抓到 → footer 變黃「接不上」</text>
+<text class="t2" x="240" y="210">面板頂端出現［重新接上］</text>
+<path class="dsh" d="M342,226 V262 H520 V236"/>
+<text class="l" x="352" y="252">修好後回到日常</text>
+
+<rect class="bx" x="14" y="146" width="180" height="72"/>
+<text class="t" x="32" y="172">移除</text>
+<text class="t2" x="32" y="192">Options → 移除掛載…</text>
+<text class="t2" x="32" y="210">→ 刪連結 → 離開 app</text>
+</svg>
+
+<h2><span class="n">8</span>要你決定的（兩大三小）</h2>
+
+<div class="q"><h3>問題一 · 行政區放哪裡</h3>
+<div class="why">兩種都能塞進 M-1／M-3～M-6，差在版面成本與可發現性。</div>
+<div class="opt rec"><span class="k">A</span><div class="t"><b>底部 utility bar（OpenUsage 式）</b>— 我的建議
+<em>「● 已接上 · v0.1.0」＋「Options ⌄」。多一列（約 28px）。<b>有文字的按鈕，非工程師找得到</b>；健康狀態有位置寫完整句子（「接不上，點這裡修」），不只是一顆點。兩個參考 app 都沒有用裸齒輪。</em></div></div>
+<div class="opt"><span class="k">B</span><div class="t"><b>標題列右上一顆齒輪 ⚙︎</b>
+<em>零新增列，健康狀態縮成一顆彩點放在原本「重設」的位置。省 28px，但齒輪對非工程師的可發現性明顯較差，且健康狀態只剩顏色、沒有句子。</em></div></div>
+</div>
+
+<div class="q"><h3>問題二 · Options 用系統選單還是面板內展開</h3>
+<div class="why">面板是 <code>NSPopover</code>；彈出 <code>NSMenu</code> 會搶走焦點，popover 預設會關掉。</div>
+<div class="opt rec"><span class="k">A</span><div class="t"><b>面板內展開一區（accordion）</b>— 我的建議
+<em>無焦點問題、開關是真的 SwiftUI Toggle、一個心智模型（東西都在面板裡）。代價：展開時面板變高；快捷鍵字樣只能當灰字提示。</em></div></div>
+<div class="opt"><span class="k">B</span><div class="t"><b>真的 <code>NSMenu</code></b>
+<em>最符合 macOS 慣例、⌘Q 字樣天然。代價：要在選單開啟期間把 popover 釘住——這正是改色時對 <code>NSColorPanel</code> 做的事（<code>.semitransient</code> ＋ <code>menuDidClose</code> 解除），機制現成但又多一條會壞的接縫。</em></div></div>
+</div>
+
+<div class="q"><h3>三個小的</h3>
+<div class="opt"><span class="k">1</span><div class="t"><b>「接不上」時選單列圖示要不要有變化？</b>
+<em>建議<b>不變</b>（八顆全暗）＋ tooltip 寫「還沒接上」＋ 首次啟動自動開面板一次。理由：拿黃燈當警示會跟「等你」撞色，破壞剛做好的四燈語意（R7）。</em></div></div>
+<div class="opt"><span class="k">2</span><div class="t"><b>M-7 文案要走多遠？</b>
+<em>保守＝只改 <code>xhigh</code>／<code>auto</code> 這類代碼字；徹底＝連 headline 的等寬字型與「本輪」等說法一起改。建議保守，因為等寬字在顯示指令與檔名時真的更好讀。</em></div></div>
+<div class="opt"><span class="k">3</span><div class="t"><b>一鍵接上要不要一併把 app 搬進 /Applications？</b>
+<em>建議<b>不要</b>——app 自己搬自己很容易出錯（正在執行、權限、Gatekeeper），而且違反「使用者完全掌控」。改成：偵測到 app 在 <code>~/Downloads</code> 或 repo 的 <code>build/</code> 底下時，在說明頁提醒一句。</em></div></div>
+</div>
+
+<h2><span class="n">9</span>影響範圍與 R9 帳</h2>
+<div class="grid c2">
+<div class="box"><h4>會動到的檔案</h4>
+<ul>
+<li>新增 <code>InstallState.swift</code>（AuraCore：純邏輯，判定 已接上／連結斷／二進位不可執行）</li>
+<li>新增 <code>Installer.swift</code>（AuraHookFile：建／刪 symlink，唯一會寫 <code>~/.claude/</code> 的地方，且只碰 <code>skills/agentaura</code>）</li>
+<li>新增 <code>OptionsView.swift</code>／<code>NotConnectedView.swift</code>、<code>LoginItem.swift</code></li>
+<li>改 <code>PanelView</code>（footer ＋ 三態）、<code>PanelModel</code>（多帶 install 狀態）、<code>AppDelegate</code>（接線）</li>
+<li>改 <code>build-app.sh</code>：把 <code>plugin/</code> 複製進 <code>Contents/Resources/plugin/</code>（app 自我包含）</li>
+<li>改 <code>INSTALL.md</code>／<code>README</code>：主路徑變成「開起來、按接上」，終端機那條降級為「開發者路徑」</li>
+</ul></div>
+<div class="box"><h4>R9（極輕量）的帳</h4>
+<ul>
+<li><b>CPU：0</b>——全部是點擊才跑的路徑，不進動畫迴圈。</li>
+<li><b>RSS：≈0</b>——沒有新的常駐物件；<code>NSMenu</code>／accordion 都是隨用隨建。</li>
+<li><b>執行檔</b>：+ 幾十 KB。但 bundle 會 <b>+ 一顆 universal <code>aura-hook</code></b>（現有 <code>plugin/bin</code> 的大小），這是自我包含的代價，我認為值得。</li>
+<li><b>啟動時間</b>：健檢是兩次 <code>lstat</code>／<code>access</code>，可忽略（不要學 <code>NSColorPanel.shared</code> 那次 +120ms 的教訓）。</li>
+<li><b>新的 invariant</b>：「只准碰 <code>~/.claude/skills/agentaura</code> 這一個路徑，其餘 <code>~/.claude/</code> 唯讀」——要有 gate 從磁碟／原始碼推導，不是寫在註解裡。</li>
+</ul></div>
+</div>
+
+<p style="margin-top:22px">建議把這七項打包成 <b>Change 3「操作層」</b>，走完整 SDD（spec → 四視角審 → TDD → integrator → Tier 1 persona，因為全部踩在 <code>Sources/AgentAuraApp/**</code>）。
+它同時把 <b>M5 漏掉的 §3.8 自我健檢補回來</b>，並讓 M6（開源）真的有意義——現在的 README 需要使用者會用終端機。</p>
+
+<div class="note">brainstorm 產出，尚未寫 spec。決策定案後才進 <code>docs/superpowers/specs/</code>。
+底層邏輯（聚合、hook 契約、acknowledge 語意、八燈形態）本輪一律不動。</div>
+</div></body></html>

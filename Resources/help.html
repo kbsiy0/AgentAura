@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentAura 說明</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f5f3;
+    --panel: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b6b70;
+    --border: #e2e0dc;
+    --accent: #2f6fed;
+    --code-bg: #eeece8;
+    --warn-bg: #fff4e5;
+    --warn-border: #e8b979;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --panel: #262628;
+      --text: #f2f1ee;
+      --muted: #a3a2a0;
+      --border: #3a3a3c;
+      --accent: #6ea1ff;
+      --code-bg: #333335;
+      --warn-bg: #3a2f1a;
+      --warn-border: #a67c34;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.55rem;
+    margin: 0 0 0.4rem;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin: 0 0 2.2rem;
+    font-size: 0.95rem;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.3rem 1.4rem;
+    margin-bottom: 1.1rem;
+  }
+  h2 {
+    font-size: 1.05rem;
+    margin: 0 0 0.7rem;
+  }
+  h3 {
+    font-size: 0.95rem;
+    margin: 1.1rem 0 0.4rem;
+  }
+  p { margin: 0.5rem 0; }
+  ul, ol { margin: 0.5rem 0; padding-left: 1.3rem; }
+  li { margin: 0.35rem 0; }
+  .lights {
+    list-style: none;
+    padding: 0;
+    margin: 0.6rem 0;
+  }
+  .lights li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0.5rem 0;
+  }
+  .dot {
+    flex: none;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    margin-top: 0.15rem;
+  }
+  .dot.error   { background: #e0453b; }
+  .dot.waiting { background: #f0a020; }
+  .dot.working { background: #3f6fb5; }
+  .dot.done    { background: #3a9a5c; }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.88em;
+  }
+  .note {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    margin: 0.7rem 0;
+    font-size: 0.92rem;
+  }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+  a { color: var(--accent); }
+  details {
+    border-top: 1px solid var(--border);
+    padding-top: 0.6rem;
+    margin-top: 0.6rem;
+  }
+  details:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  summary::marker { color: var(--accent); }
+  details > *:not(summary) { margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AgentAura 說明</h1>
+  <p class="subtitle">這一頁完全離線可讀，不需要網路，也不用懂程式。</p>
+
+  <section>
+    <h2>快速上手</h2>
+    <ol>
+      <li>打開 AgentAura，面板會顯示「還沒接上」，按一下藍色的「接上」。</li>
+      <li>開一個新的 Claude Code 對話（已經開著的視窗不會自動生效，見下面「什麼時候生效」）。</li>
+      <li>之後 Claude Code 在跑、在等你、出錯或跑完的時候，選單列的燈就會自動變色。</li>
+    </ol>
+    <p class="muted">面板底部「Options ⌄」裡還有幾個常用設定，見下面「Options 選單在做什麼」。</p>
+  </section>
+
+  <section>
+    <h2>燈號是什麼意思</h2>
+    <p>選單列上會亮起顏色，代表你所有 Claude Code 視窗裡「最需要你注意」的那一個狀態：</p>
+    <ul class="lights">
+      <li><span class="dot error"></span><span><strong>紅色（錯誤）</strong>—— 有個 session 出錯了，需要你看一眼。</span></li>
+      <li><span class="dot waiting"></span><span><strong>橘色（等你）</strong>—— 有個 session 在等你回應（例如允許某個操作）。</span></li>
+      <li><span class="dot working"></span><span><strong>藍色（執行中）</strong>—— 有 session 正在跑，不需要你做什麼。</span></li>
+      <li><span class="dot done"></span><span><strong>綠色（已完成）</strong>—— 有 session 剛跑完，等你去看結果。</span></li>
+    </ul>
+    <p>沒有任何 session 在跑時，選單列會維持全暗，幾乎看不出來——這是刻意的，安靜比顯眼更重要。</p>
+    <p class="muted">四種燈號同時存在時，顯示順序固定是「錯誤 &gt; 等你 &gt; 執行中 &gt; 已完成」——只要有一個 session 出錯，
+      整顆圖示就會亮紅色，不會被其他 session 蓋掉。</p>
+  </section>
+
+  <section>
+    <h2>為什麼有八顆燈</h2>
+    <p>選單列圖示畫了八顆小燈，但<strong>這個數字跟你有幾個 session 在跑沒有關係</strong>——
+      不是「8 個 session」的意思，八顆燈永遠一起亮同一個顏色，純粹是視覺設計，讓顏色在小小的選單列上更容易被餘光注意到。</p>
+    <p>要看實際有幾個 session、各自在做什麼，點一下圖示打開面板，裡面會列出每一個 session 的詳細狀態。</p>
+  </section>
+
+  <section>
+    <h2>怎麼改顏色</h2>
+    <p>點選單列圖示打開面板，底部會有一排小色點，那就是四種狀態目前用的顏色。</p>
+    <ol>
+      <li>點想改的那個色點，會跳出 macOS 內建的選色器。</li>
+      <li>拖動選色時，選單列的燈（如果現在正好是那個狀態）跟面板上的色點會即時跟著變。</li>
+      <li>選色器開著的時候面板不會自動關掉，可以慢慢挑。</li>
+      <li>想恢復預設值，按 Options 裡的「重設顏色」即可一次全部還原。</li>
+    </ol>
+    <p class="muted">「idle（沒事發生）」那個極暗的灰色不能改——它必須維持幾乎看不見，才不會跟其他狀態搶注意力。</p>
+  </section>
+
+  <section>
+    <h2>hook 是什麼、為什麼要「接上」</h2>
+    <p>AgentAura 本身看不到 Claude Code 在做什麼——它得靠 Claude Code 在每個關鍵時刻
+      （開始跑、開始等你、出錯、跑完……）主動通知一下，這個通知機制在 Claude Code 裡叫「hook」。</p>
+    <p>「接上」指的就是告訴 Claude Code：往後每次發生這些事，也順便通知 AgentAura 一聲，
+      讓它更新選單列的燈號。這一步只會建立一個指向這個 App 的掛載，<strong>不會更動 Claude Code 既有的任何設定</strong>，
+      隨時可以一鍵移除、完全復原。</p>
+  </section>
+
+  <section>
+    <h2>什麼時候生效</h2>
+    <p>按下「接上」之後，<strong>要從下一個新開的 Claude Code session 起才會生效</strong>——
+      這是 Claude Code 載入外掛的方式決定的，不是 AgentAura 刻意設計的延遲。</p>
+    <p><strong>現在已經開著的視窗不受影響</strong>，不需要重新啟動、也不需要重開 AgentAura 這個 App 本身，
+      只要開始一個新對話（或關掉終端機再重開一個），新的 session 就會自動接上。</p>
+  </section>
+
+  <section>
+    <h2>怎麼移除</h2>
+    <p>面板的「Options」裡有一鍵移除掛載，按下去就會把「接上」那一步建立的掛載刪掉，
+      Claude Code 不會再通知 AgentAura 任何事，畫面會回到「還沒接上」的樣子。</p>
+    <p class="muted">移除掛載不會刪掉這個 App，也不會留下任何殘留設定——AgentAura 從頭到尾都沒有寫過
+      Claude Code 的設定檔，所以移除永遠是乾淨的。</p>
+  </section>
+
+  <section>
+    <h2>Options 選單在做什麼</h2>
+    <p>點面板底部的「Options ⌄」（或直接在選單列圖示上按右鍵）會展開這些項目：</p>
+    <ul>
+      <li><strong>說明與快速上手</strong>—— 就是這一頁。</li>
+      <li><strong>開機自動啟動</strong>—— 開機時自動打開 AgentAura，不用每次手動開。</li>
+      <li><strong>減少動態</strong>—— 關掉選單列圖示的呼吸／閃爍動畫，只保留顏色本身。
+        如果是你自己打開這個選項（不是系統的「減少動態效果」幫你關的），要知道「等你」跟
+        「出錯」在圖示上會變成只靠顏色分辨，看得比較快一點，不要只靠眼角餘光掃過去。</li>
+      <li><strong>燈條底板</strong>—— 預設開啟：燈的底下墊一塊不透明深色底板，讓對比在任何桌布、
+        深色或淺色選單列下都一樣。關掉之後燈直接疊在選單列上，在某些桌布顏色下可能比較難看清楚。</li>
+      <li><strong>重設顏色</strong>—— 見上面「怎麼改顏色」。</li>
+      <li><strong>重新接上 Claude Code</strong>—— 掛載壞掉或被搬走之後，用這個重建，
+        跟第一次「接上」是同一件事。</li>
+      <li><strong>再檢查一次</strong>—— 只有「已接上但還沒驗證」這個狀態才會出現，
+        按下去重新確認 hook 真的能跑。</li>
+      <li><strong>移除掛載</strong>—— 見上面「怎麼移除」。</li>
+      <li><strong>關於 AgentAura</strong>—— 版本號、專案網址、授權狀態。</li>
+      <li><strong>回報問題</strong>—— 開瀏覽器到 GitHub 回報 bug 或提建議。</li>
+      <li><strong>離開 AgentAura</strong>（快捷鍵 ⌘Q）—— 結束這個 App；面板打開的時候也可以
+        直接按 ⌘Q。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>常見問題</h2>
+
+    <details open>
+      <summary>按了「接上」，但燈還是不會亮</summary>
+      <p>先確認你是不是還停留在按「接上」之前就開著的那個視窗——照上面「什麼時候生效」那條，
+        舊視窗不會自動生效，開一個新的對話或新終端機看看。</p>
+      <p>如果新開的也不亮，很可能是下一條：macOS 擋住了 hook。</p>
+    </details>
+
+    <details>
+      <summary>macOS 擋住了 hook，要去哪裡允許</summary>
+      <p>App 如果是從網路下載的，macOS 會先把裡面的執行檔隔離起來，導致 hook 每次都被系統擋下。
+        通常會看到面板顯示「macOS 擋住了 hook」。可以這樣處理：</p>
+      <ul>
+        <li>先確認 App 已經在「應用程式」資料夾裡（見下一條），重新打開一次；</li>
+        <li>或到「系統設定 → 隱私權與安全性」，找找看有沒有跟這個 App 有關的允許選項。</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>App 在「下載項目」或專案的 <span class="mono">build/</span> 資料夾下</summary>
+      <p>請先把 App 拖進「應用程式」資料夾再打開。放在「下載項目」或開發用的 <span class="mono">build/</span>
+        資料夾裡的 App，位置隨時可能改變或被系統當成暫時檔案處理，接上之後很容易又莫名其妙壞掉。</p>
+      <p>搬進「應用程式」是一次性的，搬好之後正常使用不會再遇到這個問題。</p>
+    </details>
+
+    <details>
+      <summary>App 被搬走了 / 改了名字</summary>
+      <p>接上的掛載是指向當時那個 App 檔案的，如果之後把 App 移動、改名或刪除，
+        燈就會停在暗的，面板會顯示「重新接上」。把 App 放回原本的位置，
+        或是移到新位置後在面板按一次「重新接上」即可。</p>
+    </details>
+
+    <details>
+      <summary>燈亮了又暗了，是不是壞了</summary>
+      <p>不是壞掉——只有「需要你注意」的狀態（等你、出錯）才會用有動畫的方式提醒你，
+        「執行中」跟「已完成」則刻意安靜，不吸引視覺注意力。這是設計上的取捨：
+        真正需要處理的事才值得打斷你。</p>
+    </details>
+  </section>
+
+  <p class="muted" style="text-align:center; margin-top:2rem;">這份說明隨 App 一起收在裡面，離線就能開。</p>
+</main>
+</body>
+</html>

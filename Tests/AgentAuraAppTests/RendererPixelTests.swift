@@ -128,7 +128,10 @@ struct RendererPixelTests {
             #expect(peakLEDOnWhite.maxComponentDelta(peakLED) <= 1.0 / 255,
                     "(c′) .\(activity) 峰值 LED 取樣在白／黑背景下不同 —— 半透明 LED 底下不是底板")
             if activity == .working {
-                #expect(abs(peakContrast - 2.54) <= 0.10, "(c) working 峰值對比 \(peakContrast) 不在 2.54±0.10 內")
+                // T19：working 從 systemBlue 改成白色（`IconPalette.default` 的 doc comment）——
+                // 白色對底板的峰值對比從 2.54 變成 7.13（新常數，不是抄團隊那張表，是這個
+                // harness 自己量出來的，見同檔 `workingIsQuietestByMotionNotColor` 的完整說明）。
+                #expect(abs(peakContrast - 7.13) <= 0.10, "(c) working 峰值對比 \(peakContrast) 不在 7.13±0.10 內")
             } else {
                 #expect(peakContrast >= 3.0, "(c) .\(activity) 峰值對比 \(peakContrast) < 3:1")
             }
@@ -158,16 +161,76 @@ struct RendererPixelTests {
         return OffscreenRender.contrast(try bmp.pixel(at: led.ledRect(at: 3).center), try bmp.pixel(at: Self.plateSample))
     }
 
-    @Test("R4 顏色半邊：working 對比在靜態與峰值都低於 error（用 IconPalette.default）")
-    func workingIsQuietestColor() throws {
+    /// T19（team-lead 裁決，2026-09-11）：working 從 systemBlue 改成白色之後，原本這條的
+    /// 舊斷言（`workingStatic < errorStatic`，亮度對比）數學上不可能再成立（白色對任何深色
+    /// 底板必然是最大亮度、必然是最大對比——實測 working 靜態 18.40:1、peak 7.13，皆高於
+    /// error 的 5.40:1）。**這不是把 R4「working 不搶眼」的承諾放棄，是原本那條 gate 的
+    /// 量法本身就錯了**：R4 要守的是「搶不搶眼」，`亮度對比` 衡量的是「看不看得清」——
+    /// 兩件事不是同一件事。在一個用顏色當警示的系統裡，搶眼來自**色度**（飽和度／色相），
+    /// 不是亮度：紅／橘會跳出來是因為它們是**有色**的警示，白是**無彩**的。使用者自己的
+    /// 說法正好對上這個模型——「不搶眼，但是我特意去看它的話，其實看得出來」＝
+    /// **高亮度對比（好認）＋ 零色度（不警示）**——白色不是違反 R4，是把 R4 的兩個半邊
+    /// （「看得清」與「不搶眼」）第一次分乾淨：以前用同一支 systemBlue 兩者混著量，
+    /// 恰好兩個方向都低，掩蓋了「亮度對比」從來就不是「搶不搶眼」的正確代理指標。
+    /// 量錯的東西守了很久（M4 起）也還是量錯，2026-09-11 被這次實機推翻。
+    ///
+    /// 這條因此改守兩個半邊，各用各自正確的量：
+    /// (1) **動態半邊**（未變）：working 的 alpha 振幅／重繪幀率在非 idle 狀態中最低——
+    ///     完全不受顏色選擇影響，白色前後量出來都一樣。
+    /// (2) **顏色半邊（色度，不是亮度對比）**：`.default` palette 下，working 的色度必須是
+    ///     四個可改色狀態中最低——色度算法用 `max(r,g,b) − min(r,g,b)`（HSV 的 chroma，
+    ///     不算亮度，只算「離灰階多遠」）。四色實測：working（白）0.0000（理論最小值，
+    ///     S=0）、done 0.6314、error 0.7725、waiting 0.9608——白色恰好是 0，這條不但現在
+    ///     會過，且語意正確：以後誰把 working 設成飽和色，這裡就會紅。只針對 `.default`
+    ///     ——使用者自訂色不受限，那是他的自由（同 `OptionsMenuModelTests` 的 safePalette
+    ///     不強制四色都過關同一個道理）。
+    @Test("R4 動態＋色度半邊：working 的 alpha 振幅／重繪幀率最低（動態）、色度在 .default 四色中最低（顏色，T19 改用色度取代亮度對比）")
+    func workingIsQuietestByMotionAndChroma() throws {
         let led = makeLED()
         let workingStatic = try contrastAgainstPlate(led, .working, static: true)
         let errorStatic = try contrastAgainstPlate(led, .error, static: true)
-        #expect(workingStatic < errorStatic, "靜態：working 對比 \(workingStatic) 應 < error 對比 \(errorStatic)")
+        print("""
+            (參考，不設門檻) T19 後 working 靜態亮度對比 \(workingStatic) 高於 error \(errorStatic)——\
+            亮度對比不是本測試守的量，見上面 doc comment：搶不搶眼要看色度，不是亮度
+            """)
 
-        let workingPeak = try contrastAgainstPlate(led, .working, static: false)
-        let errorPeak = try contrastAgainstPlate(led, .error, static: false)
-        #expect(workingPeak < errorPeak, "峰值：working 對比 \(workingPeak) 應 < error 對比 \(errorPeak)")
+        // (1) 動態半邊。
+        let workingAppearance = AppearancePolicy.appearance(for: icon(.working), reduceMotion: false)
+        let waitingAppearance = AppearancePolicy.appearance(for: icon(.waiting), reduceMotion: false)
+        let errorAppearance = AppearancePolicy.appearance(for: icon(.error), reduceMotion: false)
+
+        func swing(_ animation: IconAnimation) -> Double {
+            let peak = OffscreenRender.peakPhase(of: animation)
+            let trough = OffscreenRender.troughPhase(of: animation)
+            return AnimationCurve.alpha(for: animation, phase: peak) - AnimationCurve.alpha(for: animation, phase: trough)
+        }
+
+        let workingSwing = swing(workingAppearance.animation)
+        let waitingSwing = swing(waitingAppearance.animation)
+        let errorSwing = swing(errorAppearance.animation)
+        #expect(workingSwing < waitingSwing, "working 的 alpha 振幅 \(workingSwing) 應 < waiting \(waitingSwing)")
+        #expect(workingSwing < errorSwing, "working 的 alpha 振幅 \(workingSwing) 應 < error \(errorSwing)")
+
+        #expect(workingAppearance.targetFPS < waitingAppearance.targetFPS, """
+            working 的重繪幀率 \(workingAppearance.targetFPS) 應 < waiting \(waitingAppearance.targetFPS)
+            """)
+        #expect(workingAppearance.targetFPS < errorAppearance.targetFPS, """
+            working 的重繪幀率 \(workingAppearance.targetFPS) 應 < error \(errorAppearance.targetFPS)
+            """)
+
+        // (2) 顏色半邊（色度，不是亮度對比）。
+        func chroma(_ c: RGBA) -> Double {
+            max(c.r, c.g, c.b) - min(c.r, c.g, c.b)
+        }
+        let palette = IconPalette.default
+        let workingChroma = chroma(palette.working)
+        for (label, other) in [("done", palette.done), ("waiting", palette.waiting), ("error", palette.error)] {
+            let otherChroma = chroma(other)
+            #expect(workingChroma < otherChroma, """
+                working 色度 \(workingChroma) 應 < \(label) 色度 \(otherChroma) —— \
+                working 應是 .default 四色中色度最低（最不搶眼）的那個
+                """)
+        }
     }
 
     /// review-t04-06 I-A：`update` 裡的 `needsDisplay = true` 零 gate——刪掉它全套件仍綠，而 `AnimationDriver`

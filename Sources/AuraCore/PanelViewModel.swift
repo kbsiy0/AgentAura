@@ -93,13 +93,16 @@ public enum PanelViewModel {
         if let sub = s.subagentTool { parts.append(sub) }   // §2.5：subagent 以附註呈現
         if let ms = s.toolDurationMs, ms > 0 { parts.append(duration(Double(ms) / 1000)) }
         let subs = s.subagents.values.reduce(0, +)
-        if subs > 0 { parts.append("\(subs) subagents") }
-        if s.toolFailures > 0 { parts.append("\(s.toolFailures) tool 失敗") }
+        if subs > 0 { parts.append("\(subs) 個子任務") }
+        if s.toolFailures > 0 { parts.append("\(s.toolFailures) 次工具失敗") }
         return parts.joined(separator: " · ")
     }
 
+    /// T05（S1-Q5）：套 `Jargon` 把代碼字換成人話。`meta` 曾經直接 join 原始字串——
+    /// `Jargon` 可以 100% 正確而面板照樣印 `claude-opus-5[1m] · xhigh · auto`，
+    /// 這裡才是真正接線的地方。
     static func meta(for s: SessionState) -> String {
-        [s.model, s.effort, s.permissionMode]
+        [s.model.map(Jargon.model), s.effort.map(Jargon.effort), s.permissionMode.map(Jargon.permissionMode)]
             .compactMap { $0 }                 // 缺值就整段省略，不留懸空分隔符
             .joined(separator: " · ")
     }
@@ -118,15 +121,7 @@ public enum PanelViewModel {
     }
 
     public static func title(for icon: IconState) -> String {
-        let attention = icon.attentionCount
-        if attention > 0 {
-            let live = icon.liveCount
-            return live > attention
-                ? "\(attention) 個在等你 · \(live - attention) 個在跑"
-                : "\(attention) 個在等你"
-        }
-        if icon.liveCount > 0 { return "\(icon.liveCount) 個 session 在跑" }
-        let done = icon.counts[.done] ?? 0
-        return done > 0 ? "\(done) 個已完成" : "沒有活著的 session"
+        SessionSummary.text(attention: icon.attentionCount, live: icon.liveCount,
+                            done: icon.counts[.done] ?? 0, attentionWord: "在等你")
     }
 }

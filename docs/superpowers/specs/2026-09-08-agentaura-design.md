@@ -434,7 +434,26 @@ if payload.isSubagent {
 
 ### 3.2 安裝機制：Claude Code plugin
 
-Plugin 自帶 `hooks/hooks.json`，以 `/plugin install` / `/plugin uninstall` 管理。
+> **2026-09-10 更新（change `app-shell`，S2-A11）：** 本節原寫「以 `/plugin install` /
+> `/plugin uninstall` 管理」已被下面的機制取代，寫在這裡是因為當初沒有實測就假設了
+> marketplace 是唯一路徑。**實測推翻**：`claude plugin install` 只從 marketplace 安裝，
+> 而 `claude plugin marketplace add <path>` 會在 `~/.claude/settings.json` 的
+> `extraKnownMarketplaces` 寫一筆，直接違反下面「完全不修改 settings.json」那一條
+> （D3/R6）。現行機制改用 Claude Code 的另一條 plugin 載入路徑：`~/.claude/skills/<name>/`
+> 是 skills-dir plugin，Claude Code 會在下一個 session 把它載入成 `<name>@skills-dir`，
+> 且**不寫 settings.json**（實測：5 個既有 skills-dir plugin 在 settings.json 裡零命中；
+> 掛上後 `claude plugin list` 顯示 `✔ loaded`；`settings.json` md5 不變）。
+>
+> AgentAura 把 `~/.claude/skills/agentaura` 建成一條指向 plugin 目錄的 symlink——一鍵接上
+> 指向 app bundle 內 `Contents/Resources/plugin/` 那份（D-g），開發者路徑指向 repo
+> checkout 的 `plugin/`。這條 symlink 的建立、替換、移除由 `Installer`（`Sources/AuraHookFile/`）
+> 機械化執行，只准碰 `<claudeHome>/skills/agentaura`（必要時 `<claudeHome>/skills/`）
+> 這兩個路徑，且一律以 `realpath` 解析後的位置為準（D-h）。細節見
+> `docs/superpowers/specs/2026-09-10-app-shell-design.md` §4.1、`docs/INSTALL.md`。
+
+Plugin 自帶 `hooks/hooks.json`，以 `~/.claude/skills/agentaura` 的 skills-dir 掛載管理
+（**不是** `/plugin install` / `/plugin uninstall`——那條路徑只服務 marketplace 安裝，
+用在這裡會寫 `settings.json`，見上方更新）。
 
 - 完全不修改 `~/.claude/settings.json` → 天生可逆、天生不破壞使用者現有 hooks
 - 所有 hook 皆 `"async": true`（fire-and-forget，agent 不等待）
@@ -559,12 +578,25 @@ window 被抽掉——只造成尾巴留到下次開關面板（狀態檔仍在�
 
 AgentAura 的對應要求：
 
-1. **安裝／移除各一步** —— `/plugin install` / `/plugin uninstall`，不碰 `settings.json`
-2. **不需重啟** —— 實測確認 hook 設定變更立即對執行中的 session 生效（§10），
-   安裝完成的提示不得叫使用者重啟
+1. **安裝／移除各一步** —— 見 §3.2 的 2026-09-10 更新：實際走 `~/.claude/skills/agentaura`
+   的 skills-dir 掛載（一鍵接上／一鍵移除掛載），**不是** `/plugin install` / `/plugin uninstall`，
+   不碰 `settings.json`
+2. **（2026-09-10 更新，change `app-shell` D-m／S0-A1）不得叫使用者重啟 app，但必須說明生效時機**——
+   原文「不需重啟——實測確認 hook 設定變更立即對執行中的 session 生效（§10）」是**沒有實測依據的
+   誤植**：§10 的量測只涵蓋 hook payload 契約，從未量過「設定變更是否立即生效」。**已實測推翻**：
+   skills-dir plugin 在 session 啟動時載入，新增一個掛載對已在執行中的 session **不會**生效，
+   要下一個新 session 才載入（`docs/INSTALL.md`「什麼時候生效」、`verify-install.sh` 的失敗訊息）。
+   正確的要求是兩件：**不得叫使用者重啟 `AgentAura.app` 這個 App 本身**（原意仍成立）；
+   接上成功的文案**必須**講清楚「下一個 Claude Code session 起生效，現在開著的視窗不受影響」，
+   不得再宣稱立即生效
 3. **自我健檢** —— app 啟動時掃描 `~/.claude/settings.json` 與已啟用 plugin 的 hook 設定，
    偵測 command 指向不存在或不可執行的檔案（**包含 AgentAura 自己的**），
-   在面板顯示可行動的警告。這條直接防止重演 前一個專案 的殘留問題
+   在面板顯示可行動的警告。這條直接防止重演 前一個專案 的殘留問題。
+   **已知缺口（change `app-shell` D-k，2026-09-10）**：本條分兩半——AgentAura 自身掛載的健檢
+   （持久化 exec 驗證憑證、啟動時背景重驗）在 `app-shell` 這一輪做掉了；**掃描別人的 plugin／
+   `settings.json` 找死 hook（通用死 hook 掃描）本輪不做**，列為後續 change `dead-hook-scan`。
+   下面第 7 節 DoD 表「死 hook 偵測 100%」那一列因此仍未完全達標——**不改那條 DoD 措辭來遷就**，
+   缺口如實記在這裡
 4. **移除驗證** —— 移除流程的驗收條件是「`settings.json` 與 plugin 設定中不留任何
    AgentAura 引用，且 `~/.agentaura/` 可安全手動刪除」
 
@@ -764,8 +796,10 @@ AgentAura/
 5. `PermissionRequest` / `StopFailure` / `SubagentStart` / `SubagentStop` 的真實 payload
 
 **已由 §10 回答：** payload 欄位集合、事件時序、`PreToolUse` 與權限提示的相對順序、
-subagent 事件的 session_id 共用行為、`model` 不存在、`effort` 形狀、`SessionEnd` 欄位名、
-hooks 改完立即生效。
+subagent 事件的 session_id 共用行為、`model` 不存在、`effort` 形狀、`SessionEnd` 欄位名。
+~~hooks 改完立即生效~~ ——**2026-09-10 更正（change `app-shell` S0-A1）：這條是誤植，
+§10 的 前一個專案 量測資料裡沒有這項量測**，本項目改用「新增一個 skills-dir 掛載要下一個
+新 session 才載入」的實測結論，見 §3.8(2)。
 
 M0 的產出是 `Tests/Fixtures/real-payloads/*.json`，M1 的所有 fixture 由此衍生。
 

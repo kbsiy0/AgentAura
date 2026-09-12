@@ -17,7 +17,7 @@ struct PanelHostingTests {
         defer { controller.removeFromStatusBar() }
 
         func session(_ id: String) -> SessionState {
-            SessionState(id: id, projectName: id, projectPath: nil,
+            SessionState(id: id, projectName: id,
                         permissionMode: nil, effort: nil, model: nil,
                         activity: .working, mainActivity: .working, subActivity: nil,
                         currentTool: "Bash", subagentTool: nil, toolDurationMs: nil,
@@ -27,8 +27,12 @@ struct PanelHostingTests {
         }
 
         let icon = IconState(activity: .working, counts: [.working: 1], liveCount: 1)
-        let m1 = PanelModel.make(icon: icon, sessions: [session("a")], palette: .default)
-        let m3 = PanelModel.make(icon: icon, sessions: [session("a"), session("b"), session("c")], palette: .default)
+        let m1 = PanelModel.make(icon: icon, sessions: [session("a")], palette: .default,
+                                 install: .notConnected, version: "1.0", optionsExpanded: false,
+                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+        let m3 = PanelModel.make(icon: icon, sessions: [session("a"), session("b"), session("c")], palette: .default,
+                                 install: .notConnected, version: "1.0", optionsExpanded: false,
+                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
 
         controller.setPanel(m1)
         let first = try #require(controller.hostingController, "第一次 setPanel 之後 hostingController 應該非 nil")
@@ -61,7 +65,10 @@ struct PanelHostingTests {
     /// 離屏 `show` 靜默無效（`isShown` 恆 false），所以只驗「跑得完」與 behavior。
     @Test("attachPopover 之後 hosting controller 已存在，togglePopover 跑得完且解除釘住")
     func attachPopoverPreparesHosting() throws {
-        let controller = StatusItemController()
+        // T20：`setPopoverPinned(true)` 現在會裝滑鼠 dismiss monitor——注入假的
+        // install／remove，測試不得裝真的全域 monitor（spec §6.4）。
+        let controller = StatusItemController(dismissMonitor: PanelDismissMonitor(
+            installGlobal: { _ in "g" as AnyObject }, installLocal: { _ in "l" as AnyObject }, remove: { _ in }))
         defer { controller.removeFromStatusBar() }
         controller.attachPopover()
         #expect(controller.hostingController != nil, "attachPopover 應先掛一個空 model 的 hosting controller，否則第一次點燈條會 NSException")
@@ -105,5 +112,27 @@ struct PanelHostingTests {
         let text = StatusItemController.tooltip(for: appearance)
         #expect(text == expected, "attention=\(attention) live=\(live) → 應為「\(expected)」，實際「\(text)」")
         #expect(!text.contains("-"), "tooltip 不得出現負數：\(text)")
+    }
+
+    /// T11（S0-2）：走真的 `StatusItemController`（真的 `NSStatusItem.button.toolTip`，
+    /// 不是重算平行邏輯）——`apply` 與 `setInstallState` 是兩個獨立輸入，這條證明兩者
+    /// 交錯呼叫時 tooltip 最終反映「目前已知的兩者」，不是互相覆寫成錯的答案。
+    @Test("真的 controller：apply 與 setInstallState 交錯呼叫，tooltip 反映目前已知的安裝狀態")
+    func tooltipReflectsInstallState() throws {
+        let controller = StatusItemController()
+        defer { controller.removeFromStatusBar() }
+
+        let empty = AppearancePolicy.appearance(for: .empty, reduceMotion: true)
+        controller.apply(empty, phase: 0)
+        controller.setInstallState(.notConnected)
+        #expect(controller.currentTooltip == "還沒接上", "notConnected 時 tooltip 應為「還沒接上」，實際「\(String(describing: controller.currentTooltip))」")
+
+        controller.setInstallState(.broken(.hookBlockedOrBroken, owner: .thisApp))
+        #expect(controller.currentTooltip == "接不上：macOS 擋住了 hook", "實際「\(String(describing: controller.currentTooltip))」")
+
+        let working = AppearancePolicy.appearance(for: IconState(activity: .working, counts: [.working: 1], liveCount: 1), reduceMotion: true)
+        controller.setInstallState(.connected(owner: .thisApp, verified: .verified))
+        controller.apply(working, phase: 0)
+        #expect(controller.currentTooltip == "1 個 session 在跑", "connected 時應回到 session 計數句子，實際「\(String(describing: controller.currentTooltip))」")
     }
 }

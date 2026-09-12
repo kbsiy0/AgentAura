@@ -3,51 +3,40 @@ import AppKit
 import SwiftUI      // NSHostingController
 import AuraCore
 
-/// `AppDelegate` 依賴的選單列介面。
-///
-/// **這個 protocol 存在的理由是可測性，不是抽象癖。** spec §5.2 要求一條
-/// composition-root smoke：「`StatusItemController` **真的**收到 `IconState` 更新
-/// （spy 斷言呼叫確實發生，不是被 catch-all 吞掉）」。沒有這個縫，
-/// `AppDelegate` 就無法被注入 spy —— 而最終 review 實測：把 `graph.start()`
-/// 與 liveness timer 整段註解掉（產品完全不動），220/220 全綠。
-///
-/// Change 2（panel-legend-palette）新增：`setPanel` 改吃 `PanelModel`（取代
-/// `title:rows:`），加圖例改色三個入口——`onPickColor`／`onResetColors`／
-/// `setPopoverPinned`（spec §2）。
-@MainActor
-protocol IconRendering: AnyObject {
-    func apply(_ appearance: IconAppearance, phase: Double)
-    var isVisible: Bool { get }
-    func attachPopover()
-    func setPanel(_ model: PanelModel)
-    var onClose: (() -> Void)? { get set }
-    var onPickColor: ((Activity) -> Void)? { get set }
-    var onResetColors: (() -> Void)? { get set }
-    func setPopoverPinned(_ pinned: Bool)
-}
-
-/// 擁有 `NSStatusItem`，把 `IconAppearance` 交給 `drawing` 畫。
-///
-/// `drawing` 型別是 `any IconDrawing`，但只有一個 conformer（`LEDStripView`，A2 定案
-/// 於 `docs/2026-09-09-m4-ab-decision.md`）——protocol 仍在是因為 composition-root
-/// smoke 與像素 gate 經 `@testable import` 讀 `drawing` 斷言接線與繪製；protocol 的存在理由是 controller 不綁死 view 型別（spec §2）。
+/// 擁有 `NSStatusItem`，把 `IconAppearance` 交給 `drawing` 畫。`drawing` 型別是
+/// `any IconDrawing`，但只有一個 conformer（`LEDStripView`，A2 定案於
+/// `docs/2026-09-09-m4-ab-decision.md`）——protocol 仍在是因為測試經 `@testable import`
+/// 讀 `drawing` 斷言接線與繪製，且 controller 不綁死 view 型別（spec §2）。
 @MainActor
 final class StatusItemController: IconRendering {
-    private let item: NSStatusItem
+    /// `internal`（不是 `private`）：`StatusItemController+IconFrame.swift` 要讀它取螢幕座標。
+    let item: NSStatusItem
     let drawing: any IconDrawing
+    /// B1：右鍵/左鍵判別的注入點（測試灌假事件型別，生產讀真的 `NSApp.currentEvent`）。
+    /// `@MainActor` 的函式型別：預設值閉包本身不帶隔離標記會被推成 nonisolated，
+    /// 讀 `NSApp`（main actor-isolated）就過不了型別檢查（同 `RealTerminator` 的理由）。
+    private let currentEventType: @MainActor () -> NSEvent.EventType?
+    /// B3：面板顯示期間的 ⌘Q 監聽（注入以避免測試裝真的全域 monitor，見 `QuitKeyMonitor`）。
+    /// internal（不是 `private`）：`StatusItemController+Dismiss.swift` 的 `presentPopover` 要用它。
+    let quitMonitor: QuitKeyMonitor
+    /// T20：面板釘住期間裝的滑鼠 monitor（`PanelDismissMonitor`，接線在 `+Dismiss.swift` 的
+    /// `setPopoverPinned`）。internal 理由同 `quitMonitor`。
+    let dismissMonitor: PanelDismissMonitor
 
-    init() {
+    init(currentEventType: @escaping @MainActor () -> NSEvent.EventType? = { NSApp.currentEvent?.type },
+         quitMonitor: QuitKeyMonitor = QuitKeyMonitor(),
+         dismissMonitor: PanelDismissMonitor = PanelDismissMonitor()) {
+        self.currentEventType = currentEventType
+        self.quitMonitor = quitMonitor
+        self.dismissMonitor = dismissMonitor
         item = NSStatusBar.system.statusItem(withLength: 0)
         let view = LEDStripView()
         drawing = view
         item.length = drawing.preferredWidth + 8
-        view.frame = NSRect(x: 4, y: 0,
-                            width: drawing.preferredWidth,
-                            height: NSStatusBar.system.thickness)
+        view.frame = NSRect(x: 4, y: 0, width: drawing.preferredWidth, height: NSStatusBar.system.thickness)
         item.button?.addSubview(view)
         item.button?.toolTip = "AgentAura"
-        panelOnPick = { [weak self] activity in self?.onPickColor?(activity) }
-        panelOnReset = { [weak self] in self?.onResetColors?() }
+        panelOnAction = { [weak self] action in self?.onAction?(action) }
     }
 
     /// 測試讀取用（`statusItemWidthFollowsRenderer`）。
@@ -58,6 +47,8 @@ final class StatusItemController: IconRendering {
     func removeFromStatusBar() {
         if let didCloseToken { NotificationCenter.default.removeObserver(didCloseToken) }
         didCloseToken = nil     // 測試 teardown 後若再 attach 才能重新註冊（review-ack S2）
+        quitMonitor.stopIfNeeded()   // 防禦性收尾：教學／測試提早 teardown 時別留下全域 monitor
+        dismissMonitor.stopIfNeeded()   // 同上，面板釘住期間裝的滑鼠 monitor 一樣別留下
         NSStatusBar.system.removeStatusItem(item)
     }
 
@@ -67,13 +58,16 @@ final class StatusItemController: IconRendering {
     /// 已結束的 done/error 列在面板出現前就被移出 registry，尾巴（spec §2.4）形同不存在（S1-3，2026-09-10 實測證實）。
     var onClose: (() -> Void)?
     private var didCloseToken: NSObjectProtocol?
-    var onPickColor: ((Activity) -> Void)?
-    var onResetColors: (() -> Void)?
+    var onAction: ((PanelAction) -> Void)?
+    /// T08：使用者點燈條、popover 要顯示之前呼叫（在 `togglePopover` 的 `show` 分支裡，
+    /// `show(relativeTo:...)` 之前）——`showPanel()`（首次啟動自動開）刻意不觸發它。
+    var onOpen: (() -> Void)?
+    /// B1：只在右鍵時呼叫，緊接在 `onOpen` 之前（見 `togglePopover`）。
+    var onRightClick: (() -> Void)?
 
-    /// `PanelView` 的 `onPick`/`onReset` 綁到這兩個閉包（`init` 設好，轉發到
-    /// `onPickColor`/`onResetColors`）——`controllerForwardsPanelCallbacks` 守這條轉發。
-    var panelOnPick: (Activity) -> Void = { _ in }
-    var panelOnReset: () -> Void = {}
+    /// `PanelView` 的 `onAction` 綁到這個閉包（`init` 設好，轉發到 `onAction`）——
+    /// `controllerForwardsPanelCallbacks` 守這條轉發。
+    var panelOnAction: (PanelAction) -> Void = { _ in }
 
     /// `setPanel` 只在第一次建 `NSHostingController`，之後只換 `rootView`（D-j）。
     private(set) var hostingController: NSHostingController<PanelView>?
@@ -87,6 +81,8 @@ final class StatusItemController: IconRendering {
         popover.behavior = .transient
         item.button?.target = self
         item.button?.action = #selector(togglePopover)
+        // B1：右鍵也要能觸發同一個 action（`togglePopover` 內用 `currentEventType()` 分流）。
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         // 關面板才 acknowledge。用 `didClose` 不用 `willClose`——後者在淡出動畫中就把列抽掉，會閃。
         // `queue: nil`＝在 post 的那條執行緒同步跑（NSPopover 一律 main），gate 才能同步斷言；
         // `object: popover` 過濾掉別的 popover（色板等）。這個類別不是 NSObject 子類，走 delegate 得改繼承，不值。
@@ -94,13 +90,24 @@ final class StatusItemController: IconRendering {
             didCloseToken = NotificationCenter.default.addObserver(
                 forName: NSPopover.didCloseNotification, object: popover, queue: nil
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.onClose?() }
+                // B3／T20：面板關閉務必移除 ⌘Q monitor 與滑鼠 dismiss monitor，不論是誰關的
+                // （使用者點開別處／Esc／⌘Q 自己／我們自己的 dismiss monitor 觸發 performClose）。
+                MainActor.assumeIsolated {
+                    self?.onClose?()
+                    self?.quitMonitor.stopIfNeeded()
+                    self?.dismissMonitor.stopIfNeeded()
+                }
             }
         }
         // review-t01 I3：先掛一個空 model，讓 `popover.contentViewController` 從一開始就非 nil——
         // `togglePopover` 在 `contentViewController == nil` 時呼叫 `NSPopover.show` 會丟
         // NSException 殺掉整個行程，不是「這次點擊沒反應」。
-        setPanel(PanelModel.make(icon: .empty, sessions: [], palette: .default))
+        // T06：這是掛載前的佔位 model，AppDelegate 首次 refreshPanel() 前的短暫瞬間；
+        // 真實 install／version／banner 等狀態一律由 AppDelegate 傳入，這裡只填安全預設。
+        setPanel(PanelModel.make(icon: .empty, sessions: [], palette: .default,
+                                 install: .notConnected, version: "", optionsExpanded: false,
+                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil,
+                                 systemReduceMotion: false, userReduceMotion: false, iconPlate: true))
     }
 
     /// 首次建 `NSHostingController` 並設 `sizingOptions = [.preferredContentSize]`
@@ -109,12 +116,18 @@ final class StatusItemController: IconRendering {
     /// 每秒數十次 `onChange`，重建 controller 會閃）。
     func setPanel(_ model: PanelModel) {
         guard model != lastModel else { return }
-        let view = PanelView(model: model, onPick: panelOnPick, onReset: panelOnReset)
+        let view = PanelView(model: model, onAction: panelOnAction)
         if let hostingController {
             hostingController.rootView = view
         } else {
             let hc = NSHostingController(rootView: view)
             hc.sizingOptions = [.preferredContentSize]
+            // T15（V1 落地）：`NSHostingController.view` 預設不透明，會把 `NSPopover` 自己的
+            // 原生材質蓋掉——`PanelView` 這邊已經把 SwiftUI 內容背景交回 `.clear`，這裡補
+            // AppKit 端那一半。**離屏渲染證明不了**（沒有真 `NSWindow`，vibrancy 不會生效）；
+            // 這條要在真 app 上肉眼確認（T15 commit message 已標記）。
+            hc.view.wantsLayer = true
+            hc.view.layer?.backgroundColor = .clear
             hostingController = hc
             popover.contentViewController = hc
         }
@@ -122,11 +135,7 @@ final class StatusItemController: IconRendering {
         lastModel = model
     }
 
-    /// D-i：改色期間釘住 popover。解除有兩條路徑——`ColorPickerCoordinator.onEnd`（色板真的關掉）
-    /// 與 `togglePopover`（無條件回 `.transient`，切到別的 app 再回來不會卡住）。
-    func setPopoverPinned(_ pinned: Bool) {
-        popover.behavior = pinned ? .semitransient : .transient
-    }
+    // `setPopoverPinned` 搬到 `StatusItemController+Dismiss.swift`（T20，避免撞 200 行上限）。
 
     /// 改 internal（原為 `private`）：`controllerForwardsPanelCallbacks` 要能從測試
     /// 直接呼叫，驗證它是釘住 popover 的第二條解除路徑（spec §2 D-i）。
@@ -137,29 +146,54 @@ final class StatusItemController: IconRendering {
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            // 這裡**不**acknowledge——見 `onClose` 的說明；acknowledge 在 didClose。
-            // fail-soft（review-t01 I3）：`attachPopover()` 已經預掛過空 model，這裡是
-            // 保底第二層——沒有內容就別呼叫 `NSPopover.show`（否則整個行程被 NSException 殺掉）。
-            guard popover.contentViewController != nil else { return }
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            // B1：右鍵直接展開 Options；footer 的「Options ⌄」主入口不受影響，左鍵完全不變。
+            if currentEventType() == .rightMouseUp { onRightClick?() }
+            // 這裡**不**acknowledge（acknowledge 在 didClose）：`onOpen` 在 show 之前呼叫
+            // （只 probe＋setPanel），讓使用者點開時看到的是磁碟上的最新狀態，不是上次
+            // refreshPanel 留下的舊 model。
+            onOpen?()
+            presentPopover(from: button)
         }
     }
+
+    /// T08（§4.4）：首次啟動自動開面板專用的程式化顯示——**不**觸發 `onOpen`（呼叫端已經
+    /// 在此之前用真實狀態 `setPanel` 過）。已經開著就不重複呼叫 `show`。
+    func showPanel() {
+        guard let button = item.button else { return }
+        guard !popover.isShown else { return }
+        presentPopover(from: button)
+    }
+
+    // `presentPopover` 搬到 `StatusItemController+Dismiss.swift`（T20，避免撞 200 行上限；
+    // 改 internal 讓跨檔 extension 碰得到，同檔內其餘成員改 internal 的理由）。
 
     var isVisible: Bool { item.isVisible }
 
+    // T11（S0-2）：tooltip 依賴兩個獨立輸入（動畫幀 vs 安裝狀態），各自存最後一次收到的值。
+    private var lastAppearance = AppearancePolicy.appearance(for: .empty)
+    private var installState: InstallState = .notConnected
+
     func apply(_ appearance: IconAppearance, phase: Double) {
         drawing.update(appearance, phase: phase)
-        item.button?.toolTip = Self.tooltip(for: appearance)
+        lastAppearance = appearance
+        updateTooltip()
     }
 
-    static func tooltip(for a: IconAppearance) -> String {
-        // 第二個數字與 PanelViewModel.title 同定義（live − attention）——persona S1-1：hover 說「3 個在跑」、點開說「1 個在跑」。
-        // live 可以 < attention（已結束未確認的 error 進尾巴、不算 live）——review-t0406 B2：沒 guard 會印「-1 個在跑」。
-        if a.attentionCount > 0 {
-            let running = a.liveCount - a.attentionCount
-            return running > 0 ? "\(a.attentionCount) 個需要你 · \(running) 個在跑" : "\(a.attentionCount) 個需要你"
-        }
-        if a.liveCount > 0 { return "\(a.liveCount) 個 session 在跑" }
-        return "沒有活著的 session"
+    func setInstallState(_ state: InstallState) {
+        installState = state
+        updateTooltip()
     }
+
+    /// T16：轉發到 `drawing`（自己管 `needsDisplay`，同 `update(_:phase:)` 的模式）。
+    func setIconPlate(_ shows: Bool) { drawing.setShowsPlate(shows) }
+
+    private func updateTooltip() {
+        item.button?.toolTip = TooltipText.text(appearance: lastAppearance, install: installState)
+    }
+
+    /// 測試觀測用：真的 `NSStatusItem.button.toolTip`，不是重算一份平行邏輯。
+    var currentTooltip: String? { item.button?.toolTip }
+
+    /// 舊窄簽章轉發（`PanelHostingTests.tooltipNeverNegative` 對齊，不必跟著改）。
+    static func tooltip(for a: IconAppearance) -> String { TooltipText.sessionSummary(a) }
 }

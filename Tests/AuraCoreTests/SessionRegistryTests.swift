@@ -10,7 +10,7 @@ struct SessionRegistryTests {
     /// 不同時戳的 state 才能觸及，而整份測試檔原本沒有任何一對。
     func state(_ id: String, _ a: Activity, live: Bool = true,
                at t: TimeInterval = 1_788_628_000) -> SessionState {
-        SessionState(id: id, projectName: id, projectPath: "/x/\(id)",
+        SessionState(id: id, projectName: id,
                      permissionMode: nil, effort: nil, model: nil,
                      activity: a, mainActivity: a, subActivity: nil,
                      currentTool: nil, subagentTool: nil, toolDurationMs: nil,

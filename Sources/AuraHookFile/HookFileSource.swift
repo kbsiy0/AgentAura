@@ -9,15 +9,15 @@ public final class HookFileSource: EventSource, @unchecked Sendable {
     private let latency: TimeInterval
     private let queue = DispatchQueue(label: "io.agentaura.fsevents")
     private var stream: FSEventStreamRef?
-    private var continuation: AsyncStream<SessionSnapshot>.Continuation?
+    private var continuation: AsyncStream<[SessionSnapshot]>.Continuation?
     private let lock = NSLock()
 
-    public let snapshots: AsyncStream<SessionSnapshot>
+    public let snapshots: AsyncStream<[SessionSnapshot]>
 
     public init(root: URL = SnapshotIO.defaultRoot, latency: TimeInterval = 0.1) {
         self.root = root
         self.latency = latency
-        var cont: AsyncStream<SessionSnapshot>.Continuation!
+        var cont: AsyncStream<[SessionSnapshot]>.Continuation!
         self.snapshots = AsyncStream { cont = $0 }
         self.continuation = cont
     }
@@ -86,16 +86,20 @@ public final class HookFileSource: EventSource, @unchecked Sendable {
         continuation = nil
     }
 
-    /// 讀不到（半截 JSON、剛被刪）就跳過 —— 呼叫端保留上次已知狀態。
+    /// A3：一次 FSEvents 回呼裡的全部變動合成**一批**才 yield 一次——這裡是唯一的
+    /// producer 端，`PipelineGraph.start()` 的消費迴圈因此天然「整批 ingest 完才
+    /// 通知一次」，不必在消費端做危險的「非阻塞 peek」（AsyncStream 沒有安全的
+    /// 方式可以在不消費值的前提下偷看緩衝區，硬做容易把事件丟在半路）。
+    /// 讀不到（半截 JSON、剛被刪）就跳過 —— 呼叫端保留上次已知狀態；批次全部讀失敗
+    /// 時不 yield 空陣列（不通知，語意等同過去「每個失敗都各自不 yield」）。
     private func emit(sessionIDs: Set<String>) {
-        for id in sessionIDs {
-            // 不在這裡再驗一次 `isSafeSessionID`：`SnapshotIO.read` 內部呼叫
-            // `url(for:)`，那裡本來就會驗、不安全時回 nil。重複的守衛在這裡
-            // **永遠不會觸發**，移除它任何測試都不會紅（實測），
-            // 而一個測不到的守衛會讓讀者誤以為 `read` 不驗 —— 反而更危險。
-            // 契約由 `SnapshotIOTests.readRejectsUnsafeIDEvenIfFileExists` 釘住。
-            guard let snap = SnapshotIO.read(sessionID: id, root: root) else { continue }
-            continuation?.yield(snap)
-        }
+        // 不在這裡再驗一次 `isSafeSessionID`：`SnapshotIO.read` 內部呼叫
+        // `url(for:)`，那裡本來就會驗、不安全時回 nil。重複的守衛在這裡
+        // **永遠不會觸發**，移除它任何測試都不會紅（實測），
+        // 而一個測不到的守衛會讓讀者誤以為 `read` 不驗 —— 反而更危險。
+        // 契約由 `SnapshotIOTests.readRejectsUnsafeIDEvenIfFileExists` 釘住。
+        let batch = sessionIDs.compactMap { SnapshotIO.read(sessionID: $0, root: root) }
+        guard !batch.isEmpty else { return }
+        continuation?.yield(batch)
     }
 }

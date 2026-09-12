@@ -12,7 +12,7 @@ struct PanelViewModelTests {
                failures: Int = 0, updated: Double = 0, live: Bool = true,
                model: String? = "claude-opus-5", lastMessage: String? = nil,
                toolError: String? = nil) -> SessionState {
-        SessionState(id: id, projectName: id, projectPath: "/x/\(id)",
+        SessionState(id: id, projectName: id,
                      permissionMode: "default", effort: "high", model: model,
                      activity: a, mainActivity: a, subActivity: nil,
                      currentTool: tool, subagentTool: nil, toolDurationMs: nil,
@@ -130,18 +130,25 @@ struct PanelViewModelTests {
         #expect(!rows[0].detail.contains("0 失敗"))
     }
 
-    @Test("meta 含模型與 permission_mode")
-    func metaHasModelAndMode() {
+    // T05（S1-Q5）：`meta` 現在套 `Jargon`，顯示的是人話不是原始代碼字。
+    // 改前只驗證原始代碼字有沒有出現（`"opus"`／`"default"`）——那正是 T05 要拿掉的東西，
+    // 所以這不是弱化，是對齊新契約：斷言從「代碼字在不在」換成「人話在不在、代碼字有沒有殘留」，
+    // 淨 #expect 數從 2 條增加到 4 條。
+    @Test("meta 顯示的是人話，不是原始代碼字（套用 Jargon）")
+    func metaShowsPlainLanguageNotRawCodes() {
         let rows = PanelViewModel.rows(from: [state("p", .working)], now: now)
-        #expect(rows[0].meta.contains("opus"))
-        #expect(rows[0].meta.contains("default"))
+        #expect(rows[0].meta.contains("Opus 5"), "應顯示映射後的模型名，實際：\(rows[0].meta)")
+        #expect(rows[0].meta.contains("每次問我"), "應顯示映射後的 permission_mode，實際：\(rows[0].meta)")
+        #expect(!rows[0].meta.contains("claude-opus-5"), "不得殘留原始代碼字，實際：\(rows[0].meta)")
+        #expect(!rows[0].meta.contains("default"), "不得殘留原始代碼字，實際：\(rows[0].meta)")
     }
 
-    @Test("模型缺失時 meta 不顯示空白欄位")
+    @Test("模型缺失時 meta 不顯示空白欄位，且 permission_mode 仍是人話")
     func metaHandlesMissingModel() {
         let rows = PanelViewModel.rows(from: [state("p", .working, model: nil)], now: now)
         #expect(!rows[0].meta.hasPrefix(" ·"), "不得留下懸空的分隔符，實際：\(rows[0].meta)")
-        #expect(rows[0].meta.contains("default"))
+        #expect(rows[0].meta.contains("每次問我"), "實際：\(rows[0].meta)")
+        #expect(!rows[0].meta.contains("default"), "不得殘留原始代碼字，實際：\(rows[0].meta)")
     }
 
     // ---- 時間格式化與時鐘倒退 ----
@@ -235,7 +242,7 @@ struct PanelViewModelTests {
     /// 這幾條共用的建構器 —— 只填會用到的欄位，其餘給中性值。
     func state(_ a: Activity, tool: String? = nil, sub: String? = nil,
                desc: String? = nil, notif: String? = nil, durationMs: Int? = nil) -> SessionState {
-        SessionState(id: "s1", projectName: "P", projectPath: "/x",
+        SessionState(id: "s1", projectName: "P",
                      permissionMode: nil, effort: nil, model: nil,
                      activity: a, mainActivity: a, subActivity: nil,
                      currentTool: tool, subagentTool: sub, toolDurationMs: durationMs,

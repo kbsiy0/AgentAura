@@ -18,13 +18,36 @@ final class SpyRenderer: IconRendering {
     private(set) var attachedPopover = false
     var isVisible = true
     var onClose: (() -> Void)?
-    var onPickColor: ((Activity) -> Void)?
-    var onResetColors: (() -> Void)?
+    /// T08：`togglePopover` 的 show 分支在顯示之前呼叫（只 probe＋setPanel，不 acknowledge）。
+    var onOpen: (() -> Void)?
+    /// T12（B1）：右鍵快速路徑。
+    var onRightClick: (() -> Void)?
+    /// T04：`onPickColor`／`onResetColors` 已併入 `onAction`（`PanelAction`，spec §3.2，D-j）；
+    /// 這個成員現在真的滿足 `IconRendering` 的 protocol 要求，不再是額外成員。
+    var onAction: ((PanelAction) -> Void)?
+    /// `showPanel()` 呼叫次數——`firstRunOpensPanelOnce`（T08）要用。
+    private(set) var showPanelCallCount = 0
+    /// 三個關鍵呼叫的先後順序，供 `firstRunOrdering`（T08）斷言
+    /// `attachPopover → setPanel → showPanel`。
+    private(set) var callOrder: [String] = []
+    /// T11（S0-2）：每次 `setInstallState` 收到的值，依序——
+    /// `appDelegateWiresInstallStateToRenderer` 用它證明這不是 tested≠wired（Lessons #5）。
+    private(set) var installStates: [InstallState] = []
+    /// T16：`AppDelegatePanelActionsWiredTests`（G5）的 `.setIconPlate` case 用它證明
+    /// `AppDelegate` 真的轉發到 `status.setIconPlate`，不是只更新自己的欄位。
+    private(set) var iconPlateValues: [Bool] = []
+
+    /// T17／T18：`colorPanelAnchorIsWired` 用固定值證明 `AppDelegate` 真的把它傳進 coordinator。
+    /// 值刻意是「面板」的尺寸而不是圖示的——生產路徑優先回面板 frame（色板要避開它）。
+    var avoidScreenFrame: CGRect? = CGRect(x: 1000, y: 400, width: 380, height: 640)
 
     func apply(_ appearance: IconAppearance, phase: Double) { applied.append(appearance) }
-    func attachPopover() { attachedPopover = true }
-    func setPanel(_ model: PanelModel) { panels.append(model) }
+    func attachPopover() { attachedPopover = true; callOrder.append("attachPopover") }
+    func setPanel(_ model: PanelModel) { panels.append(model); callOrder.append("setPanel") }
     func setPopoverPinned(_ pinned: Bool) { self.pinned.append(pinned) }
+    func showPanel() { showPanelCallCount += 1; callOrder.append("showPanel") }
+    func setInstallState(_ state: InstallState) { installStates.append(state) }
+    func setIconPlate(_ shows: Bool) { iconPlateValues.append(shows) }
 }
 
 @Suite("Composition root smoke（spec §5.2）", .serialized)
@@ -158,23 +181,25 @@ struct CompositionSmokeTests {
 
     /// spec `2026-09-09-m4-icon-form-design.md` §6：`statusItemWidthFollowsRenderer`。
     ///
-    /// **A/B 收斂後的誠實註記（review-t09 I-1）**：只剩一個 `IconDrawing` conformer、一個 `preferredWidth`，
-    /// 「derived 而非 hardcoded」已不可觀測——把 `item.length`／frame 寫死成贏家的正確數字（50／42）這條仍綠
-    /// （reviewer 實測）。它現在守的是「等於 42+8／4／42／thickness」，寫死成錯的數字仍會紅。
-    /// 要恢復「跟著 renderer 走」的觀測性，需注入第二個 conformer——那與 R9／§4.3「評後刪」相反，不做。
-    /// A/B 定案後只剩一種形態，迴圈收斂為單一案例；三條 frame 斷言不變。
+    /// **T16（恢復 derived 守門力）**：review-t09 I-1 曾指出這條退化成「等於 42+8／4／42／
+    /// thickness」——把數字寫死成贏家的正確值仍會綠。T16 修掉 `LEDStripView.preferredWidth`
+    /// 本身算術錯誤（42 其實應該是 44，見該檔 doc comment）的同時，這條也改成從
+    /// `LEDStripView.ledSpan`／`plateInset` 現場推導期望值，不再跟 `drawing.preferredWidth`
+    /// 比對自己——**mutation**：把 `preferredWidth` 寫死回 42（或任何非推導值）這條會紅，
+    /// 不必注入第二個 conformer 也能重新獲得「跟著 renderer 走」的觀測性。
     @MainActor
-    @Test("status item 長度 = preferredWidth + 8，安裝 frame 為 x 4／width preferredWidth／height bar thickness")
+    @Test("status item 長度 = ledSpan + plateInset*2 + 8，安裝 frame 為 x 4／width 同推導值／height bar thickness")
     func statusItemWidthFollowsRenderer() throws {
         let controller = StatusItemController()
         defer { controller.removeFromStatusBar() }
 
-        #expect(controller.statusItemLength == controller.drawing.preferredWidth + 8, """
+        let expectedWidth = LEDStripView.ledSpan + LEDStripView.plateInset * 2
+        #expect(controller.statusItemLength == expectedWidth + 8, """
             statusItemLength(\(controller.statusItemLength)) 應為 \
-            drawing.preferredWidth(\(controller.drawing.preferredWidth)) + 8
+            ledSpan(\(LEDStripView.ledSpan)) + plateInset(\(LEDStripView.plateInset))×2 + 8 = \(expectedWidth + 8)
             """)
         let frame = try #require(controller.drawing as? NSView).frame
-        #expect(frame.width == controller.drawing.preferredWidth, "frame.width 應等於 preferredWidth，實際 \(frame.width)")
+        #expect(frame.width == expectedWidth, "frame.width 應等於 \(expectedWidth)，實際 \(frame.width)")
         #expect(frame.origin.x == 4, "frame.origin.x 應為 4，實際 \(frame.origin.x)")
         #expect(frame.height == NSStatusBar.system.thickness, "frame.height 應等於 bar thickness，實際 \(frame.height)")
     }
@@ -197,6 +222,30 @@ struct CompositionSmokeTests {
         let expected = OffscreenRender.expected(IconPalette.default.error, curveAlpha: 1, over: RGBA(r: 20.0/255, g: 20.0/255, b: 22.0/255, a: 1))
         #expect(px.maxComponentDelta(expected) <= 2.0 / 255, """
             apply(.error) 之後 LED 像素是 \(px)，不是 error 色 \(expected) —— controller 沒把 appearance 交給 drawing。
+            """)
+    }
+
+    /// T11（S0-2，Lessons #5 tested≠wired）：`IconRendering.setInstallState` 只是定義出來——
+    /// 沒有這條，`AppDelegate` 可能忘了在 `refreshPanel()` 呼叫它，tooltip 永遠拿不到
+    /// `installState`，S0-2 的修法會靜默不啟用。走真的 `AppDelegate`（不 mock `Installer`，
+    /// 用機器上真的 `.production()` 探測結果——不論結果是什麼狀態，重點是「有沒有傳到」）。
+    @MainActor
+    @Test("AppDelegate 真的把 installState 傳給 status renderer")
+    func appDelegateWiresInstallStateToRenderer() async throws {
+        let root = try makeRoot()
+        let spy = SpyRenderer()
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, makeRenderer: { spy })
+        delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
+        defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
+
+        await wait(upTo: 5) { !spy.installStates.isEmpty }
+        #expect(!spy.installStates.isEmpty, """
+            setInstallState 從未被呼叫 —— StatusItemController 拿不到 installState，
+            tooltip 永遠回不到「還沒接上」以外的答案。
+            """)
+        #expect(spy.installStates.last == delegate.installState, """
+            spy 收到的最後一個值應等於 AppDelegate.installState，
+            實際 spy=\(String(describing: spy.installStates.last)) delegate=\(delegate.installState)
             """)
     }
 }

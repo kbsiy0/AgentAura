@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentAura：subagent／agent team 回來之後的狀態優先序審計</title>
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --line:#262a32; --fg:#e6e8ee; --dim:#9aa1ad;
+    --green:#30d158; --orange:#ff9f0a; --red:#ff453a; --white:#ffffff; --grey:#48484a;
+    --accent:#6ea8fe;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:15px/1.7 -apple-system,"PingFang TC","Helvetica Neue",sans-serif;}
+  .wrap{max-width:1020px;margin:0 auto;padding:40px 24px 80px}
+  h1{font-size:28px;line-height:1.3;margin:0 0 6px}
+  .sub{color:var(--dim);margin:0 0 32px}
+  h2{font-size:20px;margin:44px 0 12px;padding-top:14px;border-top:1px solid var(--line)}
+  h3{font-size:16px;margin:26px 0 8px;color:var(--accent)}
+  p{margin:10px 0}
+  code{background:#1e222a;padding:1px 6px;border-radius:4px;font-size:13px;
+       font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre{background:#1e222a;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+      overflow-x:auto;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;display:block;overflow-x:auto}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#1c1f26;font-weight:600;white-space:nowrap}
+  .sev-high{color:var(--red);font-weight:700}
+  .sev-mid{color:var(--orange);font-weight:700}
+  .sev-low{color:var(--dim)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:16px 0}
+  .card.warn{border-color:#5a3d12;background:#1d1710}
+  .card.ok{border-color:#1e4529;background:#101a13}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .k{color:var(--dim)}
+  ul{margin:8px 0 8px 20px;padding:0} li{margin:5px 0}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
+       border:1px solid var(--line);color:var(--dim);margin-left:8px;vertical-align:middle}
+  .tag.measured{border-color:#1e4529;color:var(--green)}
+  .tag.derived{border-color:#2b3a55;color:var(--accent)}
+  .tag.unknown{border-color:#5a3d12;color:var(--orange)}
+  svg{max-width:100%;height:auto;display:block;margin:18px 0}
+  .mono-sm{font-family:ui-monospace,Menlo,monospace;font-size:12px;fill:var(--dim)}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>subagent／agent team 分出去再回來：各狀態的優先順序審計</h1>
+<p class="sub">AgentAura · 2026-09-11 · 針對「燈號是綠色或等待色，但畫面上其實沒有任何事在發生」的回報</p>
+
+<h2>0. 結論先講</h2>
+<p>你的觀察是對的，而且不只一個成因。我找到 <b>五個</b>會讓「燈號」與「畫面實際狀況」對不上的路徑，其中兩個是真的 bug，一個是呈現層的殘影，兩個是設計上的必然（但可以講清楚）。</p>
+
+<table>
+<tr><th>#</th><th>你看到的</th><th>真正的原因</th><th>目前行為</th><th>嚴重度</th></tr>
+<tr>
+  <td><b>A</b></td>
+  <td><span class="dot" style="background:var(--green)"></span>綠燈，但其實沒有結果可看</td>
+  <td>主 agent 講完話送 <code>Stop</code> 時，背景還在跑的<b>具名</b> subagent 事件<b>全部被丟掉</b></td>
+  <td>綠燈（done）。若該 session 同時也結束了（terminal 收掉），它還會進入「已結束未確認」尾巴，被面板確認後連檔一起刪</td>
+  <td class="sev-high">高</td>
+</tr>
+<tr>
+  <td><b>B</b></td>
+  <td><span class="dot" style="background:var(--green)"></span>綠燈，但其實有人在等你批准</td>
+  <td>同一條 guard：subagent 的 <code>PermissionRequest</code> 在主槽靜止時也被丟掉</td>
+  <td>永遠不會變橘，直到你自己去看</td>
+  <td class="sev-high">高</td>
+</tr>
+<tr>
+  <td><b>C</b></td>
+  <td>面板副行寫著「implementer → Bash」，那個 subagent 早就結束了</td>
+  <td><code>SubagentStop</code> 被映射成 <code>.working</code>；sub 槽只有主槽 done／error 才清</td>
+  <td>停在最後一個 tool 名不動</td>
+  <td class="sev-mid">中</td>
+</tr>
+<tr>
+  <td><b>D</b></td>
+  <td><span class="dot" style="background:var(--orange)"></span>橘燈，但你早就按過 Allow 了</td>
+  <td>平台在「批准」的瞬間<b>不送任何事件</b>；下一個事件是 tool 跑完後的 <code>PostToolUse</code></td>
+  <td>整段 tool 執行期間都是橘的</td>
+  <td class="sev-mid">中</td>
+</tr>
+<tr>
+  <td><b>E</b></td>
+  <td><span class="dot" style="background:var(--orange)"></span>橘燈，但這個視窗沒事</td>
+  <td>一顆聚合燈涵蓋所有視窗，橘色屬於另一個 session</td>
+  <td>面板分得出來，燈分不出來</td>
+  <td class="sev-low">設計如此</td>
+</tr>
+</table>
+
+<h2>1. 目前的模型</h2>
+<p>每個 session 的狀態檔有<b>兩個槽</b>：主槽與從屬槽。燈號取兩槽的優先序最大值。</p>
+<pre>effectiveActivity = max(mainActivity, subActivity ?? .idle)
+優先序：error(4) &gt; waiting(3) &gt; working(2) &gt; done(1) &gt; idle(0)</pre>
+
+<p>寫入規則（<code>Sources/AuraCore/MergeRules.swift</code>）有兩條關鍵的：</p>
+<pre>// ① 主槽靜止（waiting / done / error）時，<b>所有</b> subagent 事件一律忽略
+guard !s.mainActivity.isQuiescent else { break }
+
+// ② 主槽走到 done 或 error 時，清空整個從屬槽
+if a == .done || a == .error { clearSubSlot(&s) }</pre>
+
+<svg viewBox="0 0 960 250" role="img" aria-label="目前的兩槽模型">
+  <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="#6ea8fe"/></marker></defs>
+  <rect x="10" y="20" width="180" height="60" rx="8" fill="#16181d" stroke="#262a32"/>
+  <text x="100" y="45" text-anchor="middle" fill="#e6e8ee" font-size="13">hook event</text>
+  <text x="100" y="65" text-anchor="middle" fill="#9aa1ad" font-size="11">agent_id 有／無</text>
+
+  <path d="M195,40 L275,40" stroke="#6ea8fe" stroke-width="1.5" marker-end="url(#ar)"/>
+  <path d="M195,62 L275,120" stroke="#6ea8fe" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="232" y="32" fill="#9aa1ad" font-size="11">無＝主</text>
+  <text x="215" y="105" fill="#9aa1ad" font-size="11">有＝sub</text>
+
+  <rect x="280" y="14" width="230" height="54" rx="8" fill="#101a13" stroke="#1e4529"/>
+  <text x="395" y="36" text-anchor="middle" fill="#e6e8ee" font-size="13">主槽 mainActivity</text>
+  <text x="395" y="55" text-anchor="middle" fill="#9aa1ad" font-size="11">done／error 時清空 sub 槽 ②</text>
+
+  <rect x="280" y="96" width="230" height="54" rx="8" fill="#1d1710" stroke="#5a3d12"/>
+  <text x="395" y="118" text-anchor="middle" fill="#e6e8ee" font-size="13">從屬槽 subActivity</text>
+  <text x="395" y="137" text-anchor="middle" fill="#ff9f0a" font-size="11">主槽靜止 → 整包丟掉 ①</text>
+
+  <path d="M515,40 L600,72" stroke="#6ea8fe" stroke-width="1.5" marker-end="url(#ar)"/>
+  <path d="M515,122 L600,90" stroke="#6ea8fe" stroke-width="1.5" marker-end="url(#ar)"/>
+  <rect x="605" y="54" width="150" height="50" rx="8" fill="#16181d" stroke="#262a32"/>
+  <text x="680" y="76" text-anchor="middle" fill="#e6e8ee" font-size="13">max()</text>
+  <text x="680" y="94" text-anchor="middle" fill="#9aa1ad" font-size="11">D1 優先序</text>
+
+  <path d="M760,79 L840,79" stroke="#6ea8fe" stroke-width="1.5" marker-end="url(#ar)"/>
+  <circle cx="890" cy="79" r="18" fill="#30d158"/>
+  <text x="890" y="118" text-anchor="middle" fill="#9aa1ad" font-size="11">一顆聚合燈</text>
+
+  <text x="10" y="200" class="mono-sm">① 是 §2.5.1 的修法，當初為了擋「內部 subagent 的遲到 SubagentStop 把綠燈變回工作中」</text>
+  <text x="10" y="222" class="mono-sm">② 是「一輪結束 → 該輪 subagent 都結束了」這個假設 —— 這個假設對背景 subagent 不成立</text>
+</svg>
+
+<h2>2. 量測證據</h2>
+
+<h3>2.1 內部 subagent 的遲到 <code>SubagentStop</code> 是真的 <span class="tag measured">實測</span></h3>
+<p>真實 payload（<code>Tests/AuraCoreTests/Fixtures/round2.ndjson</code>，同一個 session 內）：</p>
+<table>
+<tr><th>主 agent 事件</th><th>之後抵達的 SubagentStop</th><th>延遲</th><th>agent_type</th></tr>
+<tr><td>Stop @ 66.51s</td><td>@ 250.88s</td><td><b>184.4 秒</b></td><td><code>""</code>（空字串）</td></tr>
+<tr><td>Stop @ 505.01s</td><td>@ 507.59s</td><td>2.58 秒</td><td><code>""</code></td></tr>
+<tr><td>Stop @ 975.48s</td><td>@ 1161.57s</td><td>186.1 秒</td><td><code>""</code></td></tr>
+<tr><td>Stop @ 1225.34s</td><td>@ 1228.26s</td><td>2.92 秒</td><td><code>""</code></td></tr>
+</table>
+<p>所以 guard ① 本身<b>有正當理由</b>：沒有它，每個跑完的 session 過幾秒到三分鐘就會從綠燈跳回工作中，而且回不去。<b>問題不在它存在，在它的適用範圍。</b></p>
+
+<h3>2.2 具名 subagent 的 payload 形狀 <span class="tag measured">今天 21:30 實測</span></h3>
+<p>我掛了一個獨立的探針 plugin（不碰 repo、不碰 <code>settings.json</code>），跑一個真的 <code>claude -p</code> session 派 subagent，抓到：</p>
+<pre>0.00s  SubagentStart  agent_id='a0b503d0b03dbd023'  agent_type='general-purpose'
+4.04s  SubagentStop   agent_id='a0b503d0b03dbd023'  agent_type='general-purpose'
+5.52s  Stop           agent_id=None                 agent_type=None</pre>
+<div class="card ok">
+<p style="margin:0"><b>這是修法的關鍵前提，而且成立：</b>具名 subagent 的 <code>SubagentStart</code> 與 <code>SubagentStop</code> <b>都</b>帶同一個 <code>agent_id</code>，也<b>都</b>帶非空的 <code>agent_type</code>。內部 subagent 的 <code>agent_type</code> 是空字串（已在 <code>HookPayload</code> 正規化成 <code>nil</code>）。<br>
+<b>「具名」與「內部」在資料層分得開，而且結束事件配得回開始事件。</b></p>
+</div>
+<p>順帶量到的：<code>SubagentStop</code> 還帶 <code>last_assistant_message</code>（subagent 自己的結論）與 <code>agent_transcript_path</code>。目前完全沒用到 —— 面板其實有機會顯示「subagent 回報了什麼」，但那是另一個題目。</p>
+
+<h3>2.3 具名 subagent 會跑很久 <span class="tag measured">實測</span></h3>
+<p><code>round1.ndjson</code>：一個 <code>implementer</code> subagent（<code>agent_id=adad9c77</code>）在 42 秒內連續送出 14 個 tool 事件。這段期間主 agent 自己也在動。你現在這個 session 的狀態檔此刻就是這個形狀：</p>
+<pre>main_activity  = 'working'   main_tool = 'Bash'
+sub_activity   = 'working'   sub_tool  = 'Read'
+sub_agent_type = 't20-panel-dismiss'
+subagents      = {'t20-panel-dismiss': 1}</pre>
+
+<h2>3. A 與 B：guard 的適用範圍開太大</h2>
+<p>guard ① 是<b>用內部 subagent 的證據</b>寫出來的，但它<b>套用在所有 subagent 事件上</b>。於是：</p>
+
+<svg viewBox="0 0 960 210" role="img" aria-label="背景 subagent 的時序">
+  <line x1="60" y1="60" x2="900" y2="60" stroke="#262a32" stroke-width="2"/>
+  <line x1="60" y1="140" x2="900" y2="140" stroke="#262a32" stroke-width="2"/>
+  <text x="10" y="64" fill="#9aa1ad" font-size="12">主 agent</text>
+  <text x="10" y="144" fill="#9aa1ad" font-size="12">具名 sub</text>
+
+  <circle cx="140" cy="60" r="6" fill="#ffffff"/><text x="112" y="42" fill="#9aa1ad" font-size="11">PreToolUse</text>
+  <circle cx="260" cy="60" r="6" fill="#ffffff"/><text x="215" y="42" fill="#9aa1ad" font-size="11">派 subagent</text>
+  <circle cx="420" cy="60" r="7" fill="#30d158"/><text x="392" y="42" fill="#30d158" font-size="12">Stop</text>
+
+  <circle cx="280" cy="140" r="6" fill="#ffffff"/><text x="232" y="166" fill="#9aa1ad" font-size="11">SubagentStart</text>
+  <circle cx="520" cy="140" r="6" fill="#ffffff"/>
+  <circle cx="640" cy="140" r="6" fill="#ff9f0a"/><text x="576" y="170" fill="#ff9f0a" font-size="11">PermissionRequest</text>
+  <circle cx="790" cy="140" r="6" fill="#ffffff"/><text x="742" y="166" fill="#9aa1ad" font-size="11">SubagentStop</text>
+
+  <rect x="420" y="96" width="480" height="26" rx="6" fill="#1d1710" stroke="#5a3d12"/>
+  <text x="660" y="114" text-anchor="middle" fill="#ff9f0a" font-size="12">這段區間內，所有 sub 事件都被 guard 丟掉</text>
+
+  <rect x="420" y="22" width="480" height="24" rx="6" fill="#101a13" stroke="#1e4529"/>
+  <text x="660" y="39" text-anchor="middle" fill="#30d158" font-size="12">燈號：綠（done）—— 你去看，其實什麼結果都還沒有</text>
+</svg>
+
+<p><b>A</b>：主 agent 講完話了，但它派出去的 agent 還在跑。燈說「有結果可看」，你去看卻什麼都沒有 —— 真正的工作還在背景。</p>
+<p><b>B</b>：更糟的一格。背景 subagent 撞到需要批准的 tool，送出 <code>PermissionRequest</code>（帶 <code>agent_id</code>），guard 把它丟掉。<b>燈是綠的，實際上有人卡著等你。</b>這正好是本產品最不該犯的錯的鏡像 —— 既有 invariant 防的是「不該橘卻橘」，這一格是「該橘卻不橘」。</p>
+
+<div class="card warn">
+<p style="margin:0"><b>為什麼現有測試沒抓到：</b>三條相關的 gate（<code>internalSubagentStopAfterStopIsIgnored</code>、<code>subagentStopAfterStopFailureIsIgnored</code>、<code>subagentIgnoredWhileWaiting</code>）測的都是「靜止之後<b>不該</b>被改變」的方向。<b>沒有任何一條測「靜止之後真的還有事在跑時該怎樣」</b> —— 那個情境從來沒有被寫成測試，因為 spec 也沒寫。這是 CLAUDE.md 講的「gates share one eye」：四道關卡都從同一份假設出發。</p>
+</div>
+
+<h2>4. C：從屬槽的殘影</h2>
+<p><code>SubagentStop</code> 在 <code>EventMapping</code> 裡對應 <code>.setActivity(.working)</code>。對主槽而言那是對的（subagent 回來了，主 agent 繼續工作），但同一個映射被拿去寫<b>從屬</b>槽，語意就反了 —— 「這個 subagent 結束了」被記成「這個 subagent 正在工作」。</p>
+<p>加上 <code>subTool</code>／<code>subAgentType</code> 都是 carry-forward，結果是：subagent 結束後，面板副行會一直掛著它最後一次用的 tool，直到主 agent 走到 done／error 才清掉。你看到的「沒有任何反應」有一部分就是這個殘影。</p>
+
+<h2>5. D：橘燈的另一個成因，與 subagent 無關</h2>
+<p>實測序列（<code>round2</code>，同一個 session）：</p>
+<pre>1215.18s  PreToolUse         Bash
+1215.18s  PermissionRequest  Bash     ← 主槽變 waiting，燈變橘
+   （你按下 Allow —— 平台不送任何事件）
+1223.16s  PostToolUse        Bash     ← 這時才變回 working</pre>
+<p>也就是說<b>從你批准的那一刻到 tool 跑完</b>，燈都是橘的。這裡是 8 秒，但如果批准的是 <code>swift test</code>，那就是兩分鐘的假橘燈。</p>
+<div class="card">
+<p style="margin:0"><b>這個修不掉（在目前的平台契約下）。</b>「批准」沒有對應的 hook event —— <code>Elicitation</code> 有 <code>ElicitationResult</code> 收尾，<code>PermissionRequest</code> 卻沒有對應的 <code>PermissionGranted</code>。唯一的辦法是時間衰減，而那違反本專案「不做 time-based gate」的教訓，也會在你真的離開時說謊。<br>
+<span class="k">實務影響有限：你多數時間跑 <code>bypassPermissions</code>，這格根本不會出現。建議記成 known gap。</span></p>
+</div>
+
+<h2>6. 提案</h2>
+
+<h3>6.1 核心：把「還有幾個具名 subagent 在外面」變成一個真的狀態</h3>
+<p>不要再用「主槽靜止就全丟」這條粗規則。改成記錄<b>在外面的具名 subagent 集合</b>，用 <code>agent_id</code> 當 key：</p>
+<pre>outstandingSubagents: [agentID: (type, tool)]
+
+• 任何帶 agent_type（非空）的 subagent 事件  → upsert
+• SubagentStop 且 agent_id 在集合裡          → remove
+• UserPromptSubmit（新一輪）                  → 清空（保險）
+• 內部 subagent（agent_type 空）              → 從不進集合，它的遲到 Stop 自然是 no-op</pre>
+<p>然後燈號多吃一個輸入：</p>
+<pre>effectiveActivity = max(mainActivity,
+                        subActivity ?? .idle,
+                        outstandingSubagents.isEmpty ? .idle : .working)</pre>
+
+<div class="card ok">
+<p style="margin:0"><b>為什麼這個形狀是對的深度：</b>§2.5.1 當初真正想擋的是「<b>內部</b> subagent 的遲到事件」。現在用 <code>agent_type</code> 直接把內部 subagent 排除在集合之外 —— <b>用資料本身的區別去擋，而不是用「主槽的狀態」去猜</b>。原本那條 guard 是拿相關性當因果。</p>
+</div>
+
+<h3>6.2 B（等待決策）要單獨處理</h3>
+<p>具名 subagent 的 <code>PermissionRequest</code>／<code>Elicitation</code> 必須能把燈變橘，即使主槽已經 done。做法：集合裡的項目帶自己的 activity，第三個輸入取集合內的 max，而不是固定 <code>.working</code>。</p>
+
+<h3>6.3 C（殘影）：SubagentStop 在從屬槽的語意改成「移除」</h3>
+<p>不是改 <code>EventMapping</code> 的回傳值（主槽仍然需要 <code>.working</code>），而是在 <code>MergeRules</code> 的 sub 分支裡對 <code>SubagentStop</code> 特判成清除。</p>
+
+<h3>6.4 哪些既有 gate 會受影響</h3>
+<table>
+<tr><th>測試</th><th>提案後</th><th>說明</th></tr>
+<tr><td><code>internalSubagentStopAfterStopIsIgnored</code></td><td>維持綠</td><td><code>agent_type=""</code> → 從不進集合 → done 仍是 done</td></tr>
+<tr><td><code>subagentStopAfterStopFailureIsIgnored</code></td><td>維持綠</td><td>SubagentStop 只會移除、不會新增</td></tr>
+<tr><td><code>subagentIgnoredWhileWaiting</code></td><td>維持綠</td><td>斷言的是 <code>subActivity == nil</code>；集合是另一個欄位，不碰它</td></tr>
+<tr><td><code>subagentCannotMaskWaiting</code></td><td>維持綠</td><td>max(waiting, working) 仍是 waiting</td></tr>
+<tr><td><code>stopClearsSubSlot</code></td><td>維持綠</td><td>從屬槽照清；集合是獨立的</td></tr>
+</table>
+<p><b>一條既有測試都不用改</b>。這是刻意的設計 —— 不動既有斷言就不會有「弱化 vs 對齊」的爭議。新行為由新 gate 覆蓋。</p>
+
+<div class="card warn">
+<p style="margin:0 0 8px"><b>實測驗證這個判斷（2026-09-11 晚）：</b>我把「最直覺的修法」套上去試——只是在 guard 上開個口讓具名 subagent 通過：</p>
+<pre style="margin:8px 0">guard !s.mainActivity.isQuiescent <b>|| p.agentType != nil</b> else { break }</pre>
+<p style="margin:8px 0 0">結果：落差 A 與 B 的釘樁測試如預期變紅（0.004 秒），<b>但同時打斷三條既有 gate</b> ——
+<code>subagentCannotMaskWaiting</code>、<code>subagentIgnoredWhileWaiting</code>、<code>subagentStopAfterStopFailureIsIgnored</code>，
+全都是因為它開始往 <code>subActivity</code> 寫東西。<br>
+<b>所以「直覺修法」是不能用的，而上面那張表所依據的設計（另開一個集合、完全不碰從屬槽）不是紙上談兵，是被這次 mutation 反證出來的唯一安全形狀。</b></p>
+</div>
+
+<h3>6.5 新 gate（各自要有 mutation）</h3>
+<ul>
+<li>主 agent <code>Stop</code> 後，具名 subagent 仍在跑 → 燈必須是 working，不是 done。<span class="k">mutation：拿掉第三個輸入 → 必紅</span></li>
+<li>該具名 subagent 的 <code>SubagentStop</code> 抵達 → 燈回到 done。<span class="k">mutation：remove 改成 no-op → 必紅（燈卡住）</span></li>
+<li>主槽 done 時具名 subagent 送 <code>PermissionRequest</code> → 燈必須橘。<span class="k">mutation：集合固定回 .working → 必紅</span></li>
+<li>內部 subagent（<code>agent_type=""</code>）的遲到 <code>SubagentStop</code> → 燈維持 done。<span class="k">用 round2 的真實 payload，不是手搓的</span></li>
+<li>具名 subagent 結束後，面板副行不得再顯示它的 tool。</li>
+</ul>
+
+<h2>7. 風險與還沒量到的東西</h2>
+<table>
+<tr><th>項目</th><th>狀態</th><th>如果猜錯會怎樣</th></tr>
+<tr><td>具名 <code>SubagentStop</code> 帶 <code>agent_id</code> 與 <code>agent_type</code></td><td><span class="tag measured">已量測</span></td><td>—</td></tr>
+<tr><td>subagent <b>崩潰</b>時是否仍送 <code>SubagentStop</code></td><td><span class="tag unknown">未量測</span></td><td>集合永遠不空 → 燈卡在 working。<br><b>保險：<code>UserPromptSubmit</code> 清空集合</b>，最多髒一輪</td></tr>
+<tr><td>agent team（多個並行 agent）的 <code>agent_id</code> 是否各自獨立</td><td><span class="tag unknown">未量測</span></td><td>集合設計本來就以 id 為 key，多個並行是自然支援；但需要一次真的 team 派發來確認</td></tr>
+<tr><td>subagent 內再派 subagent（巢狀）</td><td><span class="tag unknown">未量測</span></td><td>目前無證據顯示會發生；集合不會爆，最多多一筆</td></tr>
+</table>
+
+<h2>8. 不做的事</h2>
+<ul>
+<li><b>不改 D1 優先序本身</b>（<code>error &gt; waiting &gt; working &gt; done &gt; idle</code>）。五個狀態的相對關係沒有問題，問題在「有沒有正確地知道自己處在哪一個狀態」。</li>
+<li><b>不加時間衰減／TTL。</b>本專案已經被 time-based gate 咬過兩次。</li>
+<li><b>不把 <code>idle_prompt</code> 拿來當 waiting 的收尾</b>（既有 invariant，會讓每個講完話的 session 亮橘）。</li>
+<li><b>不動聚合成一顆燈這件事</b>（E）。面板已經分得出是哪個 session。</li>
+</ul>
+
+<h2>9. 建議的下一步</h2>
+<div class="card ok">
+<p style="margin:0"><b>使用者裁決（2026-09-12）：選 (c)</b> —— 先把 phase 2 跑完，之後另開一輪修邏輯。<br>
+已完成的釘樁：<code>Tests/AuraCoreTests/SubagentKnownGapTests.swift</code>（四條，其中三條刻意斷言「今天的錯」，
+修好之後會變紅，請改寫而不是刪除）＋ 實測 fixture <code>Fixtures/round3-named-subagent.ndjson</code>
+＋ spec §9 的 known gaps 10–12。</p>
+</div>
+<p>這一包會動到 <code>MergeRules</code>／<code>SessionSnapshot</code>／<code>EventMapping</code> —— 也就是你先前說「底層暫時先不用動」的那一層，而且 <code>SessionSnapshot</code> 加欄位是 schema 變更（舊狀態檔要能相容讀入）。所以我停在這裡等你決定：</p>
+<ul>
+<li><b>(a)</b> 現在就做整包（A+B+C），走完整 SDD，含上面五條新 gate。</li>
+<li><b>(b)</b> 只做 A（背景 subagent 不得讓燈變綠）—— 最小 diff，解掉你最常遇到的那一格。</li>
+<li><b>(c)</b> 先只補測試把現況釘住、寫進 known gaps，等 phase 2 的 UI 收尾後再做。</li>
+</ul>
+<p class="k">我的建議是 (a)。B 那一格（該橘卻不橘）跟既有 invariant「不該橘卻橘」是同一個等級的錯，只是方向相反；而且 A、B、C 三者共用同一個資料結構，分批做等於改兩次 schema。</p>
+
+</div></body></html>

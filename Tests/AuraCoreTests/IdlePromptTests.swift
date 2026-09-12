@@ -53,7 +53,7 @@ struct IdlePromptTests {
     /// （spec §2.2.1：「matcher 支援度可能隨版本變動，payload 內的型別檢查才是正確性保證」——
     /// 這條就是那個保證的 wired gate；matcher 濾掉事件只是第一層。）
     @Test("aura-hook 二進位：Stop 之後餵 idle_prompt，狀態檔仍是 done")
-    func binaryKeepsDoneAfterIdlePrompt() throws {
+    func binaryKeepsDoneAfterIdlePrompt() async throws {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("aura-idle-\(UUID().uuidString)/sessions")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -68,8 +68,11 @@ struct IdlePromptTests {
             p.waitUntilExit()
             #expect(p.terminationStatus == 0, "aura-hook 一律 exit 0")
         }
-        try fire(#"{"hook_event_name":"Stop","session_id":"bin-idle","last_message":"做完了"}"#)
-        try fire(#"{"hook_event_name":"Notification","session_id":"bin-idle","notification_type":"idle_prompt","message":"Claude is waiting for your input"}"#)
+        // T10b：兩次真的 spawn 一起經過 SpawnGate。
+        try await SpawnGate.shared.run {
+            try fire(#"{"hook_event_name":"Stop","session_id":"bin-idle","last_message":"做完了"}"#)
+            try fire(#"{"hook_event_name":"Notification","session_id":"bin-idle","notification_type":"idle_prompt","message":"Claude is waiting for your input"}"#)
+        }
         let s = try #require(SnapshotIO.read(sessionID: "bin-idle", root: root))
         #expect(s.mainActivity == .done, "二進位把 idle_prompt 寫成了 \(s.mainActivity)——舊 plugin/bin/aura-hook 沒重建就會是這樣")
         #expect(s.notificationType == "idle_prompt")

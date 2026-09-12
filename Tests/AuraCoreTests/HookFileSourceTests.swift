@@ -43,8 +43,12 @@ struct HookFileSourceTests {
         let box = Collected()
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
-                for await snap in source.snapshots {
-                    if predicate(await box.add(snap)) { break }
+                // A3：`snapshots` 現在逐批吐（`AsyncStream<[SessionSnapshot]>`），
+                // 這裡展開成單筆再餵給既有的 predicate，測試意圖不變。
+                for await batch in source.snapshots {
+                    for snap in batch {
+                        if predicate(await box.add(snap)) { return }
+                    }
                 }
             }
             group.addTask {

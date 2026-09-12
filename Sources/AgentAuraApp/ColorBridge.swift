@@ -12,7 +12,11 @@ extension Color {
 }
 
 extension NSColor {
-    convenience init(rgba: RGBA) {
-        self.init(srgbRed: rgba.r, green: rgba.g, blue: rgba.b, alpha: rgba.a)
+    /// E13（/simplify 波次2，reuse#13）：`alpha` override——`LEDStripView` 需要把
+    /// `rgba.a` 換成動畫曲線算出來的瞬時值（同 `Color.init(rgba:ignoringAlpha:)`
+    /// 「要換掉 alpha」這個既有需求），原本繞過這裡自己手寫 `NSColor(srgbRed:...)`，
+    /// 讓「RGBA → 色彩型別」的轉換多了第二份、sRGB 這個選擇要記兩處。
+    convenience init(rgba: RGBA, alpha: Double? = nil) {
+        self.init(srgbRed: rgba.r, green: rgba.g, blue: rgba.b, alpha: alpha ?? rgba.a)
     }
 }

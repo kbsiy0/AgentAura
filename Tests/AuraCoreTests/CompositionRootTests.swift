@@ -169,4 +169,48 @@ struct CompositionRootTests {
         g.refreshLiveness()
         #expect(g.iconState.activity == .idle, "檔案消失 → 不得留下幽靈 session")
     }
+
+    /// A2（/simplify 波次1，eff#2）：`refreshLiveness` 用 `st_mtimespec` 當閘門——mtime
+    /// 沒變就跳過 `SnapshotIO.read`，沿用上一輪讀到的內容，只重算 liveness。
+    ///
+    /// 正常情況下任何寫入都會動 mtime、FSEvents 會送真事件，這裡刻意用 `utimensat`
+    /// 把第二次寫入的 mtime **強制改回**跟第一次一樣（模擬「mtime 這個代理訊號剛好沒變」
+    /// 的邊界情況），藉此觀察閘門是不是真的生效：mtime 沒變時，即使磁碟上的實際內容
+    /// 已經換成 `.error`，`iconState` 仍該停在上一輪讀到的 `.waiting`。
+    @Test("mtime 沒變時沿用上一輪讀到的內容，不重新讀取解析（效能閘門）")
+    func refreshLivenessSkipsRereadWhenMtimeUnchanged() throws {
+        let root = try makeRoot()
+        let url = try SnapshotIO.url(for: "stale1", root: root)
+        try SnapshotIO.update(sessionID: "stale1", root: root) { _ in
+            var s = SessionSnapshot(sessionID: "stale1")
+            s.mainActivity = .waiting
+            s.pid = getpid(); s.pidStartedAt = SysctlLiveness().startTime(ofPID: getpid())
+            s.writtenAt = Date(); return s
+        }
+        let g = PipelineGraph.production(root: root)
+        g.start(); defer { g.stop() }
+        #expect(g.iconState.activity == .waiting)
+
+        g.refreshLiveness()   // 建立 lastSeen 快取（讀到 waiting）
+        #expect(g.iconState.activity == .waiting)
+
+        var before = stat()
+        #expect(stat(url.path, &before) == 0, "前提：檔案應該已經存在")
+
+        try SnapshotIO.update(sessionID: "stale1", root: root) { existing in
+            var s = existing ?? SessionSnapshot(sessionID: "stale1")
+            s.mainActivity = .error
+            return s
+        }
+        // 強制把 mtime 改回寫入前的那個值——模擬「mtime 剛好沒變」。
+        var times: [timespec] = [before.st_atimespec, before.st_mtimespec]
+        #expect(utimensat(AT_FDCWD, url.path, &times, 0) == 0, "utimensat 沒成功，mtime 沒被強制改回去，這條測試的前提就不成立")
+
+        g.refreshLiveness()
+        #expect(g.iconState.activity == .waiting, """
+            mtime 沒變（刻意用 utimensat 模擬）時 refreshLiveness 應該沿用上一輪讀到的
+            內容（waiting），不該因為磁碟上的新內容（error）而改變——這正是 mtime 閘門
+            的效果：跳過 SnapshotIO.read，只重算 liveness。
+            """)
+    }
 }

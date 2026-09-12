@@ -3,7 +3,6 @@ import Foundation
 public struct SessionState: Sendable, Equatable, Identifiable {
     public let id: String
     public let projectName: String
-    public let projectPath: String?
     public let permissionMode: String?
     public let effort: String?
     /// 模型名稱。只有 `SessionStart`（與 `PostModelSwitch` 的 `to_model`）提供，
@@ -39,7 +38,7 @@ public struct SessionState: Sendable, Equatable, Identifiable {
 
     // 刻意提供公開的 memberwise init：`public let` 欄位的自動合成 init 只到 internal，
     // 跨模組（未來的 UI target）建構不到值。`IconState` 同理自帶 public init。
-    public init(id: String, projectName: String, projectPath: String?,
+    public init(id: String, projectName: String,
                 permissionMode: String?, effort: String?, model: String?,
                 activity: Activity, mainActivity: Activity, subActivity: Activity?,
                 currentTool: String?, subagentTool: String?, toolDurationMs: Int?,
@@ -49,7 +48,6 @@ public struct SessionState: Sendable, Equatable, Identifiable {
                 liveness: Liveness, updatedAt: Date) {
         self.id = id
         self.projectName = projectName
-        self.projectPath = projectPath
         self.permissionMode = permissionMode
         self.effort = effort
         self.model = model

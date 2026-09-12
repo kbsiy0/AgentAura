@@ -4,33 +4,96 @@ import AuraCore
 import AuraHookFile
 
 /// Composition root。唯一的組裝點。
+///
+/// T08：接線分散到三個 extension 檔避免撞 200 行——`AppDelegate+PanelActions.swift`
+/// （窮盡 switch）、`AppDelegate+Connect.swift`（connect／disconnect／登入項目）、
+/// `AppDelegate+Verification.swift`（reprobe／背景 exec 驗證／`onOpen`）。
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var graph: PipelineGraph!
-    private var status: (any IconRendering)!
-    private var driver: AnimationDriver!
+    /// internal（不是 private）——`refreshPanel`（`AppDelegate+PanelActions.swift`）要讀它，
+    /// 跨檔 extension 碰不到 `private`（同 `status`／`driver` 的理由）。
+    var graph: PipelineGraph!
+    /// internal（不是 private）——`wireActions()`（`AppDelegate+PanelActions.swift`）要接
+    /// `status.onAction`，跨檔 extension 碰不到 `private`。
+    var status: (any IconRendering)!
+    /// internal（不是 private）——`performSetReduceMotion`（`AppDelegate+PanelActions.swift`，B5）
+    /// 要轉發使用者偏好，跨檔 extension 碰不到 `private`。
+    var driver: AnimationDriver!
     private var livenessTimer: Timer?
 
-    /// Change 2：internal（不是 private）讓 smoke test 能直接觀測／驅動
-    /// （`delegate.paletteStore.palette`、`delegate.colorCoordinator.changeColor(...)`）。
+    /// internal（不是 private）讓 smoke test 能直接觀測／驅動——與 `paletteStore`／
+    /// `colorCoordinator`（Change 2）同一個理由。
     var paletteStore: PaletteStore!
     var colorCoordinator: ColorPickerCoordinator!
+    var verificationStore: HookVerificationStore!
+    var loginItem: (any LoginItemControlling)!
 
-    /// 三個注入點，**預設值就是生產設定** —— 生產路徑與測試路徑走同一段程式碼。
-    /// 沒有這些縫，這整個 composition root 就沒有任何測試碰得到
-    /// （最終 review 實測：把下面的 `graph.start()` 與 timer 註解掉，220/220 全綠）。
+    var installState: InstallState = .notConnected
+    var optionsExpanded = false
+    var launchAtLogin: Bool?
+    var externalTargetPath: String?
+    var banner: PanelBanner?
+    /// T12（B5）：使用者的「減少動態」偏好——與系統值取 OR（`AnimationDriver.setUserReduceMotion`
+    /// 是唯一的合併點），不是獨立生效。internal（不是 private）：`AppDelegate+PanelActions.swift`
+    /// 的 `performSetReduceMotion` 要寫它，跨檔 extension 碰不到 `private`。
+    var userReduceMotion = false
+    /// T16：燈條底板開關，預設 true——internal 理由同 `userReduceMotion`。
+    var iconPlate = true
+    /// internal（不是 private）：`AppDelegate+PanelActions.swift` 的 `presentAbout` 要讀它。
+    let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+
+    static let didConnectOnceKey = "AgentAuraDidConnectOnce"
+    /// T12（B5）：`UserDefaults` 鍵，走既有的 `defaults` 注入點（比照 `didConnectOnceKey`）。
+    static let reduceMotionKey = "AgentAuraReduceMotion"
+
+    /// **`installer` 生產預設值就是真的 `~/.claude`**——`productionUsesRealInstaller` 斷言
+    /// 這一份預設值（不是測試注入的 temp 值）以 `/.claude` 結尾。internal 讓測試能讀。
+    let installer: Installer
     private let root: URL
     private let livenessInterval: TimeInterval
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
     private let makeRenderer: @MainActor () -> any IconRendering
+    private let makeLoginItem: @MainActor () -> any LoginItemControlling
+    // 以下四個跨檔 extension（PanelActions）都要用，同 `status` 的理由改 internal。
+    let openURL: @MainActor (URL) -> Void
+    let showAboutPanel: @MainActor ([NSApplication.AboutPanelOptionKey: Any]) -> Void
+    let terminator: any AppTerminating
+    let confirmDisconnect: @MainActor (@escaping () -> Void) -> Void
+    /// A5（T11 commit3）：`.replaceExternalMount` 換掉開發者掛載前的確認——同
+    /// `confirmDisconnect` 的注入縫（測試不真的彈 `NSAlert`，spec §6.4）。
+    let confirmReplaceExternalMount: @MainActor (@escaping () -> Void) -> Void
 
     init(root: URL = SnapshotIO.defaultRoot,
          livenessInterval: TimeInterval = 5,
          defaults: UserDefaults = .standard,
+         installer: Installer = .production(),
+         makeLoginItem: @escaping @MainActor () -> any LoginItemControlling = {
+             LoginItem(translocated: RunningBundle.isTranslocated(), inDownloads: RunningBundle.isInDownloads())
+         },
+         openURL: @escaping @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) },
+         // B4：帶真實內容（版本＋專案網址＋授權，見 `AboutContent`）——此前是空的 standard panel。
+         showAboutPanel: @escaping @MainActor ([NSApplication.AboutPanelOptionKey: Any]) -> Void = { options in
+             NSApp.activate(ignoringOtherApps: true)
+             NSApp.orderFrontStandardAboutPanel(options)
+         },
+         terminator: any AppTerminating = RealTerminator(),
+         confirmDisconnect: @escaping @MainActor (@escaping () -> Void) -> Void = { onConfirm in
+             DisconnectConfirmation.present(onConfirm: onConfirm)
+         },
+         confirmReplaceExternalMount: @escaping @MainActor (@escaping () -> Void) -> Void = { onConfirm in
+             ReplaceMountConfirmation.present(onConfirm: onConfirm)
+         },
          makeRenderer: @escaping @MainActor () -> any IconRendering = { StatusItemController() }) {
         self.root = root
         self.livenessInterval = livenessInterval
         self.defaults = defaults
+        self.installer = installer
+        self.makeLoginItem = makeLoginItem
+        self.openURL = openURL
+        self.showAboutPanel = showAboutPanel
+        self.terminator = terminator
+        self.confirmDisconnect = confirmDisconnect
+        self.confirmReplaceExternalMount = confirmReplaceExternalMount
         self.makeRenderer = makeRenderer
         super.init()
     }
@@ -39,6 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status = makeRenderer()
         paletteStore = PaletteStore(defaults: defaults)
         colorCoordinator = ColorPickerCoordinator()
+        verificationStore = HookVerificationStore(defaults: defaults)
+        loginItem = makeLoginItem()
         driver = AnimationDriver { [weak self] appearance, phase in
             self?.status.apply(appearance, phase: phase)
         }
@@ -46,26 +111,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Task 一定落在後一個 turn，所以「同步區」比「在 graph.start() 之前」更準確
         // 的說法是「在下面這段回呼真正跑起來之前」（spec §4.3）。
         driver.setPalette(paletteStore.palette)
+        // B5：同一段同步區內套上持久化的「減少動態」偏好，理由同上面那行（palette）。
+        userReduceMotion = Self.reduceMotionPreference.load(from: defaults)
+        driver.setUserReduceMotion(userReduceMotion)
+        loadIconPlate()   // T16：同一段同步區內套上持久化的底板偏好，理由同上
 
         paletteStore.onChange = { [weak self] in
             guard let self else { return }
             self.driver.setPalette(self.paletteStore.palette)
             self.refreshPanel()
         }
-        status.onPickColor = { [weak self] activity in
-            guard let self else { return }
-            self.status.setPopoverPinned(true)
-            self.colorCoordinator.pick(activity, current: self.paletteStore.palette[activity])
-        }
+        // E2（/simplify 波次2，reuse#10）：系統「減少動態」真的改變時重畫面板——比照上面
+        // paletteStore.onChange 的既有模式。原本系統設定改了只有 driver 自己重排動畫，
+        // 沒有人呼叫 refreshPanel()，Options 那一列會停在舊值直到下一次事件。
+        driver.onEnvironmentChange = { [weak self] in self?.refreshPanel() }
         colorCoordinator.onPick = { [weak self] activity, color in
             self?.applyColor(color, for: activity)
         }
         colorCoordinator.onEnd = { [weak self] in
             self?.status.setPopoverPinned(false)
         }
-        status.onResetColors = { [weak self] in
-            self?.resetColors()
-        }
+        wireActions()
 
         graph = PipelineGraph.production(root: root)
         // onIconStateChange 從 FSEvents 的背景 queue 上來，所以要 hop 回 main。
@@ -74,7 +140,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.driver.setIcon(icon)
                 self.driver.setIconVisible(self.status.isVisible)
-                self.refreshPanel()
+                // E1（/simplify 波次2，eff#3）：把剛拿到的 icon 轉給 refreshPanel，不讓它
+                // 自己再對 graph 上鎖重算一次——否則 driver 用的是這次鎖到的值、面板用的是
+                // 下一次上鎖重算的值，兩者理論上可能不一致。
+                self.refreshPanel(icon: icon)
             }
         }
         status.attachPopover()
@@ -83,7 +152,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.graph.acknowledgeAll()
             self.refreshPanel()
         }
+        status.onOpen = { [weak self] in self?.handleOnOpen() }
         graph.start()
+
+        // §4.4：首啟順序強制——attachPopover→setPanel(真實狀態)→showPanel；obs 轉給下面（E6）。
+        let obs = reprobeObserving()
+        refreshPanel()
+        runFirstRunSequenceIfNeeded()
+        launchVerificationIfNeeded(observed: obs)
 
         // spec §3.5：每 5s 重驗 pid，抓「terminal 被強制關掉、SessionEnd 沒來」
         livenessTimer = Timer.scheduledTimer(withTimeInterval: livenessInterval, repeats: true) { [weak self] _ in
@@ -91,10 +167,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func refreshPanel() {
-        let icon = graph.iconState
-        let model = PanelModel.make(icon: icon, sessions: graph.visibleSessions, palette: paletteStore.palette)
-        status.setPanel(model)
+    /// §4.4：`!didConnectOnce && !connected` 才自動開面板；`didConnectOnce` 由
+    /// `performConnect` 在真的接上成功時才寫（見 `AppDelegate+Connect.swift`），
+    /// 不是這裡用當下狀態反推——旗標語意是「曾經走過接上流程成功」，不是巧合已連上。
+    private func runFirstRunSequenceIfNeeded() {
+        // B5（波次2接線）：`InstallState.isConnected` 取代自己重寫的 IIFE（N9／S2-6）。
+        guard !defaults.bool(forKey: Self.didConnectOnceKey), !installState.isConnected else { return }
+        status.showPanel()
     }
 
     /// `store.set` 先 `onChange`（driver.setPalette + refreshPanel 立刻反映）再落盤。
@@ -110,5 +189,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         livenessTimer?.invalidate()
         graph?.stop()
         colorCoordinator?.detach()   // 收尾動作各自獨立（Lessons #8）；也讓每條建 AppDelegate 的 smoke 不留 observer
+        driver?.stop()   // E4：同理，別留下 NSWorkspace 的三個死註冊
     }
 }

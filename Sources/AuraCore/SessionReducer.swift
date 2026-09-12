@@ -7,7 +7,6 @@ public enum SessionReducer {
         SessionState(
             id: s.sessionID,
             projectName: projectName(fromPath: s.cwd),
-            projectPath: s.cwd,
             permissionMode: s.permissionMode,
             effort: s.effort,
             model: s.model,

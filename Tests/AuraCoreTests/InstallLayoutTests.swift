@@ -61,25 +61,29 @@ struct InstallLayoutTests {
     }
 
     @Test("plugin 的 aura-hook 真的能處理 payload")
-    func pluginBinaryWorks() throws {
+    func pluginBinaryWorks() async throws {
         let bin = try Self.expectedBinaryPath()
         try #require(FileManager.default.isExecutableFile(atPath: bin.path))
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("aura-install-\(UUID().uuidString)/sessions")
 
-        let p = Process()
-        p.executableURL = bin
-        p.environment = ProcessInfo.processInfo.environment.merging(
-            ["AGENTAURA_ROOT": root.path]) { _, new in new }
-        let pipe = Pipe(); p.standardInput = pipe
-        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
-        try p.run()
-        pipe.fileHandleForWriting.write(Data(
-            #"{"hook_event_name":"PermissionRequest","session_id":"inst1","tool_name":"Bash"}"#.utf8))
-        try pipe.fileHandleForWriting.close()
-        p.waitUntilExit()
+        // T10b：真的 spawn aura-hook，經過 SpawnGate。
+        let status = try await SpawnGate.shared.run { () throws -> Int32 in
+            let p = Process()
+            p.executableURL = bin
+            p.environment = ProcessInfo.processInfo.environment.merging(
+                ["AGENTAURA_ROOT": root.path]) { _, new in new }
+            let pipe = Pipe(); p.standardInput = pipe
+            p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+            try p.run()
+            pipe.fileHandleForWriting.write(Data(
+                #"{"hook_event_name":"PermissionRequest","session_id":"inst1","tool_name":"Bash"}"#.utf8))
+            try pipe.fileHandleForWriting.close()
+            p.waitUntilExit()
+            return p.terminationStatus
+        }
 
-        #expect(p.terminationStatus == 0)
+        #expect(status == 0)
         #expect(FileManager.default.fileExists(
             atPath: root.appendingPathComponent("inst1.json").path),
             "安裝用的二進位必須真的能寫狀態檔，不只是存在")

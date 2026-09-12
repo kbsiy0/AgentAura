@@ -27,23 +27,27 @@ struct AuraHookCLITests {
 
     struct Result { let exitCode: Int32; let stdout: String; let stderr: String }
 
-    /// 把 payload 餵進 stdin，回傳 exit code 與輸出。
-    func run(_ payload: String, root: URL) throws -> Result {
-        let p = Process()
-        p.executableURL = try Self.binaryURL()
-        p.environment = ProcessInfo.processInfo.environment.merging(
-            ["AGENTAURA_ROOT": root.path]) { _, new in new }
-        let inPipe = Pipe(), outPipe = Pipe(), errPipe = Pipe()
-        p.standardInput = inPipe; p.standardOutput = outPipe; p.standardError = errPipe
-        try p.run()
-        inPipe.fileHandleForWriting.write(Data(payload.utf8))
-        try inPipe.fileHandleForWriting.close()
-        let out = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let err = errPipe.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        return Result(exitCode: p.terminationStatus,
-                      stdout: String(decoding: out, as: UTF8.self),
-                      stderr: String(decoding: err, as: UTF8.self))
+    /// 把 payload 餵進 stdin，回傳 exit code 與輸出。**T10b：經過 `SpawnGate`**——這是本檔
+    /// 唯一的 spawn 入口，全部測試（含 `fuzzedRealPayloadsAreSilent` 的 200＋ 次呼叫）都
+    /// 走這裡，wrap 這一個函式就序列化了全檔案，不必逐一改每個 `@Test`。
+    func run(_ payload: String, root: URL) async throws -> Result {
+        try await SpawnGate.shared.run {
+            let p = Process()
+            p.executableURL = try Self.binaryURL()
+            p.environment = ProcessInfo.processInfo.environment.merging(
+                ["AGENTAURA_ROOT": root.path]) { _, new in new }
+            let inPipe = Pipe(), outPipe = Pipe(), errPipe = Pipe()
+            p.standardInput = inPipe; p.standardOutput = outPipe; p.standardError = errPipe
+            try p.run()
+            inPipe.fileHandleForWriting.write(Data(payload.utf8))
+            try inPipe.fileHandleForWriting.close()
+            let out = outPipe.fileHandleForReading.readDataToEndOfFile()
+            let err = errPipe.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            return Result(exitCode: p.terminationStatus,
+                          stdout: String(decoding: out, as: UTF8.self),
+                          stderr: String(decoding: err, as: UTF8.self))
+        }
     }
 
     func makeRoot() throws -> URL {
@@ -56,9 +60,9 @@ struct AuraHookCLITests {
     // ---- 正常路徑 ----
 
     @Test("寫入狀態檔並 exit 0")
-    func happyPath() throws {
+    func happyPath() async throws {
         let root = try makeRoot()
-        let r = try run(#"{"hook_event_name":"PermissionRequest","session_id":"cli1","cwd":"/tmp","tool_name":"Bash"}"#, root: root)
+        let r = try await run(#"{"hook_event_name":"PermissionRequest","session_id":"cli1","cwd":"/tmp","tool_name":"Bash"}"#, root: root)
         #expect(r.exitCode == 0)
         let s = try #require(SnapshotIO.read(sessionID: "cli1", root: root))
         #expect(s.mainActivity == .waiting)
@@ -67,9 +71,9 @@ struct AuraHookCLITests {
     }
 
     @Test("記錄 pid 與 pid_started_at，且該 pid 當下可驗證為活著")
-    func recordsPIDAndStartTime() throws {
+    func recordsPIDAndStartTime() async throws {
         let root = try makeRoot()
-        _ = try run(#"{"hook_event_name":"PreToolUse","session_id":"cli2"}"#, root: root)
+        _ = try await run(#"{"hook_event_name":"PreToolUse","session_id":"cli2"}"#, root: root)
         let s = try #require(SnapshotIO.read(sessionID: "cli2", root: root))
         let pid = try #require(s.pid)
         let started = try #require(s.pidStartedAt)
@@ -80,10 +84,10 @@ struct AuraHookCLITests {
     }
 
     @Test("端到端：主槽 waiting 時 subagent 事件不得改變 activity")
-    func subagentDoesNotMaskWaitingEndToEnd() throws {
+    func subagentDoesNotMaskWaitingEndToEnd() async throws {
         let root = try makeRoot()
-        _ = try run(#"{"hook_event_name":"PermissionRequest","session_id":"cli3","tool_name":"Bash"}"#, root: root)
-        _ = try run(#"{"hook_event_name":"PostToolUse","session_id":"cli3","tool_name":"Write","agent_id":"a1","agent_type":"Explore"}"#, root: root)
+        _ = try await run(#"{"hook_event_name":"PermissionRequest","session_id":"cli3","tool_name":"Bash"}"#, root: root)
+        _ = try await run(#"{"hook_event_name":"PostToolUse","session_id":"cli3","tool_name":"Write","agent_id":"a1","agent_type":"Explore"}"#, root: root)
         let s = try #require(SnapshotIO.read(sessionID: "cli3", root: root))
         #expect(s.mainActivity == .waiting, "端到端也必須保住 waiting")
         #expect(s.subActivity == nil, "主槽靜止 → 忽略 subagent（§2.5.1）")
@@ -91,10 +95,10 @@ struct AuraHookCLITests {
     }
 
     @Test("端到端：主槽 working 時 subagent 事件寫進 sub 槽")
-    func subagentGoesToSubSlotWhenWorking() throws {
+    func subagentGoesToSubSlotWhenWorking() async throws {
         let root = try makeRoot()
-        _ = try run(#"{"hook_event_name":"PreToolUse","session_id":"cli3b","tool_name":"Bash"}"#, root: root)
-        _ = try run(#"{"hook_event_name":"PostToolUse","session_id":"cli3b","tool_name":"Grep","agent_id":"a1","agent_type":"Explore"}"#, root: root)
+        _ = try await run(#"{"hook_event_name":"PreToolUse","session_id":"cli3b","tool_name":"Bash"}"#, root: root)
+        _ = try await run(#"{"hook_event_name":"PostToolUse","session_id":"cli3b","tool_name":"Grep","agent_id":"a1","agent_type":"Explore"}"#, root: root)
         let s = try #require(SnapshotIO.read(sessionID: "cli3b", root: root))
         #expect(s.mainActivity == .working)
         #expect(s.subActivity == .working)
@@ -103,13 +107,13 @@ struct AuraHookCLITests {
     }
 
     @Test("累積欄位跨多次呼叫保留")
-    func accumulatesAcrossInvocations() throws {
+    func accumulatesAcrossInvocations() async throws {
         let root = try makeRoot()
-        _ = try run(#"{"hook_event_name":"UserPromptSubmit","session_id":"cli4"}"#, root: root)
+        _ = try await run(#"{"hook_event_name":"UserPromptSubmit","session_id":"cli4"}"#, root: root)
         for _ in 0..<3 {
-            _ = try run(#"{"hook_event_name":"PostToolUseFailure","session_id":"cli4","tool_name":"Bash"}"#, root: root)
+            _ = try await run(#"{"hook_event_name":"PostToolUseFailure","session_id":"cli4","tool_name":"Bash"}"#, root: root)
         }
-        _ = try run(#"{"hook_event_name":"SubagentStart","session_id":"cli4","agent_id":"a1","agent_type":"Explore"}"#, root: root)
+        _ = try await run(#"{"hook_event_name":"SubagentStart","session_id":"cli4","agent_id":"a1","agent_type":"Explore"}"#, root: root)
         let s = try #require(SnapshotIO.read(sessionID: "cli4", root: root))
         #expect(s.toolFailures == 3)
         #expect(s.subagents == ["Explore": 1])
@@ -117,11 +121,11 @@ struct AuraHookCLITests {
     }
 
     @Test("真實 fixture 全部餵進去都 exit 0 且產生狀態檔")
-    func allRealPayloadsAccepted() throws {
+    func allRealPayloadsAccepted() async throws {
         let root = try makeRoot()
         for json in try Fixtures.rawEvents(named: "round1") {
             let data = try Fixtures.jsonData(json)
-            let r = try run(String(decoding: data, as: UTF8.self), root: root)
+            let r = try await run(String(decoding: data, as: UTF8.self), root: root)
             #expect(r.exitCode == 0)
         }
         #expect(!SnapshotIO.allSessionIDs(root: root).isEmpty)
@@ -135,49 +139,53 @@ struct AuraHookCLITests {
         #"{"hook_event_name":"Stop"}"#,                 // 缺 session_id
         #"{"hook_event_name":"Stop","session_id":123}"#,// session_id 型別錯
     ])
-    func malformedInputIsSilent(_ payload: String) throws {
-        let r = try run(payload, root: try makeRoot())
+    func malformedInputIsSilent(_ payload: String) async throws {
+        let r = try await run(payload, root: try makeRoot())
         #expect(r.exitCode == 0, "觀測性絕不可干擾 agent")
         #expect(r.stdout.isEmpty, "不得有任何 stdout")
         #expect(r.stderr.isEmpty, "不得有任何 stderr")
     }
 
     @Test("session_id 含 path traversal 時不寫任何檔案且 exit 0")
-    func pathTraversalRejected() throws {
+    func pathTraversalRejected() async throws {
         let root = try makeRoot()
         let outside = root.deletingLastPathComponent().appendingPathComponent("escaped.json")
-        let r = try run(#"{"hook_event_name":"Stop","session_id":"../escaped"}"#, root: root)
+        let r = try await run(#"{"hook_event_name":"Stop","session_id":"../escaped"}"#, root: root)
         #expect(r.exitCode == 0)
         #expect(!FileManager.default.fileExists(atPath: outside.path), "不得寫到目錄外")
         #expect(SnapshotIO.allSessionIDs(root: root).isEmpty)
     }
 
     @Test("目錄唯讀時仍 exit 0（磁碟滿 / 權限問題的代理情境）")
-    func readOnlyRootIsSilent() throws {
+    func readOnlyRootIsSilent() async throws {
         let root = try makeRoot()
         try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path) }
-        let r = try run(#"{"hook_event_name":"Stop","session_id":"ro1"}"#, root: root)
+        let r = try await run(#"{"hook_event_name":"Stop","session_id":"ro1"}"#, root: root)
         #expect(r.exitCode == 0)
         #expect(r.stdout.isEmpty, "有 stdout：\(r.stdout.prefix(120))")
         #expect(r.stderr.isEmpty, "有 stderr：\(r.stderr.prefix(120))")
     }
 
     @Test("stdin 直接關閉（沒有任何輸入）仍 exit 0")
-    func closedStdin() throws {
+    func closedStdin() async throws {
         let root = try makeRoot()
-        let p = Process()
-        p.executableURL = try Self.binaryURL()
-        p.environment = ProcessInfo.processInfo.environment.merging(
-            ["AGENTAURA_ROOT": root.path]) { _, new in new }
-        let inPipe = Pipe(), out = Pipe(), err = Pipe()
-        p.standardInput = inPipe; p.standardOutput = out; p.standardError = err
-        try p.run()
-        try inPipe.fileHandleForWriting.close()   // 立刻關閉，不寫任何 bytes
-        let o = out.fileHandleForReading.readDataToEndOfFile()
-        let e = err.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        #expect(p.terminationStatus == 0)
+        // T10b：本檔唯一不經過 run() 輔助函式的裸 Process() 使用，獨立經過 SpawnGate。
+        let (status, o, e) = try await SpawnGate.shared.run { () throws -> (Int32, Data, Data) in
+            let p = Process()
+            p.executableURL = try Self.binaryURL()
+            p.environment = ProcessInfo.processInfo.environment.merging(
+                ["AGENTAURA_ROOT": root.path]) { _, new in new }
+            let inPipe = Pipe(), out = Pipe(), err = Pipe()
+            p.standardInput = inPipe; p.standardOutput = out; p.standardError = err
+            try p.run()
+            try inPipe.fileHandleForWriting.close()   // 立刻關閉，不寫任何 bytes
+            let o = out.fileHandleForReading.readDataToEndOfFile()
+            let e = err.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            return (p.terminationStatus, o, e)
+        }
+        #expect(status == 0)
         #expect(o.isEmpty && e.isEmpty)
     }
 
@@ -188,7 +196,7 @@ struct AuraHookCLITests {
     /// 改成把真實 payload 系統性破壞後餵進去 —— Swift runtime trap 會以 signal
     /// 中止（terminationStatus 非 0），所以行為測試抓得到，而且不依賴我對程式碼的閱讀。
     @Test("真實 payload 的系統性破壞版本全部 exit 0 且無輸出")
-    func fuzzedRealPayloadsAreSilent() throws {
+    func fuzzedRealPayloadsAreSilent() async throws {
         let root = try makeRoot()
         let reals = try Fixtures.rawEvents(named: "round2")
         var cases: [(String, Data)] = []
@@ -246,7 +254,7 @@ struct AuraHookCLITests {
         #expect(cases.count > 200, "破壞案例數應有規模，實際 \(cases.count)")
 
         for (label, data) in cases {
-            let r = try run(String(decoding: data, as: UTF8.self), root: root)
+            let r = try await run(String(decoding: data, as: UTF8.self), root: root)
             #expect(r.exitCode == 0, "\(label) 的 exit code 是 \(r.exitCode)，不是 0")
             #expect(r.stdout.isEmpty, "\(label) 有 stdout：\(r.stdout.prefix(120))")
             #expect(r.stderr.isEmpty, "\(label) 有 stderr：\(r.stderr.prefix(120))")
@@ -262,24 +270,24 @@ struct AuraHookCLITests {
     }
 
     @Test("超大 payload（1MB last_assistant_message）不 crash 且 exit 0")
-    func hugePayload() throws {
+    func hugePayload() async throws {
         let big = String(repeating: "長訊息內容 ", count: 100_000)
         let json = try String(decoding: JSONSerialization.data(withJSONObject: [
             "hook_event_name": "Stop", "session_id": "big1", "last_assistant_message": big,
         ]), as: UTF8.self)
-        let r = try run(json, root: try makeRoot())
+        let r = try await run(json, root: try makeRoot())
         #expect(r.exitCode == 0)
     }
 
     // ---- 效能（DoD：p95 < 5ms）----
 
     @Test("單次呼叫的 wall-clock 中位數 < 50ms（含 process spawn）")
-    func latency() throws {
+    func latency() async throws {
         let root = try makeRoot()
         var times: [Double] = []
         for i in 0..<20 {
             let t = Date()
-            _ = try run(#"{"hook_event_name":"PreToolUse","session_id":"perf\#(i % 3)","tool_name":"Bash"}"#, root: root)
+            _ = try await run(#"{"hook_event_name":"PreToolUse","session_id":"perf\#(i % 3)","tool_name":"Bash"}"#, root: root)
             times.append(Date().timeIntervalSince(t) * 1000)
         }
         let median = times.sorted()[times.count / 2]

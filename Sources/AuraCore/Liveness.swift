@@ -38,8 +38,12 @@ public struct SysctlLiveness: LivenessProbing {
 }
 
 /// 測試與對抗式 double 用：完全可控的 liveness 回答。
-public struct StubLiveness: LivenessProbing {
+///
+/// E15（/simplify 波次2，struct#B1）：`internal` 而非 `public`——只有 `Tests/AuraCoreTests`
+/// 用它（`@testable import AuraCore` 對 `internal` 一樣拿得到），生產 module 對外不該公開
+/// 一個「完全可控」的測試替身讓任何 importer 都能建構。`AgentAuraAppTests` 沒有使用它。
+struct StubLiveness: LivenessProbing {
     let table: [Int32: Int64]
-    public init(table: [Int32: Int64]) { self.table = table }
-    public func startTime(ofPID pid: Int32) -> Int64? { table[pid] }
+    init(table: [Int32: Int64]) { self.table = table }
+    func startTime(ofPID pid: Int32) -> Int64? { table[pid] }
 }

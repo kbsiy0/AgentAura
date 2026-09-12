@@ -26,7 +26,7 @@ struct PanelEvidenceRenderer {
         error:   RGBA(r: 255/255, g: 69/255,  b: 58/255,  a: 1))
 
     func session(_ id: String, _ a: Activity, tool: String, message: String? = nil) -> SessionState {
-        SessionState(id: id, projectName: id, projectPath: "/Users/you/Code/Vibe/\(id)",
+        SessionState(id: id, projectName: id,
                     permissionMode: "default", effort: "high", model: "claude-opus-5",
                     activity: a, mainActivity: a, subActivity: nil,
                     currentTool: tool, subagentTool: a == .working ? "Explore → Grep" : nil, toolDurationMs: nil,
@@ -38,7 +38,7 @@ struct PanelEvidenceRenderer {
     /// 離屏 view 沒有 window，繪圖外觀會跟隨機器設定（實測 Dark 機器上淺底渲出白字疊白底）——
     /// 所以依背景**明確指定** `NSAppearance`，證據圖才有可讀的文字。
     func render(_ model: PanelModel, over background: NSColor, appearance: NSAppearance.Name) throws -> CGImage {
-        let hosting = NSHostingView(rootView: PanelView(model: model))
+        let hosting = NSHostingView(rootView: PanelView(model: model, onAction: { _ in }))
         hosting.appearance = NSAppearance(named: appearance)
         hosting.frame = NSRect(x: 0, y: 0, width: 380, height: max(hosting.fittingSize.height, 44))
         let bitmap = try OffscreenRender.render(hosting, over: background)
@@ -56,9 +56,15 @@ struct PanelEvidenceRenderer {
         let icon = IconState(activity: .error, counts: [.working: 1, .waiting: 1, .error: 1], liveCount: 3)
         let empty = IconState.empty
         let cases: [(String, PanelModel)] = [
-            ("default-empty", PanelModel.make(icon: empty, sessions: [], palette: .default)),
-            ("default-3rows", PanelModel.make(icon: icon, sessions: three, palette: .default)),
-            ("custom-3rows", PanelModel.make(icon: icon, sessions: three, palette: Self.customPalette)),
+            ("default-empty", PanelModel.make(icon: empty, sessions: [], palette: .default,
+                                              install: .notConnected, version: "1.0", optionsExpanded: false,
+                                              launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)),
+            ("default-3rows", PanelModel.make(icon: icon, sessions: three, palette: .default,
+                                              install: .notConnected, version: "1.0", optionsExpanded: false,
+                                              launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)),
+            ("custom-3rows", PanelModel.make(icon: icon, sessions: three, palette: Self.customPalette,
+                                             install: .notConnected, version: "1.0", optionsExpanded: false,
+                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)),
         ]
         let appearance = NSApp?.effectiveAppearance.name.rawValue ?? NSAppearance.currentDrawing().name.rawValue
         var html = "<!doctype html><meta charset=utf-8><title>Change 2 面板證據</title><style>body{font:13px -apple-system,system-ui;padding:20px;background:#f5f5f7;color:#1d1d1f}img{display:block;margin:4px 0 14px;border:1px solid #d2d2d7}.cap{color:#6e6e73;font-size:11px}</style><h1>Change 2 面板證據（NSHostingView 離屏）</h1><p class=cap>產圖外觀：淺底以 .aqua、深底以 .darkAqua 明確指定（機器外觀 \(appearance) 不影響）。背景為純色，非真實 popover 材質——版面與色點顏色可信，材質不可信。「重設」在預設 palette 下為 disabled（灰字）。</p>\n"

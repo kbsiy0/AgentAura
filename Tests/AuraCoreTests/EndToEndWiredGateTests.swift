@@ -15,8 +15,19 @@ struct EndToEndWiredGateTests {
         return url
     }
 
-    /// 真的 spawn aura-hook。
-    func fireHook(_ payload: String, root: URL) throws {
+    /// 真的 spawn aura-hook——序列化版本，經過 SpawnGate（T10b），供除了
+    /// `fiftyConcurrentSessions` 以外的所有測試共用。
+    func fireHook(_ payload: String, root: URL) async throws {
+        try await SpawnGate.shared.run {
+            try Self.fireHookUnserialized(payload, root: root)
+        }
+    }
+
+    /// **刻意不經過 SpawnGate**：`fiftyConcurrentSessions` 測的正是「50 個真的併發的 spawn
+    /// 會被 pipeline 正確處理」，序列化會讓它不再併發，等於測試失去自己要驗的東西——
+    /// 這是本檔唯一的例外，講明原因，不是漏接（`SpawnGateCoverageSourceScanTests` 只要求
+    /// 檔案裡看得到 SpawnGate 字樣，不要求每一個呼叫點都走它；上面的 `fireHook` 已經滿足）。
+    static func fireHookUnserialized(_ payload: String, root: URL) throws {
         let p = Process()
         p.executableURL = try AuraHookCLITests.binaryURL()
         p.environment = ProcessInfo.processInfo.environment.merging(
@@ -49,7 +60,7 @@ struct EndToEndWiredGateTests {
         graph.start(); defer { graph.stop() }
         #expect(graph.iconState.activity == .idle)
 
-        try fireHook(#"{"hook_event_name":"PermissionRequest","session_id":"e2e1","cwd":"/tmp/proj","tool_name":"Bash"}"#, root: root)
+        try await fireHook(#"{"hook_event_name":"PermissionRequest","session_id":"e2e1","cwd":"/tmp/proj","tool_name":"Bash"}"#, root: root)
 
         let final = await wait(for: graph) { $0.activity == .waiting }
         #expect(final.activity == .waiting, "整條鏈路必須真的接通")
@@ -70,9 +81,9 @@ struct EndToEndWiredGateTests {
         // 把 error 移到最前面，last-write-wins 會得到 `.working`，測試就有鑑別力了。
         // （同一招在 T09 的 `twoWorkingOneErrorIsError` 用過 —— 固定測資的
         // 元素位置會決定一個 mutation 是否可觀察。）
-        try fireHook(#"{"hook_event_name":"StopFailure","session_id":"e1","reason":"overloaded_error"}"#, root: root)
-        try fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w1","tool_name":"Bash"}"#, root: root)
-        try fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w2","tool_name":"Read"}"#, root: root)
+        try await fireHook(#"{"hook_event_name":"StopFailure","session_id":"e1","reason":"overloaded_error"}"#, root: root)
+        try await fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w1","tool_name":"Bash"}"#, root: root)
+        try await fireHook(#"{"hook_event_name":"PreToolUse","session_id":"w2","tool_name":"Read"}"#, root: root)
 
         let final = await wait(for: graph) { $0.activity == .error && $0.counts.values.reduce(0,+) >= 3 }
         #expect(final.activity == .error, "使用者原始舉例，端到端驗證")
@@ -86,12 +97,12 @@ struct EndToEndWiredGateTests {
         let graph = PipelineGraph.production(root: root)
         graph.start(); defer { graph.stop() }
 
-        try fireHook(#"{"hook_event_name":"PermissionRequest","session_id":"mask1","tool_name":"Bash"}"#, root: root)
+        try await fireHook(#"{"hook_event_name":"PermissionRequest","session_id":"mask1","tool_name":"Bash"}"#, root: root)
         _ = await wait(for: graph) { $0.activity == .waiting }
 
         // 模擬實測時序：主 agent 被擋住時 subagent 連發事件
         for _ in 0..<8 {
-            try fireHook(#"{"hook_event_name":"PostToolUse","session_id":"mask1","tool_name":"Write","agent_id":"sub1","agent_type":"implementer"}"#, root: root)
+            try await fireHook(#"{"hook_event_name":"PostToolUse","session_id":"mask1","tool_name":"Write","agent_id":"sub1","agent_type":"implementer"}"#, root: root)
         }
         try await Task.sleep(nanoseconds: 500_000_000)
         #expect(graph.iconState.activity == .waiting,
@@ -104,8 +115,8 @@ struct EndToEndWiredGateTests {
         let graph = PipelineGraph.production(root: root)
         graph.start(); defer { graph.stop() }
 
-        try fireHook(#"{"hook_event_name":"Stop","session_id":"tail1","last_assistant_message":"全部完成"}"#, root: root)
-        try fireHook(#"{"hook_event_name":"SessionEnd","session_id":"tail1","reason":"exit"}"#, root: root)
+        try await fireHook(#"{"hook_event_name":"Stop","session_id":"tail1","last_assistant_message":"全部完成"}"#, root: root)
+        try await fireHook(#"{"hook_event_name":"SessionEnd","session_id":"tail1","reason":"exit"}"#, root: root)
 
         // 必須等到 SessionEnd 真的處理完（liveCount 歸零），不能只等 activity == .done：
         // Stop 本身就已經把 activity 設成 .done，但那時 liveness 仍是 .alive
@@ -129,7 +140,7 @@ struct EndToEndWiredGateTests {
         graph.start(); defer { graph.stop() }
 
         DispatchQueue.concurrentPerform(iterations: 50) { i in
-            try? self.fireHook(
+            try? Self.fireHookUnserialized(
                 #"{"hook_event_name":"PreToolUse","session_id":"c\#(i)","tool_name":"Bash"}"#, root: root)
         }
         let final = await wait(for: graph, until: { $0.counts.values.reduce(0,+) >= 50 }, timeout: 20)
