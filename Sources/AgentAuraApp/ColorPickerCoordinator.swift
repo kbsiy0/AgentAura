@@ -12,6 +12,10 @@ final class ColorPickerCoordinator: NSObject {
     private var activeActivity: Activity?
     private var willCloseToken: NSObjectProtocol?
 
+    /// T21：面板被外部點擊關掉時關色板用的注入點——比照 `openURL`／`confirmDisconnect`／
+    /// `AppDelegate.showAboutPanel` 的既有慣例，測試灌 spy，不真的彈／關色板 UI。
+    var closeColorPanel: () -> Void = { NSColorPanel.shared.close() }
+
     override init() {
         super.init()
         // 觀察者的 closure 是 @Sendable，但我們指定 queue: .main，所以實際一定在
@@ -114,6 +118,22 @@ final class ColorPickerCoordinator: NSObject {
         guard let converted = color.usingColorSpace(.sRGB) else { return nil }
         return RGBA(r: converted.redComponent, g: converted.greenComponent,
                     b: converted.blueComponent, a: 1)
+    }
+
+    /// T21：面板關閉時呼叫——若正在改色（`activeActivity != nil`）就關掉色板，避免面板被
+    /// 外部點擊關掉後系統色板變成孤兒視窗（面板已經看不到、色板還浮著，使用者得再手動關
+    /// 一次）。**沒在改色時不得碰 `NSColorPanel.shared`**——碰它會把整個色板 UI 建出來
+    /// （`init` 的 +120ms 註解），這是既有的刻意設計，`end()` 用同一顆 `activeActivity`
+    /// guard 守住，不額外多摸一次色板單例。
+    ///
+    /// 收斂性：`closeColorPanel()` 在生產路徑是 `NSColorPanel.shared.close()`，會觸發
+    /// `NSWindow.willCloseNotification` → 上面 `init` 裝的既有 handler → 清空
+    /// `activeActivity`／`endCount += 1`／呼叫 `onEnd?()`（`AppDelegate` 接成
+    /// `status.setPopoverPinned(false)`）。這條鏈**不會**再繞回 `end()` 本身——handler
+    /// 裡沒有任何呼叫路徑會再次觸發面板的 `onClose`，遞迴到此為止。
+    func end() {
+        guard activeActivity != nil else { return }
+        closeColorPanel()
     }
 
     func detach() {

@@ -149,6 +149,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.attachPopover()
         status.onClose = { [weak self] in
             guard let self else { return }
+            // T21：面板關閉時若正在改色就一併關掉系統色板（避免孤兒色板留在畫面上）——
+            // `end()` 自己的 guard 保證沒在改色時不會多做事，這裡不需要再判斷一次。
+            self.colorCoordinator.end()
             self.graph.acknowledgeAll()
             self.refreshPanel()
         }

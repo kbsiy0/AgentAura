@@ -110,4 +110,54 @@ struct ColorPickerTests {
             #expect(coordinator.endCount == 1, "detach 之後再 post willClose，endCount 不該再增，實際 \(coordinator.endCount)")
         }
     }
+
+    /// T21 (a)：正在改色時，`end()`（面板關閉時呼叫）必須關掉色板——不然色板變孤兒視窗
+    /// （面板已經看不到，色板還浮著）。用注入的 spy，不真的彈／關色板 UI。
+    @Test("T21(a)：正在改色時 end() 呼叫注入的關閉閉包恰一次")
+    func endClosesColorPanelWhenPicking() {
+        withCoordinator { coordinator in
+            var closeCalls = 0
+            coordinator.closeColorPanel = { closeCalls += 1 }
+            coordinator.pick(.error, current: RGBA(r: 0.1, g: 0.1, b: 0.1, a: 1), anchor: nil, present: false)
+
+            coordinator.end()
+
+            #expect(closeCalls == 1, "正在改色時 end() 應該呼叫注入的關閉閉包恰一次，實際 \(closeCalls) 次")
+        }
+    }
+
+    /// T21 (b)：沒在改色時 `end()` 不得呼叫關閉閉包，也不得碰 `NSColorPanel.shared`——
+    /// 碰它會把整個色板 UI 建出來（`init` 的 +120ms 註解），這是既有的刻意設計。
+    @Test("T21(b)：沒在改色時 end() 不呼叫關閉閉包")
+    func endIsNoOpWhenNotPicking() {
+        withCoordinator { coordinator in
+            var closeCalls = 0
+            coordinator.closeColorPanel = { closeCalls += 1 }
+            // 刻意不呼叫 pick——activeActivity 從一開始就是 nil。
+
+            coordinator.end()
+
+            #expect(closeCalls == 0, "沒在改色時 end() 不該呼叫關閉閉包，實際 \(closeCalls) 次")
+        }
+    }
+
+    /// T21：`end()` 呼叫真的 `closeColorPanel()`（生產預設，不注入 spy）之後，既有的
+    /// `willClose` handler 會清空 `activeActivity`／`onEnd?()`——這條鏈不會遞迴繞回
+    /// `end()` 本身。**實測**：`NSColorPanel.shared.close()` 即使面板從未 `present`（不可見），
+    /// 也會同步觸發已註冊的 `willClose` handler（不像 `willCloseObservedOnce` 得手動
+    /// post 通知模擬）——所以這裡只呼叫 `end()` 一次，若鏈上有遞迴，`endCount`／`endCalls`
+    /// 會 > 1；若不收斂於一次呼叫，也會在這裡現形。
+    @Test("T21：end() 與既有 willClose handler 的鏈收斂，不遞迴")
+    func endChainConverges() {
+        withCoordinator { coordinator in
+            var endCalls = 0
+            coordinator.onEnd = { endCalls += 1 }
+            coordinator.pick(.waiting, current: RGBA(r: 0.2, g: 0.2, b: 0.2, a: 1), anchor: nil, present: false)
+
+            coordinator.end()   // 生產預設 closeColorPanel 呼叫 NSColorPanel.shared.close()（不 present，安全）
+
+            #expect(coordinator.endCount == 1, "end() 之後 willClose 應恰好觸發一次，endCount 應為 1，實際 \(coordinator.endCount)")
+            #expect(endCalls == 1, "onEnd 應該恰好被呼叫一次，沒有遞迴多觸發，實際 \(endCalls)")
+        }
+    }
 }

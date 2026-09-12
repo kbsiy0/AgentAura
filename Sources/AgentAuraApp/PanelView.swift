@@ -69,6 +69,14 @@ struct PanelView: View {
         }
         .padding(.bottom, 10)
         .frame(width: 380)
+        // T22：`alignment: .top`——外層畫布（`NSHostingController.view.frame`）被提案一個
+        // 跟這份內容理想高度不同的值時（resize 動畫的中繼畫格、螢幕空間不足），SwiftUI
+        // 預設把內容**置中**塞進被提案的畫布，不是釘在頂端；置中會讓 footer 的螢幕 Y
+        // 跟著「理想高度 vs 被提案高度」的差值漂移。`.frame(maxHeight: .infinity)` 接受
+        // 任何被提案的高度、把實際內容釘在頂端，`preferredContentSize`（`ideal` 提案）
+        // 不受影響——量過 `OptionsExpandTests`／`FooterPositionStabilityTests` 兩條都吃到
+        // 這行才全綠。
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(Color.clear)
     }
 
@@ -78,6 +86,17 @@ struct PanelView: View {
     /// 文字內距，數字沿用已經真渲圖評過的 V1 原型，不重新湊）。
     /// `ScrollView` 保留（V1 的 12 張渲圖只涵蓋 3 個 session，沒驗過超量情境，生產仍需要
     /// 捲動避免 session 數一多就把 footer／Options 推出視窗）。
+    ///
+    /// T22（panel-interaction-fixes）：高度**不用** `.frame(maxHeight: 420)`——`ScrollView`
+    /// 垂直方向天生貪婪，只設上限沒設下限的話，外層畫布提案的高度只要跟內容自然高度不同，
+    /// 它都會盡量吃滿被提案的高度，不會退回自己內容的自然高度。這在外層畫布被提案一個跟
+    /// 理想高度不同的值時（`NSPopover` resize 動畫途中、或畫布比內容寬裕）會讓 footer／
+    /// 圖例列的位置變成「依外層畫布高度而定」，不再是「列數固定時的常數」——
+    /// `FooterPositionStabilityTests` 實測：3 個 session、外層畫布提案 600pt 時，Options
+    /// 展開／收合兩者的 footer 位置差到 257pt。改用 `SessionsCardSizing.cardHeight(for:)`
+    /// 從**真實列內容**（逐列依 `footer.isEmpty` 分別套用高度，不是列數乘一個假設常數，
+    /// 見該型別 doc comment 的 review 退回紀錄）推導的固定高度（一樣夾到 420pt 上限），
+    /// `ScrollView` 因此永遠拿到一個跟外層畫布提案無關的值。
     private var sessionsCard: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -89,7 +108,7 @@ struct PanelView: View {
                 }
             }
         }
-        .frame(maxHeight: 420)
+        .frame(height: SessionsCardSizing.cardHeight(for: model.rows))
         .panelCard(filled: false)
     }
 }
