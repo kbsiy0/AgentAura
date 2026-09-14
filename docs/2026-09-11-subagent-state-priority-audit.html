@@ -289,6 +289,8 @@ subagents      = {'t20-panel-dismiss': 1}</pre>
 
 <h2>9. 建議的下一步</h2>
 <div class="card ok">
+<p style="margin:0 0 10px"><b>✅ 2026-09-13 已實作</b>（change <code>subagent-state-priority</code>：<code>c150a42</code> schema 相容 · <code>85dc2ec</code> A+B · <code>5bcacb4</code> C）。
+§6.4 的預測**逐條成立**，五條既有 gate 一條都沒改。628 tests 全綠。</p>
 <p style="margin:0"><b>使用者裁決（2026-09-12）：選 (c)</b> —— 先把 phase 2 跑完，之後另開一輪修邏輯。<br>
 已完成的釘樁：<code>Tests/AuraCoreTests/SubagentKnownGapTests.swift</code>（四條，其中三條刻意斷言「今天的錯」，
 修好之後會變紅，請改寫而不是刪除）＋ 實測 fixture <code>Fixtures/round3-named-subagent.ndjson</code>
@@ -301,5 +303,22 @@ subagents      = {'t20-panel-dismiss': 1}</pre>
 <li><b>(c)</b> 先只補測試把現況釘住、寫進 known gaps，等 phase 2 的 UI 收尾後再做。</li>
 </ul>
 <p class="k">我的建議是 (a)。B 那一格（該橘卻不橘）跟既有 invariant「不該橘卻橘」是同一個等級的錯，只是方向相反；而且 A、B、C 三者共用同一個資料結構，分批做等於改兩次 schema。</p>
+
+<h2>10. 現場證據（2026-09-13 15:00，使用者親眼看到）</h2>
+<div class="card warn">
+<p style="margin:0 0 8px">修復進行中時，使用者自己撞上了落差 A，而且這是目前最乾淨的一次重現：</p>
+<p style="margin:0 0 8px"><i>「你的 sub-agent 在工作，然後現在的 menu bar 顯示的反而是綠色，就是已經完成。我知道其實是有一些項目已經完成了，但現在我根本就沒事，我其實是在等你，而你是在等你的 sub-agent。」</i></p>
+<p style="margin:0 0 8px">當下 <code>t23-subagent-priority</code>（具名 subagent）正在跑。連續兩次取樣、相隔約 30 秒：</p>
+<table style="margin:8px 0">
+<tr><th>取樣時機</th><th><code>main_activity</code></th><th><code>sub_activity</code></th><th><code>sub_agent_type</code></th></tr>
+<tr><td>主 session 回合<b>已結束</b></td><td>done（燈綠）</td><td>nil</td><td>nil</td></tr>
+<tr><td>主 session 回合<b>進行中</b></td><td>working</td><td>working</td><td>t23-subagent-priority</td></tr>
+</table>
+<p style="margin:8px 0 0"><b>同一個 subagent，被記錄還是被丟掉，只取決於主 session 那一輪有沒有在跑。</b>
+回合一結束，<code>Stop</code> 先用 <code>clearSubSlot</code> 清空從屬槽，之後它送來的每一個事件都被 quiescence guard 丟掉。
+也就是說，這個資訊<b>在不需要的時候存在，在最需要的時候正好被銷毀</b>。</p>
+<p style="margin:8px 0 0">這次重現還證明了**面板也救不了你**：連 subagent 的名字都沒留下，<code>subagents</code> 計數又被新一輪的
+<code>UserPromptSubmit</code> 重設成空的，所以就算打開面板想看「誰還在跑」，它也答不出來。</p>
+</div>
 
 </div></body></html>

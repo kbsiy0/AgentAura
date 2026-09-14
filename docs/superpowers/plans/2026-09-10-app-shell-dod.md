@@ -19,11 +19,11 @@ SwiftUI 新增五個 view 型別的程式碼體積），與上一個 change（pa
 | 測試全綠 | 465+，連跑 3 次 0 flake | 465 tests / 76 suites。連跑 20 次：19 次 GREEN，**1 次 RED**（第 3 次，17:54:01 附近，2 issues）；因為那次我只擷取了 `tail -5` 沒有存全量 log，**指不出是哪一條測試**——這是我自己的量測疏失，誠實記下而非略過。之後改成每次存全量 log 又跑了 17 次（含最初 2 次），全部 GREEN，未能重現細節。已知這個 codebase 有 exec 驗證在全套件並行時搶資源的既有 flake 家族（T06b／T08 都修過一輪），這次的 1/20 大機率同源，但沒有實證可指認，不能斷言已經歸零 | ⚠️ 帶條件：門檻字面（3 次 0 flake）在**第一次**嘗試就沒過，擴大到 20 次後失敗率 5%；**沒有）具體測試名可回報**，這本身是缺口 |
 | 新增測試數 | ≥ 40 | `main`（`39984eb`，build-plugin 後）293 tests / 37 suites → `change/app-shell`（`eaac16b`）465 tests / 76 suites。**新增 172 條測試、39 個 suite**；`#expect` 673 → 1039（+366） | ✅ |
 | gate mutation | swift test 的 15 條（G1–G8、G9a/b/c、G10–G13，其中 G3 兩筆、G6 兩筆、G10 三筆）＋ G14 一筆 | 見下方「gate mutation 彙整表」。全部彙整自 T02–T09 commit 的逐筆記錄；**抽驗 3 筆現場重跑**（affordance 列序回歸、G3(a) 寫入點型別檢查、G12 唯一呼叫點）皆確認 RED 後乾淨還原，見下 | ✅（彙整 + 3 筆現場覆核） |
-| probe 成本 | 100 次 ≤ 5 ms | **依狀態分岔**：`notConnected`（absent，無 realpath 解析）100 次 ≈ 2.6ms（≈26µs/次，貼近 reviewer 當初 ≈17µs 的參考值）；**`connected`（正常運作中的掛載，含 realpath／hookBinaryStamp 的額外 stat）100 次 ≈ 19–27ms（穩態每次 ≈220–350µs），3 次獨立量測一致重現**，約門檻的 4–5 倍。`connected` 才是產品實際大多數時間所在的狀態（正常接上後），也是面板開啟時 `probe()` 真的會被呼叫的那個狀態（§4.1：面板路徑只讀 probe，不 exec，但 probe 本身要跑）——這才是代表性的量測對象 | ❌ **`connected` 狀態超標** |
+| probe 成本 | 100 次 ≤ 5 ms | **依狀態分岔**：`notConnected`（absent，無 realpath 解析）100 次 ≈ 2.6ms（≈26µs/次，貼近 reviewer 當初 ≈17µs 的參考值）；**`connected`（正常運作中的掛載，含 realpath／hookBinaryStamp 的額外 stat）100 次 ≈ 19–27ms（穩態每次 ≈220–350µs），3 次獨立量測一致重現**，約門檻的 4–5 倍。`connected` 才是產品實際大多數時間所在的狀態（正常接上後），也是面板開啟時 `probe()` 真的會被呼叫的那個狀態（§4.1：面板路徑只讀 probe，不 exec，但 probe 本身要跑）——這才是代表性的量測對象 | ❌ 當時超標 —— **門檻已於 2026-09-13 重新推導**（spec §8.1），本列保留當時的量測作為歷史紀錄 |
 | 啟動時間增幅 | ≤ 10 ms，行程內量測 | `applicationDidFinishLaunching` 首尾時戳，各 3 輪 × 10 次取中位數：`main` 中位數 0.616／0.595／0.690 ms（均值 ≈0.634ms）；`app-shell` 中位數 0.640／0.712／0.716 ms（均值 ≈0.689ms）。**增幅 ≈ +0.055 ms** | ✅ |
 | RSS 增幅 | ≤ 1 MB | `scripts/measure-cpu.sh`（隔離本 session 後量）：`main` 與 `app-shell` 五態 RSS 皆讀 **11M**（`main` 的 done 態讀到 `11+M`，同級），量測解析度看不出差異 | ✅ |
 | 動畫態 CPU | 不得比 `main` 更差 | 兩輪獨立量測（12s／20s 取樣）：idle／done／working／waiting 四態 `app-shell` 與 `main` 同級或更低；**`error` 態兩輪方向不一致**——第一輪 app-shell 較差（avg 2.76 vs 2.37、max 4.20 vs 3.20），第二輪（20s，只測 error）app-shell avg 較差但 max 較好（avg 2.54 vs 2.31、max 3.00 vs 3.60）。差距都在個位數百分點內，判讀為 `top` 取樣噪訊而非系統性回歸，但**無法排除真的有小幅變差**，未做第三輪定奪 | ⚠️ 噪訊內，方向不一致 |
-| 執行檔 | ≤ +80 KB（bundle 另 + 一顆 universal `aura-hook`，D-g 已知代價） | `Contents/MacOS/AgentAuraApp`：`main` 1,477,936 bytes → `app-shell` 2,242,608 bytes，**+764,672 bytes（+746.75 KB）**，約門檻的 9.3 倍。Bundle 總大小 1,452KB → 3,456KB（+2,004KB），扣掉已知代價的 `plugin/` 目錄（1,244KB，含 universal `aura-hook`）後仍有 **+760KB** 落在執行檔本身，與上述 746.75KB 大致吻合 | ❌ **超標** |
+| 執行檔 | ≤ +80 KB（bundle 另 + 一顆 universal `aura-hook`，D-g 已知代價） | `Contents/MacOS/AgentAuraApp`：`main` 1,477,936 bytes → `app-shell` 2,242,608 bytes，**+764,672 bytes（+746.75 KB）**，約門檻的 9.3 倍。Bundle 總大小 1,452KB → 3,456KB（+2,004KB），扣掉已知代價的 `plugin/` 目錄（1,244KB，含 universal `aura-hook`）後仍有 **+760KB** 落在執行檔本身，與上述 746.75KB 大致吻合 | ❌ 當時超標 —— **門檻已於 2026-09-13 重新推導**（spec §8.1），本列保留當時的量測作為歷史紀錄 |
 | 單檔行數 | `Sources/` ≤ 200、`Tests/` ≤ 300 | `IsolationTests.fileLengthLimit` 綠；手動複查最大檔：`Sources/AgentAuraApp/StatusItemController.swift` 195 行、`Sources/AuraCore/InstallState.swift` 179 行；`Tests/AuraCoreTests/MergeRulesTests.swift` 288 行、`AuraHookCLITests.swift` 288 行 | ✅ |
 | `settings.json` 位元組變動 | 0（全程） | `md5` 與位元組數在「`claude plugin validate --strict`」→「`verify-install.sh`（含一次真的 `claude -p` session）」→「多次 app 啟動／關閉（CPU 量測）」全程前後一致：`c8892fce407280198e4a11ab8422b7bf`，1974 bytes | ✅ |
 | plugin 契約 | 零 error 零 warning | `claude plugin validate --strict ./plugin` → `✔ Validation passed` | ✅ |
@@ -134,8 +134,8 @@ TOCTOU 真實視窗無法測、`InstallerFailure` 命名衝突），不重複列
 
 | 項目 | 門檻 | 現況 | 判斷 |
 |---|---|---|---|
-| probe 成本 | 100 次 ≤ 5 ms | **6.96 ms**（T10a 優化 46%：128 → 69.6 µs／次） | 待人裁決：門檻是在 `hookBinaryStamp`／`thisAppIdentity`／`hooks.json` 三項為正確性加入**之前**量的，從未重新推導。開一次面板 = 一次 probe = 0.07 ms |
-| 執行檔 | ≤ +80 KB | **+746.75 KB** | 待人裁決：SwiftUI view 型別的 release 展開成本。**+80 KB 是當初設錯**（上一輪 3 個 view 就 +292 KB）。唯一有效槓桿是「少做幾個 view 型別」 |
+| probe 成本 | **單次 ≤ 0.5 ms**（2026-09-13 重新推導） | **0.07 ms／次** | ✅ **通過**。舊門檻量錯對象：生產路徑不存在「連續 100 次 probe」。裁決理由見 spec §8.1 |
+| app bundle 總量 | **≤ 6 MB**（2026-09-13 重新推導） | **3.8 MB** | ✅ **通過**。舊的 `+80 KB` 沒有平台依據、會被正常工作穩定超過 14 倍。裁決理由與代價見 spec §8.1 |
 
 ### persona 重測（Tier 1）與 T13 收尾
 
@@ -247,6 +247,30 @@ mutation 改回飽和藍 → 三條斷言全紅。
 | ⑪ | 開面板 → 點任一圖例色點開色板 | 色板出現在面板**旁邊**、不與面板重疊（存檔位置若擋住面板就重新擺位；不擋住則尊重使用者搬過的位置） | ✅ **通過**（2026-09-12，從舊的重疊存檔座標 `1138 832` 出發，走的是重新擺位路徑） |
 | ⑫ | 改色期間**拖曳色板**、點色板內部 | 面板**不**收起 | ✅ **通過**（2026-09-12，拖曳與點內部皆不關，調色即時反映） |
 | ⑬ | 改色期間點桌面／其他視窗 | 面板**收起**，且色板一併結束；另確認點選單列圖示不會「閃一下又彈開」 | ✅ **通過**（2026-09-12 二測，T21 修復後）：面板收起，**系統色板也跟著關掉**，不再留下孤兒視窗。一測時面板會收但色板留著 |
+
+## 實機 ① ② ④ ⑤：改列 known gap（2026-09-13 裁決）
+
+這四條測的都是**全新安裝的第一次體驗**。目前唯一的測試機器是一台永久掛著開發者 symlink
+的開發機，四條都必須先把那個掛載拆掉或把 hook 弄壞才測得到——實際嘗試 ① 的時候就把
+使用者的選單列打停了一分半（已復原，狀態檔凍在 19:54:56、復原後 21:49:04 恢復寫入）。
+
+**價值判斷**：它們守的是「非工程師能不能自己裝起來」，那正是 phase 2 的核心目的，所以
+不是不重要；但它們守的是**別人的**第一次，不是這台機器的日常。在乾淨環境出現之前，
+把開發機拆掉重裝一輪的風險大於得到的資訊。
+
+**觸發條件（下次滿足任一就跑）**：有第二台機器或乾淨使用者帳號可用 · 有人回報安裝失敗 ·
+準備對外發佈（那時 ② 的 quarantine 路徑是強 gate，不可繞）。
+
+| # | 未測的部分 | 已知的部分 |
+|---|---|---|
+| ① | 「掛載裝回去之後，**新** session 才出現狀態檔」這一半 | **另一半已實測**（2026-09-13）：掛載一移走，既有 session 的 hook 立刻停止寫入；裝回去後恢復。這證明 hook 路徑是**執行當下**才解析的。因此「下一個 session 起生效」這句文案成立的機制**不是**路徑解析，而是「session 啟動時才讀 hooks 設定、沒讀到就整個不註冊」——文案剛好站在後者上，所以文案是對的 |
+| ② | 帶 quarantine 的下載路徑 | 對應的失敗模式已有單元覆蓋（`connectThrowsBlockedWhenBinaryProducesNoArtifact`），未驗的是真實 Gatekeeper 行為 |
+| ④ | 卡死檢查（弄壞 hook → 依文案處理 → 重開 app → chip 必須離開錯誤態） | 「再檢查一次」按鈕的接線有 gate；未驗的是真實 quarantine 復原後的狀態轉換 |
+| ⑤ | 首啟自動開面板 | 條件是 `!didConnectOnce && !isConnected`。這台機器**永遠是 connected**，所以光刪 defaults 鍵不會觸發，必須先拆掛載。persona 兩輪都說這條風險最高 |
+
+**另一項平台事實（本輪實測）**：`FileManager.homeDirectoryForCurrentUser` **不吃 `$HOME`**
+（它讀密碼資料庫），所以無法用假家目錄開一個隔離實例來測這四條。要做到隔離必須在
+`Installer` 開一個注入點，那是給測試開的後門，目前不值得。
 
 ## 附：main baseline 量測環境
 

@@ -46,6 +46,7 @@ struct MergeRulesCodableTests {
         s.subActivity         = .working
         s.subTool             = "Grep"
         s.subAgentType        = "Explore"
+        s.outstandingSubagents = ["a0b503d0b03dbd023": .waiting]
         s.notificationType    = "idle_prompt"
         s.notificationMessage = "Claude is waiting for your input"
         s.lastMessage         = "全部完成"
@@ -90,6 +91,29 @@ struct MergeRulesCodableTests {
         #expect(keys.contains("main_activity") && keys.contains("tool_description")
                 && keys.contains("notification_message") && keys.contains("pid_started_at"),
                 "抽查幾個 snake_case key 確實存在")
+    }
+
+    /// **schema 相容性 gate（T23）。** `outstandingSubagents` 是新加的欄位 ——
+    /// 舊版（升級前）寫的狀態檔不會有 `outstanding_subagents` 這個 key。
+    ///
+    /// 這條刻意**手組**一份不含新欄位的 JSON（不是拿新版 encoder 產生後再刪 key，
+    /// 那樣測不出「型別本身容不容忍缺 key」，只測得出「我有沒有記得刪」）。
+    /// 若欄位改成非 optional（例如 `= [:]` 的預設值），synthesized `Decodable`
+    /// 仍會要求這個 key 存在，缺了就整包解碼失敗 —— `SnapshotIO.read` 用 `try?`
+    /// 把失敗吞成 `nil`，使用者升級後既有 session 會從面板上消失，直到下一個
+    /// hook event 幫它重寫檔案為止。
+    @Test("舊版狀態檔（沒有 outstanding_subagents 欄位）仍可解碼")
+    func decodesLegacySnapshotMissingOutstandingSubagentsField() throws {
+        let legacyJSON = """
+        {"schema":1,"session_id":"legacy-1","hook_event_name":"Stop",
+         "written_at":"2026-09-01T00:00:00Z","main_activity":"done",
+         "subagents":{},"tool_failures":0,"terminated":false}
+        """
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let s = try dec.decode(SessionSnapshot.self, from: Data(legacyJSON.utf8))
+
+        #expect(s.outstandingSubagents == nil, "缺欄位視同「沒有背景具名 subagent」")
+        #expect(s.effectiveActivity == .done, "新欄位缺席不得影響既有燈號計算")
     }
 
     @Test("merge 產生的 snapshot 也能 round-trip")

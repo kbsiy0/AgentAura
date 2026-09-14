@@ -39,14 +39,27 @@ public enum MergeRules {
         switch p.effect {
         case .setActivity(let a):
             if p.isSubagent {
-                // §2.5.1 —— 主 agent 靜止時完全忽略 subagent 事件。
+                // T23（審計 §6.1/§6.2）—— 具名 subagent 的第三個狀態來源，獨立於
+                // 下面那條 quiescent guard：內部 subagent（agentType 為 nil）從不
+                // 進來，它的遲到 SubagentStop 自然是 no-op，不必再靠猜主槽狀態。
+                updateOutstandingSubagents(p, a, &s)
+
+                // §2.5.1 —— 主 agent 靜止時忽略「從屬槽」的寫入（上面那行不受這條管）。
                 // 實測：Claude Code 的內部 subagent（agent_type 空字串、只送
                 // SubagentStop）會在主 agent Stop 之後 2.6s ~ 184s 才抵達。
                 // 若寫進 sub 槽，max(done, working) = working，綠燈變藍燈且回不去。
                 guard !s.mainActivity.isQuiescent else { break }
-                s.subActivity  = a
-                s.subTool      = p.toolName ?? s.subTool
-                s.subAgentType = p.agentType ?? s.subAgentType
+                if p.hookEventName == "SubagentStop" {
+                    // T23（審計 §6.3）—— 對從屬槽而言這是「它結束了」，不是「還在
+                    // 工作」：EventMapping 回傳 .working 是為了主槽（subagent 回來，
+                    // 主 agent 繼續工作），套在從屬槽語意就反了，還會讓 subTool／
+                    // subAgentType 的 carry-forward 殘留成它最後用過的 tool。
+                    clearSubSlot(&s)
+                } else {
+                    s.subActivity  = a
+                    s.subTool      = p.toolName ?? s.subTool
+                    s.subAgentType = p.agentType ?? s.subAgentType
+                }
             } else {
                 s.mainActivity = a
                 if let t = p.toolName { s.mainTool = t }
@@ -56,6 +69,12 @@ public enum MergeRules {
             }
         case .sessionEnded:
             s.terminated = true            // 刻意保留 mainActivity：未確認的結果不得被抹掉
+            // T23 review S1-1 —— 行程都沒了，背景具名 subagent 不可能還在外面。
+            // 不清的話，一個從沒送 SubagentStop 就被收掉的具名 subagent 會讓
+            // effectiveActivity 卡在 .working，使這個已經真正結束的 session 在
+            // SessionRegistry.visible 判「有結果可看」（done／error）時判不過，
+            // 整筆從面板消失——不是燈色錯，是比「燈卡住」嚴重得多的後果。
+            s.outstandingSubagents = nil
         case .noChange:
             break                          // 只更新了時戳
         }
@@ -67,6 +86,9 @@ public enum MergeRules {
             s.turnStartedAt = now          // 新一輪：重設時戳與計數
             s.toolFailures  = 0
             s.subagents     = [:]
+            // 保險：具名 subagent 崩潰而沒送 SubagentStop，集合會卡住不清——
+            // 新一輪來了就清空，最多髒這一輪（審計 §7 風險評估）。
+            s.outstandingSubagents = nil
         }
         // 使用者按 Ctrl+C 中斷不算失敗 —— 那是使用者的動作。
         // `is_interrupt` 與 `error` 同在 `PostToolUseFailure` 上（實測）。
@@ -82,5 +104,22 @@ public enum MergeRules {
         s.subActivity = nil
         s.subTool = nil
         s.subAgentType = nil
+    }
+
+    /// 更新「還在外面的具名 subagent」集合（T23，審計 §6.1）。
+    ///
+    /// 只認 `agentType` 非空的事件——`HookPayload` 已把內部 subagent 的空字串
+    /// 正規化成 nil，所以這裡不需要另外判斷「是不是內部 subagent」。
+    /// `SubagentStop` 從集合移除；其餘 subagent 事件 upsert 它自己的 activity
+    /// （不是寫死 `.working`——背景 subagent 的 `PermissionRequest` 也要能讓
+    /// 燈變橘，見審計 §6.2）。
+    static func updateOutstandingSubagents(_ p: HookPayload, _ a: Activity, _ s: inout SessionSnapshot) {
+        guard let id = p.agentID, p.agentType != nil else { return }
+        if p.hookEventName == "SubagentStop" {
+            s.outstandingSubagents?.removeValue(forKey: id)
+        } else {
+            s.outstandingSubagents = s.outstandingSubagents ?? [:]
+            s.outstandingSubagents?[id] = a
+        }
     }
 }

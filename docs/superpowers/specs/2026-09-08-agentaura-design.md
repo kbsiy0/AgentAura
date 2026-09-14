@@ -115,6 +115,7 @@ app 啟動掃一次目錄即得正確現況。整個設計因此塌縮成很小�
   "sub_activity": "working",
   "sub_tool": "Grep",
   "sub_agent_type": "Explore",
+  "outstanding_subagents": { "adad9c77b1e0f4a21": "working" },
 
   "notification_type": null,
   "notification_message": null,
@@ -411,6 +412,27 @@ if payload.isSubagent {
    `PostToolUse` ×8 / `PostToolBatch` ×5 / `PostToolUseFailure` ×1，`agent_type` 皆為
    `"aura-t02"`（dispatch 時給的 agent 名稱）。故「以 `SubagentStart` 且 `agent_type` 非空
    計數」的規則成立，內部 subagent（空字串）自然被排除
+
+> **2026-09-13 更新（change `subagent-state-priority`，T23）：** 上面「完全忽略 subagent
+> 事件」對**內部** subagent（`agent_type` 空字串）仍然成立，這條 guard 沒有變，繼續管
+> **從屬槽**（`sub_activity`／`sub_tool`／`sub_agent_type`，上面的範例程式碼描述的就是
+> 這一半）。但**具名** subagent（`agent_type` 非空）不再完全被這條 guard 蓋住——實機
+> 回報＋審計（`docs/2026-09-11-subagent-state-priority-audit.html`）發現：背景還在跑
+> 或還在等你批准的具名 subagent，不能因為主 agent 先講完話就從燈號上消失。
+>
+> 修法是另開一個獨立於這條 guard 的第三個輸入 `outstanding_subagents`
+> （`SessionSnapshot`，keyed by `agent_id`，見 §2.1 的檔案契約），用 `agent_type` 本身
+> （而非「主槽是否靜止」）分辨具名／內部——內部 subagent 的 `agent_type` 已正規化為
+> `nil`，天生就不會進這個集合：
+>
+> ```
+> effective_activity = max(main_activity, sub_activity ?? idle,
+>                           outstanding_subagents.values.max() ?? idle)
+> ```
+>
+> `SubagentStop` 且 `agent_id` 在集合裡 → 從集合移除；`UserPromptSubmit`（新一輪）與
+> `SessionEnd` 都會清空集合作為保險。完整設計見 `MergeRules.updateOutstandingSubagents`
+> 與審計 §6；已知落差 A／B／C 的釘樁測試見 `Tests/AuraCoreTests/SubagentKnownGapTests.swift`。
 
 ---
 

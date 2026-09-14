@@ -239,15 +239,49 @@ struct PanelViewModelTests {
         #expect(PanelViewModel.detail(for: s, now: Date()).contains("12"), "應含 tool 耗時")
     }
 
+    // MARK: - T23 review S2-4：主 agent 已完成，燈卻被背景具名 subagent 拖回 working
+
+    /// **T23 A 修好之後，面板反而說謊了。**
+    ///
+    /// `effectiveActivity` 從 done 變 working（T23 A 的設計）之後，`headline`
+    /// 的 `.working` 分支照舊回 `s.currentTool`——但那是主 agent**早就跑完**的
+    /// tool。使用者會讀成「主 agent 還在跑 Bash」，比修 A 之前更糟：以前燈色
+    /// 至少沒說謊（done），現在燈色對了、文字反而說謊。
+    ///
+    /// `SessionState.mainActivity` 早就存在（`activityTakesMax` 等測試已經在
+    /// 用），不需要新欄位——`activity != mainActivity` 這件事本身就是「aggregate
+    /// 被別人拖著跑」的訊號，`mainActivity == .done` 就是「背景 subagent 撐起
+    /// working」這個情境的判準（推導見 T23 review 回報：main 若是 error 會直接
+    /// 贏過 working，不會落到這個分支；若 mainActivity 也是 working 就是正常
+    /// 前景工作，不該套用這段特例）。
+    @Test("working 但 mainActivity 已 done：主行要說出「背景還有東西在跑」，不能沿用主 agent 的舊 tool 名")
+    func workingHeadlineRevealsBackgroundSubagentWhenMainIsDone() {
+        let s = state(.working, tool: "Bash", mainActivity: .done, lastMessage: "全部完成")
+
+        let headline = PanelViewModel.headline(for: s)
+        #expect(headline != "Bash", "不能顯示主 agent 早就跑完的 tool，那會讓人誤以為主 agent 還在動")
+        #expect(headline.contains("背景"), "主行必須說得出「背景還有東西在跑」這件事，不只是燈色對")
+
+        #expect(PanelViewModel.detail(for: s, now: Date()).contains("全部完成"),
+                "主 agent 自己的完成訊息不能因為這個特例就不見了")
+    }
+
+    @Test("working 且 mainActivity 也是 working（正常前景工作）：headline 維持原本行為，不受這個特例影響")
+    func workingHeadlineUnaffectedWhenMainIsStillWorking() {
+        let s = state(.working, tool: "Bash", mainActivity: .working)
+        #expect(PanelViewModel.headline(for: s) == "Bash", "沒有背景 subagent 撐著時，行為不變")
+    }
+
     /// 這幾條共用的建構器 —— 只填會用到的欄位，其餘給中性值。
     func state(_ a: Activity, tool: String? = nil, sub: String? = nil,
-               desc: String? = nil, notif: String? = nil, durationMs: Int? = nil) -> SessionState {
+               desc: String? = nil, notif: String? = nil, durationMs: Int? = nil,
+               mainActivity: Activity? = nil, lastMessage: String? = nil) -> SessionState {
         SessionState(id: "s1", projectName: "P",
                      permissionMode: nil, effort: nil, model: nil,
-                     activity: a, mainActivity: a, subActivity: nil,
+                     activity: a, mainActivity: mainActivity ?? a, subActivity: nil,
                      currentTool: tool, subagentTool: sub, toolDurationMs: durationMs,
                      turnStartedAt: nil, subagents: [:], toolFailures: 0,
-                     lastMessage: nil, errorType: nil, toolError: nil,
+                     lastMessage: lastMessage, errorType: nil, toolError: nil,
                      toolDescription: desc, notificationMessage: notif,
                      liveness: .alive(pid: 1), updatedAt: Date())
     }

@@ -34,8 +34,8 @@ struct MergeRulesTests {
         #expect(s.mainActivity == .waiting, "主槽必須維持 waiting")
         #expect(s.subActivity == nil,
                 "main 仍是 waiting（quiescent）→ subagent 事件被忽略，不寫進 sub 槽（見 subagentIgnoredWhileWaiting）")
-        #expect(max(s.mainActivity, s.subActivity ?? .idle) == .waiting,
-                "取 max 後仍是 waiting —— 橘燈不會消失")
+        // S2-5：呼叫真正的 effectiveActivity，別手抄 max（那份公式漏了第三個輸入）。
+        #expect(s.effectiveActivity == .waiting, "取三個輸入的 max 後仍是 waiting —— 橘燈不會消失")
     }
 
     @Test("主 agent 的長 tool 名不被 subagent 覆蓋")
@@ -61,6 +61,11 @@ struct MergeRulesTests {
         #expect(s.mainActivity == .done)
         #expect(s.subActivity == nil, "該輪的 subagent 都已結束")
         #expect(s.subTool == nil)
+        // S2-5：從屬槽清空 ≠ 整體燈號已經 done —— sub1 還沒送 SubagentStop，
+        // 依然「outstanding」（T23 A），effectiveActivity 必須反映這件事。
+        #expect(s.effectiveActivity == .working, "sub1 未回報 SubagentStop，燈必須維持 working（T23 A）")
+        s = merge(payload("SubagentStop", agent: "sub1"), into: s, at: t0.addingTimeInterval(1))
+        #expect(s.effectiveActivity == .done, "sub1 回報完畢，燈才回到 done")
     }
 
     // ---- §2.5.1：主 agent 靜止後必須忽略 subagent 事件 ----
@@ -79,8 +84,7 @@ struct MergeRulesTests {
 
         #expect(s.mainActivity == .done)
         #expect(s.subActivity == nil, "主 agent 靜止 → 不得寫 sub 槽")
-        #expect(max(s.mainActivity, s.subActivity ?? .idle) == .done,
-                "綠燈必須維持綠燈 —— 此 bug 會影響每一個跑完的 session")
+        #expect(s.effectiveActivity == .done, "綠燈必須維持綠燈（S2-5：呼叫真正的 effectiveActivity）")
         #expect(s.writtenAt == t0.addingTimeInterval(2.58), "但時戳仍要更新")
     }
 
@@ -90,6 +94,7 @@ struct MergeRulesTests {
         s = merge(payload("SubagentStop", agent: "a1"), into: s, at: t0.addingTimeInterval(3))
         #expect(s.mainActivity == .error)
         #expect(s.subActivity == nil)
+        #expect(s.effectiveActivity == .error, "S2-5：聚合結果不能被忽略的 subagent 事件動搖")
     }
 
     @Test("PermissionRequest 之後的 subagent 事件不得寫 sub 槽")
@@ -99,6 +104,7 @@ struct MergeRulesTests {
                   into: s, at: t0.addingTimeInterval(0.02))
         #expect(s.mainActivity == .waiting)
         #expect(s.subActivity == nil, "比單靠 max 更直接地保護 waiting")
+        #expect(s.effectiveActivity == .waiting, "S2-5：聚合結果不能被忽略的 subagent 事件動搖")
     }
 
     @Test("主 agent 仍在 working 時，subagent 事件正常寫入 sub 槽")

@@ -64,6 +64,14 @@ public enum PanelViewModel {
         case .done:
             return summarise(s.lastMessage) ?? "已完成"
         case .working:
+            // **T23 review S2-4**——`mainActivity == .done` 代表這個 working
+            // 不是主 agent 自己的，是背景還沒回來的具名 subagent 撐起來的第三個
+            // 輸入（T23 A）。不能沿用 `currentTool`：那是主 agent**早就跑完**
+            // 的 tool，會讓使用者誤以為主 agent 還在動——這比修 A 之前更糟，
+            // 以前燈色至少沒說謊（done），現在燈色對了、文字反而說謊。
+            if s.mainActivity == .done {
+                return "主 agent 已完成，背景 subagent 還在跑"
+            }
             // **主 agent 的 tool 是主行**（spec §2.5 結尾）。subagent 的以
             // `Explore → Grep` 形式**附註**在副行，不是拿來取代主行。
             //
@@ -87,6 +95,11 @@ public enum PanelViewModel {
 
     static func detail(for s: SessionState, now: Date) -> String {
         var parts: [String] = []
+        // T23 review S2-4——主行改講背景 subagent 的事之後，主 agent 自己的
+        // 完成訊息不能整個消失，副行保留它。
+        if s.activity == .working, s.mainActivity == .done, let done = summarise(s.lastMessage) {
+            parts.append("主 agent：\(done)")
+        }
         if let start = s.turnStartedAt {
             parts.append("本輪 " + duration(now.timeIntervalSince(start)))
         }

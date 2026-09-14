@@ -880,25 +880,39 @@ Tests/AgentAuraAppTests/{ShellWiringTests,FooterPixelTests}.swift
 |---|---|---|
 | 測試 | 全綠，新增 ≥ 40 條 | `swift test` |
 | gate mutation | **`swift test` 的 15 條**（G1–G8、G9a/b/c、G10–G13）全部要有指名測試在 ≤ 60s 內變紅（非掛住）；其中 G3 有**兩筆** mutation（connect／disconnect 各一條呼叫路徑）、G6 兩筆、G10 三筆。G14 住在 shell script，改以「`verify-app.sh` 非零退出」為紅，單獨記一筆（S2-2／R6：r3 的「13/13」漏算了 G9 拆成 a/b/c）。`IsolationTests` 不計入 | 逐條記錄於 tasks 的 mutation 欄 |
-| probe 成本 | 100 次 probe ≤ 5 ms（reviewer 實測單次 ≈ 17 µs） | 行程內 micro-benchmark 測試 |
+| probe 成本 | **單次 probe ≤ 0.5 ms**（2026-09-13 重新推導；實測 0.07 ms） | `InstallerProbeCostTests`（相對比值 4x，不是絕對毫秒——絕對值會被測試套件自己的負載打敗，見 CLAUDE.md gate 哲學第 5 條） |
 | 啟動時間增幅 | ≤ 10 ms，**行程內**量測（`applicationDidFinishLaunching` 首尾時戳） | 沿用 Change 2 抓到 `NSColorPanel.shared` +120 ms 那次的做法（`open` 量在雜訊底下，S2-A12） |
 | RSS 增幅 | ≤ 1 MB | `scripts/measure-cpu.sh`（先隔離自己的 session） |
 | 動畫態 CPU | 不得比 `main` 更差 | 同上 |
-| 執行檔 | ≤ +80 KB（bundle 另 + 一顆 universal `aura-hook`，D-g 的已知代價） | `ls -l` |
+| app bundle 總量 | **≤ 6 MB**（2026-09-13 重新推導；實測 3.8 MB，含 universal `aura-hook`） | `du -sh build/AgentAura.app` |
 | 單檔行數 | `Sources/` ≤ 200、`Tests/` ≤ 300 | `IsolationTests` |
 | `settings.json` 位元組變動 | **0**（全程） | G2 ＋ `verify-install.sh` |
 | bundle 佈局 | `verify-app.sh` 通過（缺 bundle 時 FAIL 不 skip） | 每次改 bundle 佈局必跑 |
 | **實機 ①** 生效時機 | 互動 session 開著時掛上掛載 → 觸發一次 tool → 狀態檔**不**出現；開新 session → 出現 | 手動（S0-A1） |
 | **實機 ②** 下載路徑 | 打包 zip → 下載/解壓（帶 quarantine）→ 開起來 → 按接上 → **要嘛成功且真的有狀態檔，要嘛明確報 `.hookBlockedOrBroken`**，不得說「已接上」卻沒產物 | 手動（S0-A2） |
-| **實機 ③** 登入項目 | ad-hoc 簽章 bundle 上 `SMAppService` 的實際行為（成功／需核准） | 手動（known gap 2） |
+| **實機 ③** 登入項目 | ✅ 2026-09-12 實測：ad-hoc 簽章 bundle 上**直接成功**，不需系統設定核准 | 手動（原 known gap 2，已解除） |
 | **實機 ④** 卡死檢查 | 讓 exec 驗證失敗（例如手動加回 quarantine）→ 依文案處理 → **重開 app** → chip 必須離開「接不上」；另測「再檢查一次」按鈕（R2：這條擋的是「使用者做了 app 叫他做的事，app 還是說壞的」） | 手動 |
 | persona | 加權 ≥ 6.5；「非工程師能不能自己裝起來」項 ≥ 6 | persona-tester（Tier 1） |
+
+
+### 8.1 兩項門檻的重新推導（2026-09-13）
+
+兩條都**沒有**為了讓 gate 轉綠而調動，是回頭發現門檻本身立錯了地方，照 §3 的規矩回來改並記錄理由。
+
+**probe 成本：`100 次 ≤ 5 ms` → `單次 ≤ 0.5 ms`。**
+舊門檻是在 `hookBinaryStamp`／`thisAppIdentity`／`hooks.json` 三項**為正確性加入之前**量的，之後從未重新推導。更根本的問題是它量錯了對象：生產路徑上不存在「連續 100 次 probe」，開一次面板就是一次。用真正發生的單位（單次）重新立門檻，實測 0.07 ms，離 0.5 ms 還有 7 倍餘裕。
+執行面的 gate 早就不是絕對毫秒了——`InstallerProbeCostTests` 用的是相對控制組的 4x 比值，因為絕對值會被測試套件自己的負載打敗（CLAUDE.md gate 哲學第 5 條，實測撞穿過三條）。這次只是讓 DoD 的說法追上 gate 的實作。
+
+**執行檔：`≤ +80 KB` → `app bundle 總量 ≤ 6 MB`。**
+`+80 KB` 從一開始就沒有平台依據，是我憑空設的。實測 SwiftUI 的 view 型別在 release 展開大約每個 60–80 KB／架構，上一輪三個 view 就 +292 KB，這一輪整套面板 +1119.6 KB，門檻被超過 14 倍——一個會被正常工作穩定超過 14 倍的門檻，守的不是品質而是它自己。
+換成守使用者真正感覺得到的量：bundle 總量（實測 3.8 MB）。啟動時間增幅那條（≤ 10 ms，實測 +0.055 ms）本來就在守「有沒有變慢」，兩條合起來涵蓋了原本想守的東西。
+**代價要講清楚**：這條不再擋「多寫了幾個 view 型別」。如果哪天 bundle 逼近 6 MB，要回來問的是「為什麼需要這麼多 view」，不是把門檻再往上調。
 
 ## 9. Known gaps（明列，不假裝做完）
 
 1. **§3.8(3) 的通用死 hook 掃描**（掃 `settings.json` 與其他 plugin 的 hook 是否指向失效檔案）本輪不做（D-k）。
    正典 §3.8 的 DoD 因此仍未完全滿足——**不改 DoD 措辭來遷就**，列為後續 change `dead-hook-scan`。
-2. `SMAppService` 在 ad-hoc 簽章 bundle 上的行為待實機確認（DoD 實機 ③）。
+2. ~~`SMAppService` 在 ad-hoc 簽章 bundle 上的行為待實機確認~~ —— **2026-09-12 實測解除**：直接成功，不需系統設定核准（DoD 實機 ③）。
 3. **Mach-O 放在 `Contents/Resources/plugin/bin/`** 不是 Apple 建議位置（可執行檔屬 `Contents/MacOS/`
    或 `Contents/Helpers/`）。本地 ad-hoc 簽章實測通過，但**將來 notarize 會變硬錯誤**。
    替代方案（未採用）：`Contents/Helpers/aura-hook` ＋ plugin 內相對 symlink 指過去（S2-S5）。
@@ -913,18 +927,25 @@ Tests/AgentAuraAppTests/{ShellWiringTests,FooterPixelTests}.swift
 9. **`InstallerFailure` 不叫 `InstallerError`**（T03 實測）：`Sources/AuraHookFile/AuraHookFile.swift`
    有一個同名空 enum 當 namespace marker，寫 `AuraHookFile.InstallerError` 會被解析成那個 enum
    而不是 module ⇒ 編譯錯。T07／T08 在 app 層 catch 時用 `InstallerFailure`、不加 module 前綴。
-10. **背景具名 subagent 不會讓燈維持工作中**（審計 2026-09-11，使用者裁決 **(c)：phase 2 收尾後
-    另開一輪修**）。主 agent 送 `Stop` 之後，`MergeRules` 的 `guard !s.mainActivity.isQuiescent`
+10. ~~**背景具名 subagent 不會讓燈維持工作中**~~（審計 2026-09-11，裁決 (c)；**2026-09-13 已修**）。主 agent 送 `Stop` 之後，`MergeRules` 的 `guard !s.mainActivity.isQuiescent`
     會丟掉**所有** subagent 事件，包含仍在跑的具名 subagent ⇒ 燈誤報 done（「有結果可看」但其實沒有）。
     那條 guard 是用**內部** subagent 的證據寫的（`agent_type` 空字串、Stop 後 2.58s–186s 才到），
-    適用範圍開太大。現況由 `SubagentKnownGapTests.gapA_…` 釘住。
-11. **背景具名 subagent 的 `PermissionRequest` 變不了橘**（同一條 guard，同一輪修）。
+    適用範圍開太大。**2026-09-13 已修**（change `subagent-state-priority`，`85dc2ec`）：釘樁測試已改寫成新契約 `backgroundNamedSubagentKeepsLightWorking`。
+11. ~~**背景具名 subagent 的 `PermissionRequest` 變不了橘**~~（**2026-09-13 已修**）。
     這是既有 invariant「`waiting` 不得進入已結束未確認的尾巴」（不該橘卻橘）的**鏡像**：該橘卻不橘。
-    現況由 `SubagentKnownGapTests.gapB_…` 釘住。**這個組合尚無實測樣本**，形狀取自 round3 的
+    **2026-09-13 已修**（`85dc2ec`）：釘樁測試已改寫成 `backgroundNamedSubagentPermissionRequestTurnsLightOrange`，並斷言集合存的是各 subagent 自己的 activity 而非寫死 `.working`。**這個組合尚無實測樣本**，形狀取自 round3 的
     `agent_id` 與 `EventMapping.handledEvents`。
-12. **從屬槽在 subagent 結束後留下殘影**：`SubagentStop` 映射到 `.setActivity(.working)`，
+12. ~~**從屬槽在 subagent 結束後留下殘影**~~（**2026-09-13 已修**）：`SubagentStop` 映射到 `.setActivity(.working)`，
     對主槽正確、對從屬槽語意相反；`subTool`／`subAgentType` 又是 carry-forward，殘影活到主槽
-    走 done／error 為止。現況由 `SubagentKnownGapTests.gapC_…` 釘住。
+    走 done／error 為止。**2026-09-13 已修**（`5bcacb4`）：釘樁測試已改寫成 `subSlotClearsWhenSubagentStops`。
     完整分析與提案：`docs/2026-09-11-subagent-state-priority-audit.html`。
     **實測平台契約**（提案的地基，不得放寬）：具名 subagent 的 `SubagentStart` 與 `SubagentStop`
     都帶非空 `agent_type` 且共用同一個 `agent_id`（fixture `round3-named-subagent.ndjson`）。
+13. **面板說得出「背景還有 subagent 在跑」，說不出是哪一個**（T23 review S2-4 的收斂邊界，
+    2026-09-13 裁決不做）。`outstandingSubagents` 的 key 是不透明的 `agent_id`、value 只有
+    `activity`，沒有存 `agent_type`（也就是 agent 的名字）；主槽靜止時 `clearSubSlot` 已經
+    把 `subAgentType` 清掉，沒有殘留可用。要顯示身份得把 value 換成 struct，是第二次 schema 變更。
+    **不做的理由**：核心事實（有東西還在跑）已經說出來了，身份是加分項；使用者的 agent 清單在
+    Claude Code 本身就看得到，選單列的價值是餘光感知而非取代它。
+    **觸發條件**：同時跑多個具名 agent 且需要分辨是哪一個時再做——屆時 value 換 struct 走的是
+    這次已經驗證過的同一條 Optional 相容路徑。

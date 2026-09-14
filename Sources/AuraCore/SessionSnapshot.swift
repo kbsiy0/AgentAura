@@ -46,10 +46,30 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
     public var toolFailures: Int = 0
     public var terminated: Bool = false
 
+    /// 在外面還沒回來的**具名** subagent（T23，審計 §6.1）。Key 是 `agent_id`
+    /// （`subagents` 是依 agent **type** 計數，兩者用途不同，別搞混），value 是
+    /// 它自己最後回報的 activity。
+    ///
+    /// 只有 `agentType` 非空的 subagent 事件會進來——內部 subagent（`agent_type`
+    /// 空字串，`HookPayload` 已正規化成 nil）從不進集合，它的遲到 `SubagentStop`
+    /// 天生就摸不到這個欄位，不需要另外用「主槽是否靜止」去猜。
+    ///
+    /// **必須是 Optional**（不是 `= [:]`）才能讓舊版狀態檔安全解碼：synthesized
+    /// `Decodable` 對 Optional 屬性會用 `decodeIfPresent`，缺這個 key 時自然變 nil；
+    /// 换成非 Optional 預設值不會改變這件事——synthesis 仍會要求 key 存在，
+    /// 缺了就整包解碼失敗（`decodesLegacySnapshotMissingOutstandingSubagentsField`）。
+    /// nil／缺這個 key 視同空集合。
+    public var outstandingSubagents: [String: Activity]? = nil
+
     public init(sessionID: String) { self.sessionID = sessionID }
 
-    /// 取兩槽的優先序最大值 —— `waiting`(3) > `working`(2)，故 subagent 蓋不掉 waiting。
-    public var effectiveActivity: Activity { max(mainActivity, subActivity ?? .idle) }
+    /// 取三個輸入的優先序最大值 —— `waiting`(3) > `working`(2)，故 subagent 蓋不掉 waiting。
+    /// 第三個輸入是 `outstandingSubagents`（T23，審計 §6.1/§6.2）：背景還沒回來的
+    /// 具名 subagent，即使主槽已經靜止（done／error），它們自己的 activity 仍然算數。
+    public var effectiveActivity: Activity {
+        let outstanding = outstandingSubagents?.values.max() ?? .idle
+        return max(max(mainActivity, subActivity ?? .idle), outstanding)
+    }
 
     enum CodingKeys: String, CodingKey {
         case schema
@@ -76,5 +96,6 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
         case subagents
         case toolFailures    = "tool_failures"
         case terminated
+        case outstandingSubagents = "outstanding_subagents"
     }
 }
