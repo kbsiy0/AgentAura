@@ -131,6 +131,7 @@ private struct OptionsRowIconView: View {
         case .connect: "arrow.triangle.2.circlepath"
         case .recheckHook: "arrow.clockwise"
         case .disconnect: "trash"
+        case .uninstall: "trash.fill"
         case .about: "info.circle"
         case .reportIssue: "exclamationmark.bubble"
         case .quit: "power.circle"

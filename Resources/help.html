@@ -198,6 +198,15 @@
   </section>
 
   <section>
+    <h2>怎麼完整移除 AgentAura</h2>
+    <p>如果連這個 App 本身都不想留，Options 裡的「完整移除 AgentAura」會依序：取消「開機自動
+      啟動」、移除掛載（同上）、刪除 <code>~/.agentaura</code> 底下所有 session 紀錄、清掉顏色與
+      開關等偏好設定，最後把 AgentAura.app 移到垃圾桶並結束這個 App。</p>
+    <p class="muted">App 進垃圾桶前都可以還原；按下去之前會先跳出對話框，列出上面這幾件事，
+      不會沒說清楚就動手。</p>
+  </section>
+
+  <section>
     <h2>Options 選單在做什麼</h2>
     <p>點面板底部的「Options ⌄」（或直接在選單列圖示上按右鍵）會展開這些項目：</p>
     <ul>
@@ -214,6 +223,7 @@
       <li><strong>再檢查一次</strong>—— 只有「已接上但還沒驗證」這個狀態才會出現，
         按下去重新確認 hook 真的能跑。</li>
       <li><strong>移除掛載</strong>—— 見上面「怎麼移除」。</li>
+      <li><strong>完整移除 AgentAura</strong>—— 見上面「怎麼完整移除 AgentAura」。</li>
       <li><strong>關於 AgentAura</strong>—— 版本號、專案網址、授權狀態。</li>
       <li><strong>回報問題</strong>—— 開瀏覽器到 GitHub 回報 bug 或提建議。</li>
       <li><strong>離開 AgentAura</strong>（快捷鍵 ⌘Q）—— 結束這個 App；面板打開的時候也可以

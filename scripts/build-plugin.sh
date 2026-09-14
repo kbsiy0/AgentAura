@@ -34,7 +34,7 @@ echo '{"hook_event_name":"PreToolUse","session_id":"buildcheck","tool_name":"Bas
   | AGENTAURA_ROOT="$BENCHROOT" ./plugin/bin/aura-hook
 rc=$?
 set -e
-[ "$rc" -eq 0 ] || { echo "aura-hook 回了 $rc，契約要求一律 0"; exit 1; }
+[ "$rc" -eq 0 ] || { echo "aura-hook 回了 ${rc}，契約要求一律 0"; exit 1; }
 
 # exit 0 不等於真的寫了檔 —— 契約是「靜默 exit 0」，所以 exit code 本身
 # 無法區分「成功」與「內部炸掉但被吞掉」。必須驗產物。

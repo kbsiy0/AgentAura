@@ -949,3 +949,10 @@ Tests/AgentAuraAppTests/{ShellWiringTests,FooterPixelTests}.swift
     Claude Code 本身就看得到，選單列的價值是餘光感知而非取代它。
     **觸發條件**：同時跑多個具名 agent 且需要分辨是哪一個時再做——屆時 value 換 struct 走的是
     這次已經驗證過的同一條 Optional 相容路徑。
+14. **首次安裝後圖示可能看不見**（2026-09-14 實機發現）。圖示是一顆 LED 燈點，不是有圖案的
+    icon；在有瀏海、選單列項目又多的 MacBook 上，macOS 可能把它排到瀏海後面，使用者會以為
+    沒裝成功。完整移除會清掉 `NSStatusItem Preferred Position`（刻意的，完整移除就該不留東西），
+    所以重裝後特別容易遇到。
+    **本輪不做**，已在 `docs/INSTALL.md` 補「找不到選單列圖示？」一節（按住 Command 拖曳挪位）。
+    **可做而未做**：接上成功後在面板上直接告訴使用者圖示在哪、看不到時怎麼辦——這一格打在
+    「非工程師第一次裝完」的路徑上，優先度不低。

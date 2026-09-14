@@ -81,6 +81,24 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 - **單檔上限：`Sources/` 200 行、`Tests/` 300 行**（`IsolationTests.fileLengthLimit` 從磁碟推導）。
 - **`Installer` 只准碰 `<claudeHome>/skills/agentaura`（必要時加 `<claudeHome>/skills/`），判定一律以 `realpath` 解析後為準；`~/.claude` 不存在時拒絕接上、不得建立它**（spec D-h —— `skills` 自己可能是 symlink；gate `installerTouchesOnlyAllowedPaths`）。
 
+## Agent 在終端機裡的界線（2026-09-14 事故）
+
+產品程式碼不准刪什麼，跟 **agent 自己在終端機裡可以跑什麼**，是兩條不同的界線。
+事故發生在後者：一個 subagent 為了確認 `sfltool resetbtm` 是不是真的指令，**直接執行它
+「順便看看說明」**——它不是查詢，是真的重置了整台機器的背景任務管理資料庫，
+開發機上八個登入項目瞬間歸零（`sfltool dumpbtm` 1593 行 → 21 行，全機影響、非本專案專屬）。
+
+- **不確定後果的系統指令，只准查文件，不准「執行一次看看」。** 想知道一個指令做什麼，
+  用 `man` / `--help` / 官方文件，不要用執行它來查。**執行不是查詢。**
+- **破壞性動詞一律先問人**：`reset`／`erase`／`purge`／`disable`／`reinstall`／`delete`
+  出現在 `sfltool`、`launchctl`、`tccutil`、`diskutil`、`csrutil`、`defaults delete <別人的 domain>`
+  這類**系統層級**工具上時，先停下來問，不要自己判斷「應該還好」。
+- **破壞性指令不得寫進使用者文件**，即使附警告——`docs/INSTALL.md` 的草稿一度把
+  `sfltool resetbtm` 放進可複製的程式碼區塊、警告放在區塊下方。人會複製區塊，不會先讀警告。
+- **動任何全機狀態前先存基準**：這次能在三分鐘內確定損害範圍與清單，唯一原因是事故前
+  剛好量過一次登入項目。`osascript -e 'tell application "System Events" to get the name of
+  every login item'` 是 0 秒的快照，很便宜。
+
 ## 這個 codebase 的 gate 哲學
 
 改動任何 gate 前先讀 `docs/2026-09-09-agentaura-audit.html`（八族「空轉的守衛」實證案例）。

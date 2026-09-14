@@ -74,6 +74,30 @@ extension AppDelegate {
         refreshPanel()
     }
 
+    /// T24（D-1）：`.uninstall` 的完整移除流程本體。`bundleIdentifier`／`bundleURL` 現場讀
+    /// `Bundle.main`——`swift test`／`swift run` 下天生是 nil（同 `LoginItem.runningFromBundle`
+    /// 既有判斷），`Uninstaller` 據此自然跳過清 defaults／搬垃圾桶那兩步，composition root
+    /// 不必為這兩步另開一條測試專用的注入縫。
+    ///
+    /// **先停掉 liveness timer 與 `graph`（FSEvents），再建構 `Uninstaller`**——team-lead
+    /// 真機實測抓到的殘留：`PipelineGraph.refreshLiveness()` 會在目錄整個被刪掉時重建它
+    /// （那是刻意行為，給使用者手動清 `~/.agentaura` 用的），而 `livenessTimer` 每 5 秒
+    /// 呼叫它一次；`Uninstaller.run()` 刪完狀態目錄後要等 recycle 的非同步 completion
+    /// 才終止，這段等待期間 timer 還在跳，會把剛刪的目錄建回來。「先讓自己閉嘴，再打掃」——
+    /// 這兩個會寫入的背景活動必須在 `Uninstaller` 動手之前就停掉，不是事後才收尾
+    /// （`applicationWillTerminate` 之後才會停，那時已經太晚）。
+    func performUninstall() {
+        livenessTimer?.invalidate()
+        livenessTimer = nil
+        graph?.stop()
+        let bundleID = Bundle.main.bundleIdentifier
+        Uninstaller(installer: installer, loginItem: loginItem, defaults: defaults,
+                   bundleIdentifier: bundleID, stateDirectory: root.deletingLastPathComponent(),
+                   homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
+                   recycler: WorkspaceRecycler(), bundleURL: bundleID != nil ? Bundle.main.bundleURL : nil,
+                   terminator: terminator).run()
+    }
+
     /// §4.2：設完**重讀實際值**——`.requiresApproval` 等失敗時開關要彈回去，
     /// `loginItem.isEnabled` 本就不快取，天然滿足。
     func performSetLaunchAtLogin(_ on: Bool) {

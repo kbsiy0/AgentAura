@@ -9,6 +9,13 @@ import AppKit
 @MainActor
 protocol AppTerminating {
     func terminate()
+    /// T24：完整移除的最後一步——**不經過 `NSApp.terminate()`**。team-lead 真機實測
+    /// 抓到：`NSApp.terminate()` 的 AppKit teardown 會把剛清空的 `io.agentaura.app`
+    /// persistent domain 部分寫回去（觀察到 `NSToolbar Configuration com.apple.NSColorPanel`
+    /// 這個鍵復活），即使 decoy domain 的對照實驗測不出這個效應（AppKit 沒有參與那個
+    /// domain）——這正是「gates share one eye」：decoy 跟生產路徑不是同一件事。
+    /// 直接結束行程，不給 AppKit 任何寫回的機會。
+    func terminateImmediately()
 }
 
 /// `.quit`（D-j）：唯一真的呼叫 `NSApp.terminate` 的地方。
@@ -21,6 +28,7 @@ protocol AppTerminating {
 struct RealTerminator: AppTerminating {
     nonisolated init() {}
     func terminate() { NSApp.terminate(nil) }
+    func terminateImmediately() { exit(0) }
 }
 
 /// E11（/simplify 波次2，reuse#9）：`DisconnectConfirmation`／`ReplaceMountConfirmation`
@@ -80,5 +88,50 @@ enum ReplaceMountConfirmation {
                 要換回去的話可以到原本的位置重新接上一次。
                 """,
             confirmTitle: "改指向這個 App", onConfirm: onConfirm)
+    }
+}
+
+/// T24（D-1）：`.uninstall`——比 `.disconnect` 更進一步。文案是使用者原話要求改過的
+/// 第二版：條列、短句、講**使用者感受得到的後果**，不寫技術名詞（不提 symlink／
+/// persistent domain／`~/.claude/skills/agentaura` 這類字面）。`title`／`body` 拆成
+/// 獨立常數（不是內嵌在 `present()` 裡）：`UninstallConfirmationCopyTests` 需要在
+/// 不彈真 `NSAlert` 的前提下驗文案語意，這是唯一的讀取點。
+///
+/// T25（真機事故）：結尾原本寫「都可以救回來」，是無條件保證——垃圾桶動作曾經在無法
+/// 解釋的情況下沒有真的落地，那句話對那次的使用者是假話。這個對話框在動作**之前**
+/// 顯示，沒辦法等垃圾桶動作真的回報成功才講這句話，所以改成不做絕對承諾，
+/// 而不是把承諾綁在事實上（`recoveryClaimIsHedgedNotAbsolute` 驗證這個決定）。
+@MainActor
+enum UninstallConfirmation {
+    static let title = "完整移除 AgentAura？"
+    static let body = """
+        這會依序做這些事：
+
+        • 關閉開機自動啟動
+        • 選單列不再顯示狀態
+        • 顏色和開關恢復預設
+        • 清空所有使用紀錄
+        • 移到垃圾桶
+
+        垃圾桶清空前，通常都能救回來。
+        """
+
+    static func present(onConfirm: () -> Void) {
+        ConfirmationAlert.present(title: title, body: body, confirmTitle: "完整移除", onConfirm: onConfirm)
+    }
+}
+
+/// T24（D-1 步驟5）：`NSWorkspace.recycle`（可還原，不是 `FileManager.removeItem`）。
+/// 注入縫同 `AppServiceRegistering`（`LoginItem.swift`）——**測試不得真的呼叫它**，
+/// 走 fake（spec §6.4 的既有慣例，這裡是同一個形狀）。
+@MainActor
+protocol BundleRecycling {
+    func recycle(_ url: URL, completion: @escaping (Error?) -> Void)
+}
+
+@MainActor
+struct WorkspaceRecycler: BundleRecycling {
+    func recycle(_ url: URL, completion: @escaping (Error?) -> Void) {
+        NSWorkspace.shared.recycle([url]) { _, error in completion(error) }
     }
 }

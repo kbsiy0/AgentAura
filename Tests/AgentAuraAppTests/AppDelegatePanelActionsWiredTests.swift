@@ -8,14 +8,13 @@ import AuraHookFile
 /// G5 `panelActionsAreWired`（spec §6.2／§6.3）：`PanelActionKind.allCases.flatMap(PanelAction.samples)`
 /// 逐一驗證**每一個**的副作用真的發生（含 `setLaunchAtLogin` 的 true／false 兩者）。
 ///
-/// **T10b bug B**：舊版把 16 個動作依序送進「同一個」delegate，`.replaceExternalMount`／
+/// **T10b bug B**：舊版把全部動作依序送進「同一個」delegate，`.replaceExternalMount`／
 /// `.disconnect`／`.dismissBanner` 這幾個 case 的前提條件（要嘛已連上、要嘛已有 banner）
-/// 隱含依賴「前一步剛好跑完」——這不是 flake，是斷言寫錯了：team-lead 實測全套件並行
-/// 負載重時抓到 `.replaceExternalMount` 那條斷言翻車（`delegate.banner?.kind` 還是
-/// `.connected`，沒有變成 `.alreadyConnected`）。**修法**：每個 case 各自拿一個全新的
-/// delegate／installer fixture（`withFreshRig`），需要「已連上」這種前提時在該 case 自己
-/// 的作用域裡明確先做一次，不依賴迴圈順序或其他 case 留下的狀態。動作總數仍然由
-/// `PanelActionKind.allCases.flatMap(samples)` 推導（R6，不寫死數字）。
+/// 隱含依賴「前一步剛好跑完」——team-lead 實測全套件並行負載重時抓到 `.replaceExternalMount`
+/// 那條斷言翻車（`banner?.kind` 還是 `.connected`，沒變成 `.alreadyConnected`）。**修法**：
+/// 每個 case 各自拿全新的 delegate／installer fixture（`withFreshRig`），需要「已連上」這種
+/// 前提時在該 case 自己的作用域裡明確先做一次。動作總數由
+/// `PanelActionKind.allCases.flatMap(samples)` 推導（R6，不寫死數字）——T24 新增 `.uninstall`。
 @MainActor
 @Suite("G5：panelActionsAreWired", .serialized)
 struct AppDelegatePanelActionsWiredTests {
@@ -47,6 +46,7 @@ struct AppDelegatePanelActionsWiredTests {
         var confirmedDisconnects = 0
         /// A5（T11 commit3）：`.replaceExternalMount` 現在也要先走確認框，同 `confirmedDisconnects`。
         var confirmedReplaceExternalMounts = 0
+        var confirmedUninstalls = 0   // T24：`.uninstall` 同理
     }
 
     @MainActor
@@ -81,6 +81,7 @@ struct AppDelegatePanelActionsWiredTests {
             terminator: recorder.fakeTerminator,
             confirmDisconnect: { onConfirm in recorder.confirmedDisconnects += 1; onConfirm() },
             confirmReplaceExternalMount: { onConfirm in recorder.confirmedReplaceExternalMounts += 1; onConfirm() },
+            confirmUninstall: { onConfirm in recorder.confirmedUninstalls += 1; onConfirm() },
             makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
@@ -163,6 +164,9 @@ struct AppDelegatePanelActionsWiredTests {
                     #expect(rig.delegate.banner?.kind == .disconnected, ".disconnect 成功後應顯示「已移除掛載」banner")
                 }
 
+            case .uninstall:   // T24：case body 在 `+Uninstall.swift`（同 T12／T16，避免撞 300 行上限）
+                try await verifyUninstall(samples: samples)
+
             case .setLaunchAtLogin:
                 try await withFreshRig { rig in
                     #expect(samples.contains(.setLaunchAtLogin(true)) && samples.contains(.setLaunchAtLogin(false)),
@@ -194,8 +198,7 @@ struct AppDelegatePanelActionsWiredTests {
                     }
                 }
 
-            // E3（/simplify 波次2）：case body 搬到 `+E3.swift`，理由同 T12／T16
-            // （避免本檔撞 300 行 Tests 上限）。
+            // E3（/simplify 波次2）：case body 搬到 `+E3.swift`，理由同 T12／T16（避免撞 300 行上限）。
             case .openHelp:
                 try await verifyOpenHelp(samples: samples)
 
@@ -219,8 +222,7 @@ struct AppDelegatePanelActionsWiredTests {
                     #expect(rig.recorder.fakeTerminator.terminateCallCount == 1, ".quit 應該呼叫注入的 terminator.terminate() 一次")
                 }
 
-            // T12（B2／B5）：case body 移到 `AppDelegatePanelActionsWiredTests+T12.swift`，
-            // 避免本檔撞 300 行 Tests 上限。
+            // T12（B2／B5）：case body 移到 `AppDelegatePanelActionsWiredTests+T12.swift`（避免撞 300 行上限）。
             case .reportIssue:
                 try await verifyReportIssue(samples: samples)
 

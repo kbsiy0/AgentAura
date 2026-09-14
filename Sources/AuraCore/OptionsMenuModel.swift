@@ -114,6 +114,11 @@ public enum OptionsMenuModel {
         }
         rows.append(OptionsRow(title: "移除掛載…", action: .disconnect, isDisabled: false,
                                toggleValue: nil, group: .mount))
+        // T24：與「移除掛載…」同群（.mount）、緊接在它後面——語意上都屬於「拆掉這個 App
+        // 跟系統的關係」，差別只是範圍大小（掛載 vs 全部）。恆在、不因 install 狀態隱藏
+        // （即使從沒接上過，登入項目／偏好設定仍可能存在，完整移除仍要能做）。
+        rows.append(OptionsRow(title: "完整移除 AgentAura…", action: .uninstall, isDisabled: false,
+                               toggleValue: nil, group: .mount))
         rows.append(OptionsRow(title: "關於 AgentAura", action: .about, isDisabled: false,
                                toggleValue: nil, group: .about))
         // B2：Amphetamine 的 Feedback & Support 對應——開 GitHub issues（見 `ProjectLinks.newIssue`）。

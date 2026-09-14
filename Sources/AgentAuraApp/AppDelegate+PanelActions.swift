@@ -35,6 +35,9 @@ extension AppDelegate {
                 // 確認對話框由注入的閉包負責（測試不真的彈 NSAlert，spec §6.4）；
                 // 只有使用者確認才真的呼叫 Installer.disconnect()。
                 self.confirmDisconnect { [weak self] in self?.performDisconnect() }
+            case .uninstall:
+                // T24：同 .disconnect 的注入縫，只是確認框措辭更重（會列出五件事）。
+                self.confirmUninstall { [weak self] in self?.performUninstall() }
             case .setLaunchAtLogin(let on):
                 self.performSetLaunchAtLogin(on)
             case .recheckHook:

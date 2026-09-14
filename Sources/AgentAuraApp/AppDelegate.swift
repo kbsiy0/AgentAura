@@ -6,20 +6,17 @@ import AuraHookFile
 /// Composition root。唯一的組裝點。
 ///
 /// T08：接線分散到三個 extension 檔避免撞 200 行——`AppDelegate+PanelActions.swift`
-/// （窮盡 switch）、`AppDelegate+Connect.swift`（connect／disconnect／登入項目）、
+/// （窮盡 switch）、`AppDelegate+Connect.swift`（connect／disconnect／uninstall／登入項目）、
 /// `AppDelegate+Verification.swift`（reprobe／背景 exec 驗證／`onOpen`）。
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// internal（不是 private）——`refreshPanel`（`AppDelegate+PanelActions.swift`）要讀它，
-    /// 跨檔 extension 碰不到 `private`（同 `status`／`driver` 的理由）。
+    /// internal（不是 private）——`refreshPanel`／`wireActions`／`performSetReduceMotion`
+    /// （`AppDelegate+PanelActions.swift`）都要讀寫它們，跨檔 extension 碰不到 `private`。
     var graph: PipelineGraph!
-    /// internal（不是 private）——`wireActions()`（`AppDelegate+PanelActions.swift`）要接
-    /// `status.onAction`，跨檔 extension 碰不到 `private`。
     var status: (any IconRendering)!
-    /// internal（不是 private）——`performSetReduceMotion`（`AppDelegate+PanelActions.swift`，B5）
-    /// 要轉發使用者偏好，跨檔 extension 碰不到 `private`。
     var driver: AnimationDriver!
-    private var livenessTimer: Timer?
+    // internal（不是 private）：T24 的 `performUninstall`（AppDelegate+Connect.swift）要停它。
+    var livenessTimer: Timer?
 
     /// internal（不是 private）讓 smoke test 能直接觀測／驅動——與 `paletteStore`／
     /// `colorCoordinator`（Change 2）同一個理由。
@@ -34,8 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var externalTargetPath: String?
     var banner: PanelBanner?
     /// T12（B5）：使用者的「減少動態」偏好——與系統值取 OR（`AnimationDriver.setUserReduceMotion`
-    /// 是唯一的合併點），不是獨立生效。internal（不是 private）：`AppDelegate+PanelActions.swift`
-    /// 的 `performSetReduceMotion` 要寫它，跨檔 extension 碰不到 `private`。
+    /// 是唯一的合併點），不是獨立生效。internal 讓 `performSetReduceMotion` 能寫它。
     var userReduceMotion = false
     /// T16：燈條底板開關，預設 true——internal 理由同 `userReduceMotion`。
     var iconPlate = true
@@ -46,10 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// T12（B5）：`UserDefaults` 鍵，走既有的 `defaults` 注入點（比照 `didConnectOnceKey`）。
     static let reduceMotionKey = "AgentAuraReduceMotion"
 
-    /// **`installer` 生產預設值就是真的 `~/.claude`**——`productionUsesRealInstaller` 斷言
-    /// 這一份預設值（不是測試注入的 temp 值）以 `/.claude` 結尾。internal 讓測試能讀。
+    /// **`installer` 生產預設值就是真的 `~/.claude`**（`productionUsesRealInstaller` 斷言）。
     let installer: Installer
-    private let root: URL
+    /// internal（不是 private）：`AppDelegate+Connect.swift` 的 `performUninstall()` 要用它
+    /// 算 `~/.agentaura`（`root` 就是 `.../.agentaura/sessions`），跨檔 extension 碰不到 `private`。
+    let root: URL
     private let livenessInterval: TimeInterval
     let defaults: UserDefaults
     private let makeRenderer: @MainActor () -> any IconRendering
@@ -59,9 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let showAboutPanel: @MainActor ([NSApplication.AboutPanelOptionKey: Any]) -> Void
     let terminator: any AppTerminating
     let confirmDisconnect: @MainActor (@escaping () -> Void) -> Void
-    /// A5（T11 commit3）：`.replaceExternalMount` 換掉開發者掛載前的確認——同
+    /// A5（T11 commit3）／T24：`.replaceExternalMount`／`.uninstall` 各自的確認框——同
     /// `confirmDisconnect` 的注入縫（測試不真的彈 `NSAlert`，spec §6.4）。
     let confirmReplaceExternalMount: @MainActor (@escaping () -> Void) -> Void
+    let confirmUninstall: @MainActor (@escaping () -> Void) -> Void
 
     init(root: URL = SnapshotIO.defaultRoot,
          livenessInterval: TimeInterval = 5,
@@ -83,6 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
          confirmReplaceExternalMount: @escaping @MainActor (@escaping () -> Void) -> Void = { onConfirm in
              ReplaceMountConfirmation.present(onConfirm: onConfirm)
          },
+         confirmUninstall: @escaping @MainActor (@escaping () -> Void) -> Void = { onConfirm in
+             UninstallConfirmation.present(onConfirm: onConfirm)
+         },
          makeRenderer: @escaping @MainActor () -> any IconRendering = { StatusItemController() }) {
         self.root = root
         self.livenessInterval = livenessInterval
@@ -94,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.terminator = terminator
         self.confirmDisconnect = confirmDisconnect
         self.confirmReplaceExternalMount = confirmReplaceExternalMount
+        self.confirmUninstall = confirmUninstall
         self.makeRenderer = makeRenderer
         super.init()
     }

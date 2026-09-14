@@ -26,6 +26,19 @@
 不熟悉這些名詞的話，App 裡按「說明」會開一份離線的白話文件（`help.html`），
 涵蓋燈號意思、hook 是什麼、常見問題。
 
+## 找不到選單列圖示？
+
+AgentAura 的圖示是一顆小小的 LED 燈點，不是有圖案的 icon。裝好之後如果選單列上看不到：
+
+1. **先確認它真的在跑**：`pgrep -fl AgentAura.app`。有輸出就代表 App 正常，只是圖示看不見。
+2. **按住 Command 鍵拖曳**選單列上的其他圖示，把空間挪出來，圖示就會出現。
+3. 有瀏海的 MacBook（14"／16" Pro）特別容易遇到——選單列項目一多，新加入的圖示會被排到
+   瀏海後面，完全看不到也點不到。
+
+**已知情況（2026-09-14 實測）**：跑過「完整移除」之後再重裝，圖示的位置偏好
+（`NSStatusItem Preferred Position`）也會一併被清掉——那是刻意的，完整移除就該不留東西——
+所以 macOS 會重新決定位置，有可能就放到瀏海後面。這時照上面第 2 步拖一下即可。
+
 ## 什麼時候生效
 
 按「接上」之後，**要從下一個新開的 Claude Code session 起才會生效**——skills-dir
@@ -85,33 +98,53 @@ open build/AgentAura.app                             # 開始使用
 
 ## 完整移除
 
-一般使用者：面板 Options 裡「移除掛載」一鍵完成，會把上面第 4 步建立的掛載刪掉。
+面板 Options 裡有**兩個**移除選項，處理的是不同範圍，選錯會留下不該留的東西：
 
-開發者路徑／手動移除：
+- **「移除掛載」**——只刪 `~/.claude/skills/agentaura` 這個掛載。App 本身、你的顏色
+  設定、session 紀錄、開機自動啟動的登入項目，全部原封不動留著。適合暫時停用、
+  之後還想用同一份設定重新接上的情況。
+- **「完整移除 AgentAura」**——依序：取消開機自動啟動的登入項目、移除上面那個掛載、
+  刪除 `~/.agentaura` 底下所有 session 紀錄、清掉顏色與開關等偏好設定、最後把
+  `AgentAura.app` 移到垃圾桶並結束這個 App。按下去之前會先跳出確認對話框，列出
+  這幾件事。app 進垃圾桶前都可以還原；一旦清空垃圾桶就是真的刪除。這是讓機器回到
+  「從未安裝過」狀態的唯一一鍵做法。
+
+開發者路徑／手動移除（等同於「完整移除 AgentAura」做的五件事）：
 
 ```bash
-pkill -f AgentAura.app            # 關掉 app
-rm -rf build/AgentAura.app        # 刪掉 app（建置產物，隨時可重建）
+pkill -f AgentAura.app            # 關掉 app（連帶讓 SMAppService 的登入項目失去對應的執行檔）
+# 登入項目：到「系統設定 → 一般 → 登入項目」把 AgentAura 那一列移除。
+# 這一步刻意沒有對應的指令，理由見下方警告。
 rm ~/.claude/skills/agentaura     # 移除掛載（hooks 隨之失效）
 rm -rf ~/.agentaura               # 狀態目錄，可安全刪除
+defaults delete io.agentaura.app  # 清掉顏色／開關等偏好設定（persistent domain）
+rm -rf build/AgentAura.app        # 刪掉 app 本身（建置產物，隨時可重建；正式安裝則拖進垃圾桶）
 ```
 
 > 沒有 `claude plugin uninstall` 這一步 —— 那是 marketplace 安裝的 plugin 才需要；
 > skills-dir 掛載的移除就是刪掉上面那個 symlink。
+>
+> **⚠️ 絕對不要用 `sfltool resetbtm` 來移除登入項目。** 它不是「移除 AgentAura 的登入項目」，
+> 而是**清空整台機器**所有 app 的背景任務登記——你裝的每一個會開機自動啟動的軟體都會
+> 一起消失，而且沒有還原鍵，只能一個一個手動加回去。
+> 本專案在 2026-09-14 實際踩過這一顆：一個 agent 為了確認這個指令存不存在而執行了它，
+> 開發機上八個登入項目瞬間歸零（`sfltool dumpbtm` 從 1593 行剩 21 行）。
+> 移除單一 app 的登入項目，正確做法就是上面那句：到系統設定裡把那一列移掉。
 
-一步安裝、一步移除（R6）。驗證移除乾淨：
+驗證移除乾淨——**一律跑 `./scripts/verify-uninstall.sh`**，不要在這裡另外手抄一份檢查
+清單（手抄的清單會跟實作 drift，這正是這份文件先前的問題所在）：
 
 ```bash
-claude plugin list | grep -c -i agentaura           # → 0
-grep -c -i agentaura ~/.claude/settings.json        # → 0（**全程都是 0**）
-ls ~/.agentaura 2>/dev/null | wc -l                 # → 0
+./scripts/verify-uninstall.sh                       # 預設檢查 /Applications/AgentAura.app
+./scripts/verify-uninstall.sh build/AgentAura.app   # 開發者路徑另外指定 app 實際位置
 ```
 
-第二行的重點是「**全程**都是 0」，不是「移除後變成 0」——
-AgentAura 從頭到尾沒有寫過 `settings.json` 的任何一個位元組。
+它會逐一檢查掛載、`~/.agentaura` 狀態目錄、`io.agentaura.app` 偏好設定、登入項目、
+app bundle 本身這五個位置，任何一項還在就非零退出並印出是哪一項。
 
 移除後 `~/.claude/settings.json` **不會留下任何 AgentAura 引用** ——
-這是刻意的設計：AgentAura 從不修改 `settings.json`，全部靠 plugin 機制。
+這是刻意的設計：AgentAura 從不修改 `settings.json`，全部靠 plugin 機制；
+這一項單獨驗（`verify-install.sh` 的第 3 項），不屬於上面的移除檢查。
 
 ## 狀態目錄
 

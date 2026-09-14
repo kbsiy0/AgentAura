@@ -8,6 +8,9 @@ public enum PanelAction: Equatable, Sendable {
     case connect                      // 一鍵接上／重新接上
     case replaceExternalMount         // D-i：明確選擇「改指向 App 內建」
     case disconnect                   // 呼叫端負責確認對話框
+    /// T24：D-1「完整移除」——比 `.disconnect` 更進一步（登入項目／狀態目錄／偏好設定／
+    /// app 本身都清掉）。呼叫端同樣負責確認對話框（不是這裡）。
+    case uninstall
     case setLaunchAtLogin(Bool)
     case recheckHook                  // R2：`verified == false` 時的退化出口，不讓畫面停在未驗證
     case openHelp
@@ -31,6 +34,7 @@ public enum PanelAction: Equatable, Sendable {
         case .connect: .connect
         case .replaceExternalMount: .replaceExternalMount
         case .disconnect: .disconnect
+        case .uninstall: .uninstall
         case .setLaunchAtLogin: .setLaunchAtLogin
         case .recheckHook: .recheckHook
         case .openHelp: .openHelp
@@ -48,6 +52,7 @@ public enum PanelAction: Equatable, Sendable {
 /// 這個平行型別供 gate 推導「每一種動作都要有人接線」。
 public enum PanelActionKind: String, Sendable, CaseIterable {
     case pickColor, resetColors, toggleOptions, connect, replaceExternalMount, disconnect
+    case uninstall
     case setLaunchAtLogin, recheckHook, openHelp, about, dismissBanner, quit
     case reportIssue, setReduceMotion, setIconPlate
 }
@@ -65,6 +70,7 @@ extension PanelAction {
         case .connect: [.connect]
         case .replaceExternalMount: [.replaceExternalMount]
         case .disconnect: [.disconnect]
+        case .uninstall: [.uninstall]
         case .setLaunchAtLogin: [.setLaunchAtLogin(true), .setLaunchAtLogin(false)]
         case .recheckHook: [.recheckHook]
         case .openHelp: [.openHelp]

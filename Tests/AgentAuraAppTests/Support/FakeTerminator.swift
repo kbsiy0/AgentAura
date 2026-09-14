@@ -10,5 +10,8 @@ import Foundation
 @MainActor
 final class FakeTerminator: AppTerminating {
     private(set) var terminateCallCount = 0
+    /// T24：`.uninstall` 的最後一步呼叫這個，不是 `terminate()`（見 `Uninstaller`）。
+    private(set) var terminateImmediatelyCallCount = 0
     func terminate() { terminateCallCount += 1 }
+    func terminateImmediately() { terminateImmediatelyCallCount += 1 }
 }
