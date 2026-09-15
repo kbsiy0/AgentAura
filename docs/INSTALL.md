@@ -55,6 +55,22 @@ AgentAura 的圖示是一顆小小的 LED 燈點，不是有圖案的 icon。裝
 
 接上完成不會、也不需要叫你重開 `AgentAura.app` 這個 App 本身。
 
+## 安裝後 AgentAura 沒反應？先看 `/plugin`
+
+在 Claude Code 裡輸入 `/plugin`，找 `agentaura` 那一項。如果看到
+`Failed to load hooks from .../hooks.json`，那代表**整份 hook 設定被拒絕**，
+不是某一條失效——AgentAura 會完全不運作，而選單列上看起來一切正常。
+
+常見成因是 **Claude Code 版本落差**：我們註冊的某個 hook event 在你的版本裡不存在，
+而平台對 `hooks.json` 是**全有全無**地解析——一個不認得的鍵就讓整份檔案失敗。
+
+2026-09-15 實際發生過一次：`PostModelSwitch` 在開發機上合法、官方 validator 也全綠，
+但同事的版本不認得它，於是那台機器上 AgentAura 完全不動。已經移除該 event。
+
+**如果你遇到這個錯誤**：先確認 `plugin/bin/aura-hook` 是用**當前版本的原始碼**建的
+（`./scripts/build-plugin.sh`），再把 `/plugin` 的完整錯誤訊息回報——訊息裡會列出
+你的 Claude Code 認得的完整 event 清單，那正是判斷差在哪的依據。
+
 ## 從別人給的 zip 安裝（ad-hoc 簽章）
 
 目前沒有正式簽章與公證的版本，所以第一次開啟**一定**會被 Gatekeeper 擋。那是預期行為，

@@ -106,10 +106,38 @@ struct EventMappingTests {
                     .isSubset(of: EventMapping.handledEvents))
     }
 
-    @Test("PostModelSwitch 不改 activity 但仍在 handledEvents 裡（因為帶 to_model）")
-    func postModelSwitchIsRegisteredButInert() {
-        #expect(EventMapping.handledEvents.contains("PostModelSwitch"))
+    /// **改寫自 `postModelSwitchIsRegisteredButInert`（2026-09-15 相容性事故）。**
+    /// 原本斷言「`PostModelSwitch` 在 `handledEvents` 裡」，現在斷言它**不在**——
+    /// 測的仍然是同一件事（這個 event 的註冊狀態），只是結論反過來了，而且理由寫在下面。
+    ///
+    /// 事故：`PostModelSwitch` 在開發機（Claude Code 2.1.271）合法、
+    /// `claude plugin validate --strict` 全綠，但同事的版本不認得它——
+    /// **那一個鍵讓整份 `hooks.json` 解析失敗**，AgentAura 在那台機器上完全不運作。
+    /// 不是「少一個事件」，是「整個產品不動」。
+    ///
+    /// 代價（誠實記著）：使用者中途 `/model` 換模型後，面板的模型名會停在
+    /// `SessionStart` 當下那個值，不會更新。那是**顯示上的陳舊**，
+    /// 與「完全不運作」不在同一個量級。
+    @Test("PostModelSwitch 已移除：一個某些版本不認得的 event 會讓整份 hooks.json 掛掉")
+    func postModelSwitchIsNoLongerRegistered() {
+        #expect(!EventMapping.handledEvents.contains("PostModelSwitch"),
+                "重新註冊它會讓不認得這個 event 的 Claude Code 版本整份 hooks.json 解析失敗")
+        // 映射本身仍然安全地回 .noChange（未知 event 一律如此）——真的收到也不會壞，
+        // 只是我們不再主動要求平台送它。
         #expect(EventMapping.effect(forEvent: "PostModelSwitch") == .noChange)
+    }
+
+    /// 上一條的一般化：**任何**只為了「多拿一個欄位」而註冊的 event 都有同樣的風險。
+    /// `registeredButNoActivityChange` 正是那一類的集合——它現在是空的，
+    /// 之後若有人往裡面加東西，這條會逼他先讀上面那段事故紀錄。
+    @Test("registeredButNoActivityChange 目前是空的（加東西進去是相容性決定，不是免費的）")
+    func inertRegistrationsAreEmptyByDefault() {
+        #expect(EventMapping.registeredButNoActivityChange.isEmpty, """
+            有人往 registeredButNoActivityChange 加了 event。那類 event 不改變 activity，
+            純粹為了多拿一個欄位而註冊——而註冊一個某些 Claude Code 版本不認得的 event，
+            會讓那些使用者的**整份 hooks.json 解析失敗**（2026-09-15 實機事故）。
+            加之前先問：沒有它會怎樣？若答案是「少一個錦上添花的欄位」，就不值得。
+            """)
     }
 
     // ---- 真實 fixture 回歸：每一筆實測 event 都必須被明確處理 ----
