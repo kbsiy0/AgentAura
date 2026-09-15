@@ -12,15 +12,6 @@ public enum EventMapping {
 
     /// 本模組明確處理的 event —— **`plugin/hooks/hooks.json` 必須註冊且僅註冊這些**。
     ///
-    /// **⚠️ 加一個 event 進來不是免費的，是相容性決定。** 2026-09-15 實機事故：
-    /// `PostModelSwitch` 在開發機（Claude Code 2.1.271）合法、`claude plugin validate
-    /// --strict` 全綠，但同事的版本不認得它——**那一個鍵讓整份 `hooks.json` 解析失敗**，
-    /// AgentAura 在那台機器上完全不運作，而且錯誤只在 `/plugin` 裡看得到。
-    /// 本機 validator 對未知 event 只給 warning 說「entry ignored at runtime」，
-    /// **那個寬容不能外推到別人的 runtime**。
-    /// 所以：只註冊有把握長期穩定的核心 event；新增一個之前先問「沒有它會怎樣」，
-    /// 答案若是「少一個錦上添花的欄位」，就不值得拿整個產品的可用性去換。
-    ///
     /// 跨層一致性 gate（Task 13）從這個集合推導，不用手維護第二份清單。
     /// 手維護的清單會 drift：本專案已實際發生過 —— `Elicitation`（映射到 `waiting`，
     /// 代表「MCP server 在等你輸入」）有映射卻沒註冊，那個狀態永遠收不到，
@@ -34,17 +25,16 @@ public enum EventMapping {
         "Elicitation", "ElicitationResult",
         "Notification",
         "Stop", "StopFailure", "SessionEnd",
+        "PostModelSwitch",
     ]
 
-    /// `handledEvents` 中刻意不改變 activity 的 event（目前是空集合）。
+    /// `handledEvents` 中刻意不改變 activity 的 event。
     ///
-    /// **`PostModelSwitch` 曾經在這裡，2026-09-15 移除**——它帶 `to_model`，讓使用者中途
-    /// `/model` 換模型後面板不顯示舊模型。但實機回報：**有些 Claude Code 版本不認得這個
-    /// event，而一個不認得的鍵會讓整份 `hooks.json` 解析失敗**（不是忽略那一條），
-    /// 於是 AgentAura 在那台機器上完全不運作。詳見 `handledEvents` 的相容性說明。
-    /// 型別留著（不是直接砍掉常數）：`PluginWiringTests` 的跨層 gate 用它區分
-    /// 「刻意註冊但不改 activity」與「漏了映射」，集合空不代表這個概念消失。
-    public static let registeredButNoActivityChange: Set<String> = []
+    /// 它們仍必須註冊，因為帶了別的必要資訊：`PostModelSwitch` 帶 `to_model`
+    /// （使用者中途 `/model` 換模型後，面板不得顯示舊模型）。
+    public static let registeredButNoActivityChange: Set<String> = [
+        "PostModelSwitch",
+    ]
 
     /// hook event（必要時加上 `notification_type`）→ 效果。
     ///

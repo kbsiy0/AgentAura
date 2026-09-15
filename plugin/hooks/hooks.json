@@ -144,6 +144,17 @@
         ]
       }
     ],
+    "PostModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/aura-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
     "Elicitation": [
       {
         "hooks": [

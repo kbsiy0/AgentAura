@@ -61,15 +61,17 @@ AgentAura 的圖示是一顆小小的 LED 燈點，不是有圖案的 icon。裝
 `Failed to load hooks from .../hooks.json`，那代表**整份 hook 設定被拒絕**，
 不是某一條失效——AgentAura 會完全不運作，而選單列上看起來一切正常。
 
-常見成因是 **Claude Code 版本落差**：我們註冊的某個 hook event 在你的版本裡不存在，
-而平台對 `hooks.json` 是**全有全無**地解析——一個不認得的鍵就讓整份檔案失敗。
+**成因是 Claude Code 版本落差**：我們註冊的某個 hook event 在你的版本裡不存在，
+而平台對 `hooks.json` 是**全有全無**地解析——一個不認得的鍵就讓整份檔案失敗，
+其餘合法的事件一起陪葬。
 
-2026-09-15 實際發生過一次：`PostModelSwitch` 在開發機上合法、官方 validator 也全綠，
-但同事的版本不認得它，於是那台機器上 AgentAura 完全不動。已經移除該 event。
+**處置：把 Claude Code 更新到最新版。** 錯誤訊息裡會列出你的版本認得的完整 event 清單，
+拿它跟 `plugin/hooks/hooks.json` 註冊的清單比對，就知道差在哪一個。
 
-**如果你遇到這個錯誤**：先確認 `plugin/bin/aura-hook` 是用**當前版本的原始碼**建的
-（`./scripts/build-plugin.sh`），再把 `/plugin` 的完整錯誤訊息回報——訊息裡會列出
-你的 Claude Code 認得的完整 event 清單，那正是判斷差在哪的依據。
+> **給維護者的注意事項**：`claude plugin validate --strict` 在**你自己這台**通過，
+> 不代表別人的 runtime 接受。實測（2026-09-15，Claude Code 2.1.271）：本機 validator
+> 對未知 event 只給 warning 說「entry ignored at runtime」，但**別人的 runtime 是直接
+> 拒絕整份檔案**。新增 hook event 時，這個寬容度差異要納入考量。
 
 ## 從別人給的 zip 安裝（ad-hoc 簽章）
 
