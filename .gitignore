@@ -9,3 +9,4 @@ xcuserdata/
 .claude/worktrees/
 plugin/bin/
 build/
+dist/

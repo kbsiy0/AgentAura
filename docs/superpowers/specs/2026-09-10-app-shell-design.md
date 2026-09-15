@@ -916,8 +916,14 @@ Tests/AgentAuraAppTests/{ShellWiringTests,FooterPixelTests}.swift
 3. **Mach-O 放在 `Contents/Resources/plugin/bin/`** 不是 Apple 建議位置（可執行檔屬 `Contents/MacOS/`
    或 `Contents/Helpers/`）。本地 ad-hoc 簽章實測通過，但**將來 notarize 會變硬錯誤**。
    替代方案（未採用）：`Contents/Helpers/aura-hook` ＋ plugin 內相對 symlink 指過去（S2-S5）。
-4. Gatekeeper「允許」之後巢狀資源的 quarantine 是否被遞迴清除——**未驗證**。這正是第 6 步改成
-   對外事實對帳（看產物）而非自洽檢查的理由。
+4. ~~Gatekeeper「允許」之後巢狀資源的 quarantine 是否被遞迴清除——未驗證~~
+   **2026-09-15 實測解除**（macOS 26.6.2，打包 zip ＋ 模擬下載）：
+   **沒有被遞迴清除，但不影響執行。** 授權前跑巢狀的 `aura-hook` 是 SIGKILL（exit 137）、
+   0 個狀態檔，而 `access(X_OK)` 照樣說可執行；使用者授權 app 之後，那顆 hook **仍帶著
+   quarantine 屬性**，執行卻正常（exit 0、狀態檔產出）——系統認的是使用者對這個 app 的授權，
+   不是逐檔的標記。這也再次證實第 6 步「看產物不看自洽檢查」是對的。
+   **同時踩到一個新事實**：macOS 15 Sequoia 起「右鍵 →打開」的繞過已被移除，
+   新對話框只有「移到垃圾桶」與「完成」，最顯眼的是前者。照舊行為寫的安裝說明會害人把 app 丟掉。
 5. 系統通知（session 完成／出錯時 banner）刻意不做——會把產品從「餘光可見」變成「主動打擾」，
    撞 R4 注意力預算，需要自己的 brainstorm。
 6. 右鍵開 Options 未做（加分項；主入口必須看得見）。
