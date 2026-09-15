@@ -4,34 +4,36 @@
 /// .mustMoveToApplicationsMessage` 的文件）。這裡是新的唯一 oracle；app 層改用它
 /// 之後不會再有第二份手搓字面（消費端改動屬於 wave 2）。
 extension PanelBanner {
-    public static func error(for failure: InstallerFailure) -> PanelBanner {
-        .error(message(for: failure))
+    /// T27（i18n）：`language` **帶預設值 `.traditionalChinese`**——`AppDelegate+Connect.swift`
+    /// （T28 清單內）是唯一生產呼叫點，帶預設值同 `PanelModel.swift` 那批 banner 工廠的理由。
+    public static func error(for failure: InstallerFailure, language: Language) -> PanelBanner {
+        .error(message(for: failure, language: language))
     }
 
-    static func message(for failure: InstallerFailure) -> String {
+    static func message(for failure: InstallerFailure, language: Language) -> String {
         switch failure {
         case .mustMoveToApplications:
-            return InstallerFailure.mustMoveToApplicationsMessage
+            return InstallerFailure.mustMoveToApplicationsMessage(language)
         case .cannotConnect(let reason):
             // 與 `healthLabel` 共用同一個 oracle（§3.3 的表），不手搓第二份文案——
             // 原 app 層 `cannotConnectMessage` 的邏輯搬過來。
-            guard let reason else { return InstallState.claudeNotFound.healthLabel }
-            return InstallState.broken(reason, owner: .unknown).healthLabel
+            guard let reason else { return InstallState.claudeNotFound.healthLabel(language) }
+            return InstallState.broken(reason, owner: .unknown).healthLabel(language)
         case .externalMountNeedsChoice:
-            return "目前掛載指向別的地方，請選擇是否改指向這個 App。"
+            return L10nPanelBanner.externalMountNeedsChoice.text(language)
         case .bundleIncomplete:
-            return "App 內建的 plugin 不完整，請重新下載安裝。"
+            return L10nPanelBanner.bundleIncomplete.text(language)
         case .writeTargetOccupied:
-            return "接上失敗：目標路徑被佔用。"
+            return L10nPanelBanner.writeTargetOccupied.text(language)
         case .renameFailed(let code):
-            return "接上失敗（錯誤碼 \(code)）。"
+            return L10nPanelBanner.renameFailed(code: code, language: language)
         case .verificationFailed:
-            return "接上後確認失敗，請再試一次。"
+            return L10nPanelBanner.verificationFailed.text(language)
         case .hookBlockedOrBroken:
             // S1-1：與按下按鈕之前 `explanationDetail` 顯示的處方共用同一句常數。
-            return InstallState.hookBlockedPrescription
+            return InstallState.hookBlockedPrescription(language)
         case .hookUnconfirmed:
-            return InstallState.hookUnconfirmedPrescription
+            return InstallState.hookUnconfirmedPrescription(language)
         }
     }
 }

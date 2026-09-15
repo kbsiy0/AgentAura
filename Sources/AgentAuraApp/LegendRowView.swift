@@ -16,6 +16,8 @@ struct LegendRowView: View {
     let legend: [LegendItem]
     /// 沒有預設值：忘了傳要是編譯錯，不是靜默沒反應（T04，D-j）。
     let onAction: (PanelAction) -> Void
+    /// T29（i18n）：沒有預設值——同 `onAction` 的理由，忘了傳要是編譯錯。
+    let language: Language
 
     var body: some View {
         HStack(spacing: 10) {
@@ -44,8 +46,8 @@ struct LegendRowView: View {
                     if hovering { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() }
                 }
                 .onDisappear { NSCursor.arrow.set() }
-                .help("改「\(item.label)」的顏色")
-                .accessibilityLabel("改「\(item.label)」的顏色")
+                .help(L10nLegend.changeColorTooltip(label: item.label, language: language))
+                .accessibilityLabel(L10nLegend.changeColorTooltip(label: item.label, language: language))
             }
             Spacer(minLength: 0)
             // T15：提示行拿掉，改 ⓘ 的 tooltip——**不是** `Button`：純資訊、沒有對應的
@@ -57,7 +59,7 @@ struct LegendRowView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .help(Text("八顆燈一起代表全部 session · 點色點改顏色"))
+                .help(Text(L10nLegend.explanation.text(language)))
         }
         .padding(.horizontal, 14)
         .frame(height: 24)

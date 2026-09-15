@@ -50,7 +50,7 @@ struct PanelPixelTests {
         for (label, sessions) in [("空 rows", [SessionState]()), ("非空 rows", [session("a", .working)])] {
             let wildModel = PanelModel.make(icon: icon, sessions: sessions, palette: Self.wildPalette,
                                             install: .notConnected, version: "1.0", optionsExpanded: false,
-                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
             let wildBitmap = try renderPanel(wildModel)
             for activity in [Activity.error, .waiting, .working, .done] {
                 let hits = wildBitmap.count(near: Self.wildPalette[activity])
@@ -61,7 +61,7 @@ struct PanelPixelTests {
 
             let defaultModel = PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                                                install: .notConnected, version: "1.0", optionsExpanded: false,
-                                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
             let defaultBitmap = try renderPanel(defaultModel)
             for activity in [Activity.error, .waiting, .working, .done] {
                 let hits = defaultBitmap.count(near: Self.wildPalette[activity])
@@ -78,7 +78,7 @@ struct PanelPixelTests {
     @Test("單列色點吃 palette：wild 四色各 ≥ 70 px；.default 渲時 wild 色 0 px（對抗式）")
     func rowDotsUsePalette() throws {
         for activity in [Activity.error, .waiting, .working, .done] {
-            let row = try #require(PanelViewModel.rows(from: [session("r", activity)]).first,
+            let row = try #require(PanelViewModel.rows(from: [session("r", activity)], language: .traditionalChinese).first,
                 "前提：至少要生得出一列")
 
             let wildHosting = NSHostingView(rootView: PanelRowView(row: row, palette: Self.wildPalette))
@@ -101,7 +101,7 @@ struct PanelPixelTests {
     /// 實測純色區從 120+ 降到 88，70 對實測 88 仍留 ~20% margin）。
     @Test("idle 列色點忽略 alpha：以 .default 渲一列 idle，全不透明的 #48484a ≥ 70 px")
     func idleRowDotIgnoresAlpha() throws {
-        let row = try #require(PanelViewModel.rows(from: [session("idle-row", .idle)]).first)
+        let row = try #require(PanelViewModel.rows(from: [session("idle-row", .idle)], language: .traditionalChinese).first)
         let hosting = NSHostingView(rootView: PanelRowView(row: row, palette: .default))
         hosting.frame = NSRect(x: 0, y: 0, width: 380, height: max(hosting.fittingSize.height, 30))
         let bitmap = try OffscreenRender.render(hosting, over: .white)
@@ -135,7 +135,7 @@ struct PanelPixelTests {
         }
 
         // (a) 列色點：真的 PanelRowView vs 同佈局但無邊線的對照組。
-        let row = try #require(PanelViewModel.rows(from: [session("a", .working)]).first)
+        let row = try #require(PanelViewModel.rows(from: [session("a", .working)], language: .traditionalChinese).first)
         let rowSize = NSSize(width: 380, height: 30)
         let rowWithRing = try pinned(PanelRowView(row: row, palette: .default), size: rowSize)
         let rowNoRing = try pinned(PanelPixelTests.NoRingRow(row: row, palette: .default), size: rowSize)
@@ -146,9 +146,9 @@ struct PanelPixelTests {
             """)
 
         // (b) 圖例色點：真的 LegendRowView vs 同佈局但無邊線的對照組。
-        let legend = LegendModel.items(for: .default)
+        let legend = LegendModel.items(for: .default, language: .traditionalChinese)
         let legendSize = NSSize(width: 380, height: 24)
-        let legendWithRing = try pinned(LegendRowView(legend: legend, onAction: { _ in }), size: legendSize)
+        let legendWithRing = try pinned(LegendRowView(legend: legend, onAction: { _ in }, language: .traditionalChinese), size: legendSize)
         let legendNoRing = try pinned(PanelPixelTests.NoRingLegend(legend: legend), size: legendSize)
         let legendDiff = try DifferingPixels.count(legendWithRing, legendNoRing)
         #expect(legendDiff >= 20, """
@@ -233,7 +233,7 @@ struct PanelPixelTests {
         // 轉發，與安裝狀態無關，只是需要一個不多不少的按鈕組合。
         let model = PanelModel.make(icon: icon, sessions: [session("a", .working)], palette: Self.wildPalette,
                                     install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                    optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                    optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         var received: [PanelAction] = []
         let hosting = NSHostingView(rootView: PanelView(model: model, onAction: { received.append($0) }))
         hosting.frame = NSRect(x: 0, y: 0, width: 380, height: max(hosting.fittingSize.height, 44))

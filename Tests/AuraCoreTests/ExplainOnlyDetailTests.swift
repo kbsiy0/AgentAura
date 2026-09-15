@@ -28,9 +28,13 @@ struct ExplainOnlyDetailTests {
 
     @Test("每一種 .explainOnly 狀態的 explanationDetail 非空")
     func explainOnlyStatesHaveNonEmptyDetail() {
-        for state in Self.explainOnlyStates {
-            let detail = state.explanationDetail
-            #expect(detail?.isEmpty == false, "\(state) 的 explanationDetail 是 nil 或空字串 —— .explainOnly 沒有按鈕，說明文字是使用者唯一能看到的行動指引")
+        // i18n：**兩種語言都要驗**。這條測的是結構性質（非空），與語言無關，
+        // 所以跑遍 `Language.allCases` 比只釘一種語言更強——它會抓到「某個狀態只翻了一半」。
+        for language in Language.allCases {
+            for state in Self.explainOnlyStates {
+                let detail = state.explanationDetail(language)
+                #expect(detail?.isEmpty == false, "\(state) 在 \(language) 的 explanationDetail 是 nil 或空字串 —— .explainOnly 沒有按鈕，說明文字是使用者唯一能看到的行動指引")
+            }
         }
     }
 
@@ -40,9 +44,12 @@ struct ExplainOnlyDetailTests {
         // 不必逐 owner 組合都各自算一次 distinct（那樣只是同一句文字重複 3 次，Set 會誤判成通過）。
         let byReason: [InstallState] = [.claudeNotFound, .broken(.occupiedByFile, owner: .unknown),
                                         .broken(.occupiedByDirectory, owner: .unknown)]
-        let details = byReason.compactMap(\.explanationDetail)
-        #expect(details.count == byReason.count, "三種原因應該都有非空文案")
-        #expect(Set(details).count == details.count, "三種原因的 explanationDetail 有重複：\(details)")
+        // i18n：互異性在每一種語言裡都必須成立（翻譯時把兩句翻成同一句也要抓到）。
+        for language in Language.allCases {
+            let details = byReason.compactMap { $0.explanationDetail(language) }
+            #expect(details.count == byReason.count, "三種原因在 \(language) 應該都有非空文案")
+            #expect(Set(details).count == details.count, "三種原因的 explanationDetail 在 \(language) 有重複：\(details)")
+        }
     }
 
     /// T13（S1-1 收尾）：`explanationDetail` 從 `.explainOnly` 專屬放寬到「7 個 broken reason
@@ -52,12 +59,16 @@ struct ExplainOnlyDetailTests {
     /// 補上另一半（explainOnly 之外的 7 個 broken reason 現在恆非空）。
     @Test(".connected／.notConnected 沒有 Reason 可講，explanationDetail 恆 nil")
     func connectedAndNotConnectedHaveNilDetail() {
-        #expect(InstallState.notConnected.explanationDetail == nil)
+        // i18n：「恆 nil」在每一種語言裡都必須成立——某個語言不小心回了空字串而不是 nil，
+        // 這裡就要抓到（`.explainOnly` 的判斷讀的正是 nil／非 nil）。
+        for language in Language.allCases {
+            #expect(InstallState.notConnected.explanationDetail(language) == nil, "\(language)")
+        }
         for owner in MountOwner.allCases {
             for verified in Verification.allCases {
                 let state = InstallState.connected(owner: owner, verified: verified)
-                #expect(state.explanationDetail == nil, """
-                    \(state) 的 explanationDetail 應為 nil，實際「\(String(describing: state.explanationDetail))」
+                #expect(Language.allCases.allSatisfy { state.explanationDetail($0) == nil }, """
+                    \(state) 的 explanationDetail 應為 nil，實際「\(String(describing: state.explanationDetail(.english)))」
                     """)
             }
         }
@@ -71,7 +82,7 @@ struct ExplainOnlyDetailTests {
         for reason in InstallState.Reason.allCases {
             for owner in MountOwner.allCases {
                 let state = InstallState.broken(reason, owner: owner)
-                #expect(state.explanationDetail?.isEmpty == false, """
+                #expect(Language.allCases.allSatisfy { state.explanationDetail($0)?.isEmpty == false }, """
                     \(state) 的 explanationDetail 是 nil 或空字串 —— T13（S1-1）要求全部 9 個
                     Reason 在按下 CTA **之前**都要有可行動的說明，不是只有 explainOnly 的兩個
                     """)
@@ -88,10 +99,13 @@ struct ExplainOnlyDetailTests {
     @Test("hookBlockedOrBroken／hookUnconfirmed 的 explanationDetail 恰為對應的共用 prescription 常數")
     func hookFailureReasonsUseSharedPrescriptionConstants() {
         for owner in MountOwner.allCases {
-            #expect(InstallState.broken(.hookBlockedOrBroken, owner: owner).explanationDetail
-                    == InstallState.hookBlockedPrescription, "owner: .\(owner)")
-            #expect(InstallState.broken(.hookUnconfirmed, owner: owner).explanationDetail
-                    == InstallState.hookUnconfirmedPrescription, "owner: .\(owner)")
+            // i18n：兩種語言都要對上各自的 prescription 常數，不是只有中文那半。
+            for language in Language.allCases {
+                #expect(InstallState.broken(.hookBlockedOrBroken, owner: owner).explanationDetail(language)
+                        == InstallState.hookBlockedPrescription(language), "owner: .\(owner) / \(language)")
+                #expect(InstallState.broken(.hookUnconfirmed, owner: owner).explanationDetail(language)
+                        == InstallState.hookUnconfirmedPrescription(language), "owner: .\(owner) / \(language)")
+            }
         }
     }
 
@@ -100,16 +114,16 @@ struct ExplainOnlyDetailTests {
         for state in Self.explainOnlyStates {
             let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: state, version: "1.0", optionsExpanded: false,
-                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
             #expect(model.showsExplanationPanel, "\(state) 的 showsExplanationPanel 應為 true")
         }
         let connected = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                        optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                        optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         #expect(!connected.showsExplanationPanel, "已接上不該走說明樣式")
         let notConnected = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                            install: .notConnected, version: "1.0", optionsExpanded: false,
-                                           launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                           launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         #expect(!notConnected.showsExplanationPanel, "notConnected 走的是有 CTA 按鈕的 .fullPanel，不是純說明樣式")
     }
 }

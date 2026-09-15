@@ -20,7 +20,7 @@ struct PanelModelConnectCTATests {
         case .notConnected: return "還沒接上"
         case .connected(let owner, let verified):
             // S2（T11 A9–A11 批次）：三個子句用「 · 」串接，owner 子句排在 verified 子句之前
-            // ——見 `InstallAffordance.healthLabel`。
+            // ——見 `InstallAffordance.healthLabel(.traditionalChinese)`。
             let ownerClause = owner == .external ? " · 你的 repo 掛載" : ""
             switch verified {
             case .verified: return "已接上" + ownerClause
@@ -71,15 +71,15 @@ struct PanelModelConnectCTATests {
     static func model(for state: InstallState) -> PanelModel {
         PanelModel.make(icon: icon, sessions: [], palette: .default,
                         install: state, version: "1.0", optionsExpanded: false,
-                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
     }
 
     @Test("每一種 InstallState：chip 文字、showsConnectCTA、CTA 文案都對得上 oracle")
     func everyInstallStateMatchesOracle() {
         for state in InstallStateAllCases.all() {
             let model = Self.model(for: state)
-            #expect(model.install.healthLabel == Self.expectedChipText(state), """
-                \(state) 的 chip 文字對不上 §3.3 的表，實際 \(model.install.healthLabel)
+            #expect(model.install.healthLabel(.traditionalChinese) == Self.expectedChipText(state), """
+                \(state) 的 chip 文字對不上 §3.3 的表，實際 \(model.install.healthLabel(.traditionalChinese))
                 """)
             #expect(model.showsConnectCTA == Self.expectedShowsConnectCTA(state.affordance), """
                 \(state) 的 showsConnectCTA 對不上 §3.1.1 的表，實際 \(model.showsConnectCTA)

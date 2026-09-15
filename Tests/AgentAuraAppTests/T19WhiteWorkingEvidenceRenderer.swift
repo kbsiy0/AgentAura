@@ -49,10 +49,10 @@ struct T19WhiteWorkingEvidenceRenderer {
 
         // (a)(b) 圖例／單列——白色 working 在面板卡片背景上，DotRing 保不保得住看得見（放大 4×，
         // 10pt／8pt 色點在原尺寸肉眼不好判斷邊線）。
-        let legend = LegendModel.items(for: .default)
-        let row = try #require(PanelViewModel.rows(from: [session("a", .working)]).first)
+        let legend = LegendModel.items(for: .default, language: .traditionalChinese)
+        let row = try #require(PanelViewModel.rows(from: [session("a", .working)], language: .traditionalChinese).first)
         let scenarios: [(name: String, view: AnyView, size: NSSize)] = [
-            ("legend", AnyView(LegendRowView(legend: legend, onAction: { _ in })), NSSize(width: 380, height: 24)),
+            ("legend", AnyView(LegendRowView(legend: legend, onAction: { _ in }, language: .traditionalChinese)), NSSize(width: 380, height: 24)),
             ("row", AnyView(PanelRowView(row: row, palette: .default)), NSSize(width: 380, height: 30)),
         ]
         for scenario in scenarios {

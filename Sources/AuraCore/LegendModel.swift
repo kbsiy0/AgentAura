@@ -8,19 +8,24 @@ public struct LegendItem: Equatable, Sendable, Identifiable {
 
 public enum LegendModel {
     /// 順序＝`Activity.customizable`；每項的 label／色分別取自 `label(_:)`／`palette`。
-    public static func items(for palette: IconPalette) -> [LegendItem] {
+    ///
+    /// T27（i18n）：`language` **帶預設值 `.traditionalChinese`**（同 `Jargon`／`PanelViewModel.rows`
+    /// 的 T27 理由）——`Tests/AgentAuraAppTests`（`PanelPixelTests`／`T19WhiteWorkingEvidenceRenderer`）
+    /// 直接呼叫這個函式量像素尺寸，不關心語言；生產路徑（`PanelModel.make`）明確傳 `language`。
+    public static func items(for palette: IconPalette, language: Language) -> [LegendItem] {
         Activity.customizable.map { activity in
-            LegendItem(activity: activity, label: label(activity), color: palette[activity])
+            LegendItem(activity: activity, label: label(activity, language: language), color: palette[activity])
         }
     }
 
-    /// 窮盡 switch，供 `items(for:)` 內部使用。D-c 的具體字串。
-    static func label(_ activity: Activity) -> String {
+    /// 窮盡 switch，供 `items(for:)` 內部使用。`OptionsMenuModel.lightBarWarning` 也借用它
+    /// 組提醒句（同一個 oracle，不重複維護一份 Activity→人話的對應）。
+    static func label(_ activity: Activity, language: Language) -> String {
         switch activity {
-        case .error:   return "錯誤"
-        case .waiting: return "等你"
-        case .working: return "執行中"
-        case .done:    return "已完成"
+        case .error:   return L10nLegend.error.text(language)
+        case .waiting: return L10nLegend.waiting.text(language)
+        case .working: return L10nLegend.working.text(language)
+        case .done:    return L10nLegend.done.text(language)
         case .idle:    return ""
         }
     }

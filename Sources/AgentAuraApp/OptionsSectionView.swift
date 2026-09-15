@@ -19,7 +19,7 @@ struct OptionsSectionView: View {
         OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                               isDefaultPalette: model.isDefaultPalette,
                               systemReduceMotion: model.systemReduceMotion, userReduceMotion: model.userReduceMotion,
-                              iconPlate: model.iconPlate, palette: model.palette)
+                              iconPlate: model.iconPlate, palette: model.palette, language: model.language)
     }
 
     var body: some View {
@@ -33,7 +33,7 @@ struct OptionsSectionView: View {
             // 會變成一面「列牆」（Amphetamine 只在群組之間放分隔線）。第一列前面不用再畫。
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 if index > 0, rows[index - 1].group != row.group { Divider().padding(.leading, 32) }
-                OptionsRowContent(row: row, onAction: onAction)
+                OptionsRowContent(row: row, onAction: onAction, language: model.language)
             }
             // §3.1：connected(owner: .external, _) 時多一行灰字寫掛載目標——自己的群組，
             // 前面補一條分隔線（不再依賴舊版「每列後面都有」留下的那一條）。
@@ -60,6 +60,8 @@ struct OptionsSectionView: View {
 struct OptionsRowContent: View {
     let row: OptionsRow
     let onAction: (PanelAction) -> Void
+    /// T29（i18n）：沒有預設值——開／關字樣（`toggleValue` 分支）需要它。
+    let language: Language
 
     var body: some View {
         if let toggleValue = row.toggleValue {
@@ -78,7 +80,7 @@ struct OptionsRowContent: View {
                 // 一樣（診斷量到 0 px 差異）——同 CLAUDE.md 的 gate 哲學：渲不出來的狀態
                 // 指示，我們就沒有辦法驗證使用者看不看得到。`Toggle` 保留（真的觸發互動），
                 // 但狀態另外自己畫一個字樣＋顏色，兩者都是渲染保證畫得出來的。
-                Text(toggleValue ? "開" : "關")
+                Text(toggleValue ? L10nOptionsMenuRows.toggleOn.text(language) : L10nOptionsMenuRows.toggleOff.text(language))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(toggleValue ? Color(rgba: HealthTone.ok.color) : .secondary)
                 Toggle("", isOn: Binding(get: { toggleValue }, set: { _ in onAction(row.action) }))
@@ -139,6 +141,7 @@ private struct OptionsRowIconView: View {
         case .toggleOptions: "ellipsis.circle"
         case .dismissBanner: "xmark"
         case .replaceExternalMount: "arrow.2.squarepath"
+        case .setLanguage: "globe"
         }
     }
 }

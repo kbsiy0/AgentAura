@@ -25,7 +25,7 @@ struct PanelModelBannerTests {
     static func model(sessions: [SessionState], banner: PanelBanner?) -> PanelModel {
         PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                         install: .notConnected, version: "1.0", optionsExpanded: false,
-                        launchAtLogin: nil, externalTargetPath: nil, banner: banner, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                        launchAtLogin: nil, externalTargetPath: nil, banner: banner, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
     }
 
     @Test("前提：rows 空、無 banner → .fullPanel；有列、無 banner → .banner")
@@ -36,14 +36,14 @@ struct PanelModelBannerTests {
 
     @Test("banner != nil 且 rows 非空（本應是 .banner）→ 降級為 .none，banner 贏")
     func bannerDegradesCTABannerToNone() {
-        let model = Self.model(sessions: [Self.session("a")], banner: .disconnected())
+        let model = Self.model(sessions: [Self.session("a")], banner: .disconnected(language: .traditionalChinese))
         #expect(model.banner != nil)
         #expect(model.connectCTAStyle == .none, "有 banner 時 CTA 不得再顯示成另一條窄條——畫面上方只准一條")
     }
 
     @Test("banner != nil 且 rows 空（.fullPanel）→ 並存，CTA 仍是 .fullPanel")
     func bannerCoexistsWithFullPanelCTA() {
-        let model = Self.model(sessions: [], banner: .disconnected())
+        let model = Self.model(sessions: [], banner: .disconnected(language: .traditionalChinese))
         #expect(model.banner != nil)
         #expect(model.connectCTAStyle == .fullPanel, """
             rows 空的整版 CTA 與 banner 可以並存，banner 只是疊在上面，不吃掉整版 CTA
@@ -55,7 +55,7 @@ struct PanelModelBannerTests {
         let model = PanelModel.make(icon: Self.icon, sessions: [], palette: .default,
                                     install: .connected(owner: .thisApp, verified: .verified),
                                     version: "1.0", optionsExpanded: false,
-                                    launchAtLogin: nil, externalTargetPath: nil, banner: .connected(), systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                    launchAtLogin: nil, externalTargetPath: nil, banner: .connected(language: .traditionalChinese), systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         #expect(model.connectCTAStyle == .none)
     }
 
@@ -66,17 +66,17 @@ struct PanelModelBannerTests {
     /// 之後自動退場——不需要使用者按 ✕。
     @Test("A7：connected banner 在真的出現第一個 session 之後自動消失")
     func connectedBannerClearsOnceSessionAppears() {
-        let withoutRows = Self.model(sessions: [], banner: .connected())
+        let withoutRows = Self.model(sessions: [], banner: .connected(language: .traditionalChinese))
         #expect(withoutRows.effectiveBanner != nil, "還沒有任何 session 之前，成功 banner 應該還在")
 
-        let withRows = Self.model(sessions: [Self.session("a")], banner: .connected())
+        let withRows = Self.model(sessions: [Self.session("a")], banner: .connected(language: .traditionalChinese))
         #expect(withRows.effectiveBanner == nil, "已經出現第一個 session（banner 宣稱的條件已滿足），成功 banner 應該自動清除")
         #expect(withRows.banner != nil, "banner 這個原始欄位（AppDelegate 存的那份）不受影響——effectiveBanner 只是顯示層推導")
     }
 
     @Test("A7：其餘 banner（disconnected／error／alreadyConnected）不因 rows 非空自動消失")
     func nonConnectedKindBannersDoNotAutoClear() {
-        for banner in [PanelBanner.disconnected(), .error("x"), .alreadyConnected(target: nil)] {
+        for banner in [PanelBanner.disconnected(language: .traditionalChinese), .error("x"), .alreadyConnected(target: nil, language: .traditionalChinese)] {
             let model = Self.model(sessions: [Self.session("a")], banner: banner)
             #expect(model.effectiveBanner != nil, "\(banner.kind) 不該因為 rows 非空就自動消失")
         }
@@ -89,22 +89,22 @@ struct PanelModelBannerTests {
         let replaceExternal = PanelModel.make(icon: Self.icon, sessions: [], palette: .default,
                                               install: .broken(.hookMissing, owner: .external), version: "1.0",
                                               optionsExpanded: false, launchAtLogin: nil,
-                                              externalTargetPath: "/Users/dev/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                              externalTargetPath: "/Users/dev/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         #expect(replaceExternal.connectCTASubtitle == "現有掛載指向：/Users/dev/repo/plugin")
 
         let connect = PanelModel.make(icon: Self.icon, sessions: [], palette: .default,
                                       install: .notConnected, version: "1.0", optionsExpanded: false,
-                                      launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                      launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         #expect(connect.connectCTASubtitle == nil, ".connect affordance 沒有「現有掛載指向」可顯示")
     }
 
     @Test("A5：mountReplaced(from:) 文案明說原掛載路徑；nil 時不留懸空括號")
     func mountReplacedTextMentionsPriorTarget() {
-        let withTarget = PanelBanner.mountReplaced(from: "/Users/dev/repo/plugin")
+        let withTarget = PanelBanner.mountReplaced(from: "/Users/dev/repo/plugin", language: .traditionalChinese)
         #expect(withTarget.text.contains("/Users/dev/repo/plugin"), "應該明說原掛載路徑，實際「\(withTarget.text)」")
         #expect(withTarget.kind == .connected, "mountReplaced 沿用 .connected kind（視覺上仍是成功樣式）")
 
-        let withoutTarget = PanelBanner.mountReplaced(from: nil)
+        let withoutTarget = PanelBanner.mountReplaced(from: nil, language: .traditionalChinese)
         #expect(!withoutTarget.text.contains("（原掛載："), "target 為 nil 時不該留下懸空的「（原掛載：」，實際「\(withoutTarget.text)」")
     }
 }

@@ -16,7 +16,7 @@ struct PanelFooterView: View {
             Circle()
                 .fill(Color(rgba: model.install.healthTone.color))
                 .frame(width: 8, height: 8)
-            Text("\(model.install.healthLabel) · v\(model.version)")
+            Text("\(model.install.healthLabel(model.language)) · v\(model.version)")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

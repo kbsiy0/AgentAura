@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import AgentAuraApp
+import AuraCore
 import AuraHookFile
 
 /// T24：`Uninstaller`——D-1「完整移除」的五個動作。`AppDelegatePanelActionsWiredTests+Uninstall`
@@ -85,7 +86,7 @@ struct UninstallerTests {
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
                    recycler: rig.recycler, bundleURL: URL(fileURLWithPath: "/tmp/fake.app"),
-                   terminator: rig.terminator).run()
+                   terminator: rig.terminator, language: .traditionalChinese).run()
 
         #expect(rig.loginItem.setCallCount == 1, "應該呼叫 loginItem.set(false) 一次")
         #expect(rig.loginItem.isEnabled == false)
@@ -107,7 +108,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: orderChecker, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator).run()
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese).run()
 
         #expect(orderChecker.setCallCount == 1)
         #expect(orderChecker.markerPresentWhenCalled == true, """
@@ -124,7 +125,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: nil, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator).run()
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese).run()
 
         #expect(rig.defaults.object(forKey: "someKey") as? String == "x", """
             bundleIdentifier 為 nil 時不該呼叫 removePersistentDomain——那會是清掉一個
@@ -140,7 +141,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator).run()
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese).run()
 
         #expect(rig.recycler.recycledURLs.isEmpty, "bundleURL 為 nil 時不該呼叫 recycler")
         #expect(rig.terminator.terminateImmediatelyCallCount == 1)
@@ -155,7 +156,7 @@ struct UninstallerTests {
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
                    recycler: rig.recycler, bundleURL: URL(fileURLWithPath: "/tmp/fake.app"),
-                   terminator: rig.terminator).run()
+                   terminator: rig.terminator, language: .traditionalChinese).run()
 
         #expect(rig.recycler.recycledURLs.count == 1, "應該已經呼叫 recycler.recycle")
         #expect(rig.terminator.terminateImmediatelyCallCount == 0, """
@@ -182,7 +183,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator).run()
+                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator, language: .traditionalChinese).run()
 
         await wait(upTo: 2) { rig.terminator.terminateImmediatelyCallCount == 1 }
         #expect(rig.terminator.terminateImmediatelyCallCount == 1, "recycle 失敗不該卡住 terminate")
@@ -203,7 +204,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator).run()
+                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator, language: .traditionalChinese).run()
 
         await wait(upTo: 2) { rig.terminator.terminateImmediatelyCallCount == 1 }
         let logURL = rig.stateHome.appendingPathComponent(UninstallFailureLog.filename)
@@ -218,7 +219,7 @@ struct UninstallerTests {
         let uninstaller = Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                                       bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory,
                                       homeDirectory: rig.stateHome, recycler: rig.recycler,
-                                      bundleURL: nil, terminator: rig.terminator)
+                                      bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese)
         uninstaller.run()
         uninstaller.run()   // 全部東西都已經不在了
 

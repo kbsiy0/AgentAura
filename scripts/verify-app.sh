@@ -32,9 +32,21 @@ if [ -x "$PLUGIN/bin/aura-hook" ]; then
 else
   bad "缺 $PLUGIN/bin/aura-hook 或不可執行 —— 先跑 scripts/build-app.sh（gitignored 建置產物）"
 fi
-[ -f "$APP/Contents/Resources/help.html" ] \
-  && ok "help.html 在 bundle 裡" \
-  || bad "缺 $APP/Contents/Resources/help.html —— 先跑 scripts/build-app.sh"
+# T30（i18n）：說明文件依語言拆成 help-*.html，逐一檢查每個 repo 裡的來源檔都有
+# 被複製進 bundle（同 build-app.sh 的 glob，不手抄語言清單）。
+shopt -s nullglob
+help_docs=(Resources/help-*.html)
+shopt -u nullglob
+if [ ${#help_docs[@]} -eq 0 ]; then
+  bad "repo 裡找不到任何 Resources/help-*.html"
+else
+  for f in "${help_docs[@]}"; do
+    name=$(basename "$f")
+    [ -f "$APP/Contents/Resources/$name" ] \
+      && ok "$name 在 bundle 裡" \
+      || bad "缺 $APP/Contents/Resources/$name —— 先跑 scripts/build-app.sh"
+  done
+fi
 
 echo "== 2. 造三個假狀態（waiting / working / error）=="
 mkdir -p "$ROOT"

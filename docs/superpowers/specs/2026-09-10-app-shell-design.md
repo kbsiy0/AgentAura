@@ -956,3 +956,11 @@ Tests/AgentAuraAppTests/{ShellWiringTests,FooterPixelTests}.swift
     **本輪不做**，已在 `docs/INSTALL.md` 補「找不到選單列圖示？」一節（按住 Command 拖曳挪位）。
     **可做而未做**：接上成功後在面板上直接告訴使用者圖示在哪、看不到時怎麼辦——這一格打在
     「非工程師第一次裝完」的路徑上，優先度不低。
+15. **`BundleRecycling.recycle` 的 completion 有一個 Swift 6 嚴格併發警告**
+    （`capture of 'completion' with non-Sendable type in a '@Sendable' closure`）。
+    **試過修，還原了**：把 `completion` 標 `@Sendable` 會把問題往上推一層——
+    `Uninstaller.recycleBundleAndTerminate` 捕獲的 `any AppTerminating` 也非 Sendable，
+    要一路標下去會動到 `AppTerminating`／`RealTerminator`／測試替身一整串。
+    **行為上沒有風險**：那個回呼實際上已經用 `Task { @MainActor in }` 跳回主執行緒，
+    警告講的是型別系統看不出這件事，不是真的有資料競爭。
+    修的收益（少一個警告）小於改動範圍（四個型別加測試替身），留著。

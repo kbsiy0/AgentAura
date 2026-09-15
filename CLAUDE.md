@@ -39,7 +39,7 @@ plugin/                 Claude Code plugin（bin/ 是建置產物，gitignored�
 docs/superpowers/specs/2026-09-08-agentaura-design.md  ★ 正典設計，衝突以它為準
 docs/2026-09-11-subagent-state-priority-audit.html     ★ subagent 優先序的設計與實測證據
 docs/INSTALL.md         ★ 安裝／移除／疑難排解
-Resources/help.html     ★ bundle 內離線說明（D-l，隨 build-app.sh 複製進 app）
+Resources/help-*.html   ★ bundle 內離線說明，依語言分檔（D-l／T30，隨 build-app.sh 複製進 app）
 scripts/                build-plugin · build-app · verify-install · verify-app · measure-cpu
 ```
 

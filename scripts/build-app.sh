@@ -25,7 +25,19 @@ lipo -create -output "$APP/Contents/MacOS/AgentAuraApp" \
   .build/arm64-apple-macosx/release/AgentAuraApp \
   .build/x86_64-apple-macosx/release/AgentAuraApp
 cp Resources/Info.plist "$APP/Contents/Info.plist"
-cp Resources/help.html "$APP/Contents/Resources/help.html"
+
+echo "==> 複製說明文件（依語言，T30／i18n）"
+# 不手抄「有哪些語言」：glob 出 Resources/help-*.html 全部複製，命名規則跟
+# `AppDelegate+PanelActions.helpResourceName(for:)`（help-<Language.rawValue>.html）
+# 是同一條，哪天 Language 真的加第三個 case，這裡不用改，只要多放一個對應檔名的資源檔。
+shopt -s nullglob
+help_docs=(Resources/help-*.html)
+shopt -u nullglob
+if [ ${#help_docs[@]} -eq 0 ]; then
+  echo "!! 找不到任何 Resources/help-*.html" >&2
+  exit 1
+fi
+cp "${help_docs[@]}" "$APP/Contents/Resources/"
 
 echo "==> 複製 plugin/ 進 bundle（D-g）"
 cp -R plugin "$APP/Contents/Resources/plugin"
@@ -40,7 +52,10 @@ test -x "$APP/Contents/MacOS/AgentAuraApp"
 # 「看起來裝好了、按接上其實壞掉」的 bundle。
 test -x "$APP/Contents/Resources/plugin/bin/aura-hook" \
   || { echo "!! 複製後 aura-hook 掉了可執行位元" >&2; exit 1; }
-test -f "$APP/Contents/Resources/help.html"
+for f in "${help_docs[@]}"; do
+  test -f "$APP/Contents/Resources/$(basename "$f")" \
+    || { echo "!! 複製後缺 $(basename "$f")" >&2; exit 1; }
+done
 
 echo "==> ad-hoc 簽章（未簽章的 bundle 在部分系統設定下無法啟動；巢狀 Mach-O 一併簽）"
 # 順序重要：codesign 必須在複製 plugin/ 之後跑，這樣 --deep 才會把

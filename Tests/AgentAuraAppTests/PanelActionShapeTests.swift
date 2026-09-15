@@ -35,4 +35,12 @@ struct PanelActionShapeTests {
         }
         #expect(Set(activities) == Set(Activity.customizable), "pickColor 應覆蓋 Activity.customizable 全部四個值")
     }
+
+    /// T26：`.setLanguage` 同 `.setLaunchAtLogin`（N7）——兩個語言都要送，不能只送一個代表值。
+    @Test("setLanguage 的 samples 同時含兩個 Language（N7 明確要求的那個反例）")
+    func setLanguageCoversBothLanguages() {
+        let samples = PanelAction.samples(.setLanguage)
+        #expect(samples.contains(.setLanguage(.english)))
+        #expect(samples.contains(.setLanguage(.traditionalChinese)))
+    }
 }

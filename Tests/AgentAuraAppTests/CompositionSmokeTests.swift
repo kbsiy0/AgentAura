@@ -248,4 +248,31 @@ struct CompositionSmokeTests {
             實際 spy=\(String(describing: spy.installStates.last)) delegate=\(delegate.installState)
             """)
     }
+
+    /// D-5(4)：語言預設英文——composition root smoke（不是只測 `LanguagePreference` 單體，
+    /// 那個在 `LanguagePreferenceTests` 已經測過；這裡驗證 `AppDelegate` 真的在啟動時
+    /// 呼叫了 `loadLanguage()` 並轉發到面板 model，`Tested≠wired`（Lessons #5）——
+    /// 忘了接線的話 `delegate.language` 會停在型別的預設值，這條測試分不出兩者，所以
+    /// **同時**斷言 `delegate.language` 與 `spy.panels.last?.language` 兩層。
+    /// 用全新 `UserDefaults` suite（不是 `.standard`）確保「未設定偏好」這個前提是真的。
+    @MainActor
+    @Test("D-5(4)：全新 UserDefaults（未設定語言偏好）下，AppDelegate 啟動後 language 是 .english")
+    func languageDefaultsToEnglishOnFreshInstall() async throws {
+        let root = try makeRoot()
+        let suite = "io.agentaura.tests.langdefault.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let spy = SpyRenderer()
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults, makeRenderer: { spy })
+        delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
+        defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
+
+        #expect(delegate.language == .english, "未設定偏好時 delegate.language 應為 .english，實際 \(delegate.language)")
+        await wait(upTo: 5) { !spy.panels.isEmpty }
+        #expect(spy.panels.last?.language == .english, """
+            delegate.language 是 .english，但面板 model 收到的是 \(String(describing: spy.panels.last?.language))——
+            沒有真的轉發到 PanelModel.make，是 tested≠wired
+            """)
+    }
 }

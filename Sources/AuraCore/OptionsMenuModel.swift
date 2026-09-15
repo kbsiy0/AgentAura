@@ -64,16 +64,22 @@ public enum OptionsMenuModel {
     /// T12（B5）：`systemReduceMotion`／`userReduceMotion` 各自是系統值與使用者偏好——
     /// 「減少動態」列的 disabled／subtitle 只看系統值，toggleValue 看兩者的 OR（與
     /// `AnimationDriver.setUserReduceMotion` 同一個 oracle，不在這裡重算一份平行邏輯）。
+    /// T26（i18n）：`language` 帶預設值 `.traditionalChinese`——現況（此檔其餘 ~10 列，見
+    /// `L10nStrayLiteralSourceScanTests.pendingMigrationFiles`）。跟 `PanelModel.make` 的
+    /// `language:`（G13 式無預設）不同：這裡沒有等價的「猜錯會顯示使用者從未同意過的畫面」
+    /// 那種安全疑慮（見 `PanelModel.swift` doc comment），給預設值能讓既有 ~15 個呼叫點
+    /// （只關心 kind／isDisabled／toggleValue，不關心語言）維持不變，符合 D-4「這輪受影響的
+    /// 很少」——生產路徑（`OptionsSectionView`）明確傳 `model.language`，不吃這個預設值。
     public static func rows(install: InstallState, launchAtLogin: Bool?, isDefaultPalette: Bool,
                             systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool,
-                            palette: IconPalette) -> [OptionsRow] {
+                            palette: IconPalette, language: Language) -> [OptionsRow] {
         var rows: [OptionsRow] = []
 
-        rows.append(OptionsRow(title: "說明與快速上手…", action: .openHelp, isDisabled: false,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.help.text(language), action: .openHelp, isDisabled: false,
                                toggleValue: nil, group: .help))
         if let launchAtLogin {
             // 觸發時把值反過來（按下＝切換），toggleValue 帶目前值供 view 畫開關位置。
-            rows.append(OptionsRow(title: "開機自動啟動", action: .setLaunchAtLogin(!launchAtLogin),
+            rows.append(OptionsRow(title: L10nOptionsMenuRows.launchAtLogin.text(language), action: .setLaunchAtLogin(!launchAtLogin),
                                    isDisabled: false, toggleValue: launchAtLogin, group: .settings))
         }
         // B5：系統已強制時開關顯示為開且 disabled（按了也沒用——系統值贏），
@@ -86,13 +92,13 @@ public enum OptionsMenuModel {
         let reduceMotionOn = systemReduceMotion || userReduceMotion
         let reduceMotionSubtitle: String?
         if systemReduceMotion {
-            reduceMotionSubtitle = "已在系統設定開啟"
+            reduceMotionSubtitle = L10nOptionsMenuRows.reduceMotionForcedBySystem.text(language)
         } else if userReduceMotion {
-            reduceMotionSubtitle = "動畫關閉後，「等你」與「錯誤」只靠顏色區分"
+            reduceMotionSubtitle = L10nOptionsMenuRows.reduceMotionUserEnabledWarning.text(language)
         } else {
             reduceMotionSubtitle = nil
         }
-        rows.append(OptionsRow(title: "減少動態", subtitle: reduceMotionSubtitle,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.reduceMotion.text(language), subtitle: reduceMotionSubtitle,
                                action: .setReduceMotion(!reduceMotionOn),
                                isDisabled: systemReduceMotion, toggleValue: reduceMotionOn, group: .settings))
         // T16：底板讓 LED 對比在深淺模式／任何桌布下恆定（M4 選 A2 的理由）；關掉後
@@ -101,30 +107,39 @@ public enum OptionsMenuModel {
         // 使用者把 working 改成白色之後，底板關掉會讓它在淺色選單列上幾乎消失（1.12:1），
         // 這件事跟「使用者現在正在看的這個開關」直接相關，help.html 的靜態文字不會主動跳出來，
         // 所以借用既有的 `subtitle` 欄位（跟「減少動態」那條可及性提醒同一套機制，B5）。
-        rows.append(OptionsRow(title: "燈條底板", subtitle: lightBarWarning(iconPlate: iconPlate, palette: palette),
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.iconPlate.text(language),
+                               subtitle: lightBarWarning(iconPlate: iconPlate, palette: palette, language: language),
                                action: .setIconPlate(!iconPlate), isDisabled: false,
                                toggleValue: iconPlate, group: .settings))
-        rows.append(OptionsRow(title: "重設顏色", action: .resetColors, isDisabled: isDefaultPalette,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.resetColors.text(language), action: .resetColors, isDisabled: isDefaultPalette,
                                toggleValue: nil, group: .settings))
-        rows.append(OptionsRow(title: "重新接上 Claude Code", action: .connect, isDisabled: false,
+        // T26（i18n）：D-1 示範 2/3、3/3——標題（純靜態）與副標（帶參數，插值目標語言的
+        // 自稱）都來自字串表，不是 view 自己拼。不用 toggleValue（語言不是二元開/關語意，
+        // 是「選了哪一個」）——比照 `resetColors`／`connect` 這種純點擊列，同群（.settings）。
+        let otherLanguage: Language = language == .english ? .traditionalChinese : .english
+        rows.append(OptionsRow(title: L10nOptionsMenu.languageRowTitle.text(language),
+                               subtitle: L10nOptionsMenu.languageRowSubtitle(switchingTo: otherLanguage, displayLanguage: language),
+                               action: .setLanguage(otherLanguage), isDisabled: false,
+                               toggleValue: nil, group: .settings))
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.reconnect.text(language), action: .connect, isDisabled: false,
                                toggleValue: nil, group: .mount))
         if case .connected(_, .unknown) = install {
-            rows.append(OptionsRow(title: "再檢查一次", action: .recheckHook, isDisabled: false,
+            rows.append(OptionsRow(title: L10nOptionsMenuRows.recheckHook.text(language), action: .recheckHook, isDisabled: false,
                                    toggleValue: nil, group: .mount))
         }
-        rows.append(OptionsRow(title: "移除掛載…", action: .disconnect, isDisabled: false,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.disconnect.text(language), action: .disconnect, isDisabled: false,
                                toggleValue: nil, group: .mount))
         // T24：與「移除掛載…」同群（.mount）、緊接在它後面——語意上都屬於「拆掉這個 App
         // 跟系統的關係」，差別只是範圍大小（掛載 vs 全部）。恆在、不因 install 狀態隱藏
         // （即使從沒接上過，登入項目／偏好設定仍可能存在，完整移除仍要能做）。
-        rows.append(OptionsRow(title: "完整移除 AgentAura…", action: .uninstall, isDisabled: false,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.uninstall.text(language), action: .uninstall, isDisabled: false,
                                toggleValue: nil, group: .mount))
-        rows.append(OptionsRow(title: "關於 AgentAura", action: .about, isDisabled: false,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.about.text(language), action: .about, isDisabled: false,
                                toggleValue: nil, group: .about))
         // B2：Amphetamine 的 Feedback & Support 對應——開 GitHub issues（見 `ProjectLinks.newIssue`）。
-        rows.append(OptionsRow(title: "回報問題…", action: .reportIssue, isDisabled: false,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.reportIssue.text(language), action: .reportIssue, isDisabled: false,
                                toggleValue: nil, group: .about))
-        rows.append(OptionsRow(title: "離開 AgentAura ⌘Q", action: .quit, isDisabled: false,
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.quit.text(language), action: .quit, isDisabled: false,
                                toggleValue: nil, group: .quit))
 
         return rows
@@ -134,11 +149,11 @@ public enum OptionsMenuModel {
     /// （`ContrastCheck.lowOnLightBar`）時給提醒；底板開時恆 nil（有底板就沒有這個問題，
     /// 白色 18.40:1）。命名具體出問題的狀態（而不是籠統講「顏色」或猜色名）——
     /// 使用者可能改的不是 working，點出「哪一個」比講「白色」更準也更泛用。
-    private static func lightBarWarning(iconPlate: Bool, palette: IconPalette) -> String? {
+    private static func lightBarWarning(iconPlate: Bool, palette: IconPalette, language: Language) -> String? {
         guard !iconPlate else { return nil }
         let dim = Activity.customizable.filter { ContrastCheck.lowOnLightBar(palette[$0]) }
         guard !dim.isEmpty else { return nil }
-        let names = dim.map { "「\(LegendModel.label($0))」" }.joined(separator: "、")
-        return "底板關閉時，\(names)的顏色在淺色選單列上幾乎看不見"
+        let names = dim.map { LegendModel.label($0, language: language) }
+        return L10nOptionsMenuRows.lightBarWarning(names: names, language: language)
     }
 }

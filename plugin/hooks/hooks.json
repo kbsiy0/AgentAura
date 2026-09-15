@@ -1,5 +1,5 @@
 {
-  "description": "把 Claude Code 的運行狀態寫進 ~/.agentaura/sessions/，供 menu bar app 讀取",
+  "description": "Writes Claude Code's running status to ~/.agentaura/sessions/ for the menu bar app to read",
   "hooks": {
     "SessionStart": [
       {

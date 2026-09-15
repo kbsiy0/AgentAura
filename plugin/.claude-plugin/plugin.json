@@ -1,7 +1,7 @@
 {
   "name": "agentaura",
   "version": "0.1.0",
-  "description": "把 Claude Code 的運行狀態顯示在 macOS menu bar",
+  "description": "Shows Claude Code's running status in the macOS menu bar",
   "author": {
     "name": "AgentAura",
     "email": ""

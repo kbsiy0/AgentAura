@@ -107,7 +107,8 @@ final class StatusItemController: IconRendering {
         setPanel(PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                  install: .notConnected, version: "", optionsExpanded: false,
                                  launchAtLogin: nil, externalTargetPath: nil, banner: nil,
-                                 systemReduceMotion: false, userReduceMotion: false, iconPlate: true))
+                                 systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
+                                 language: .english))
     }
 
     /// 首次建 `NSHostingController` 並設 `sizingOptions = [.preferredContentSize]`
@@ -115,6 +116,9 @@ final class StatusItemController: IconRendering {
     /// review r3 I-b 實測）；之後只換 `rootView`。`model` 未變就跳過（D-j：`isContinuous` 拖曳
     /// 每秒數十次 `onChange`，重建 controller 會閃）。
     func setPanel(_ model: PanelModel) {
+        // 語言先記下來再比對 model——`guard model != lastModel` 會在 model 沒變時提早返回，
+        // 但那時語言本來就沒變，所以不會漏。放在 guard 之前只是讓意圖更明確。
+        if language != model.language { language = model.language; updateTooltip() }
         guard model != lastModel else { return }
         let view = PanelView(model: model, onAction: panelOnAction)
         if let hostingController {
@@ -170,8 +174,12 @@ final class StatusItemController: IconRendering {
     var isVisible: Bool { item.isVisible }
 
     // T11（S0-2）：tooltip 依賴兩個獨立輸入（動畫幀 vs 安裝狀態），各自存最後一次收到的值。
-    private var lastAppearance = AppearancePolicy.appearance(for: .empty)
-    private var installState: InstallState = .notConnected
+    var lastAppearance = AppearancePolicy.appearance(for: .empty)
+    var installState: InstallState = .notConnected
+    /// T28 接線：tooltip 也要跟著語言走。`setPanel` 是唯一的傳遞路徑——`PanelModel` 每次
+    /// `refreshPanel()` 都帶著當下語言過來，同 `installState` 走 `setInstallState` 的理由
+    /// （單一匯集點，不另外開一條會漂掉的平行路徑）。預設 `.english` 對齊 D-2。
+    var language: Language = .english
 
     func apply(_ appearance: IconAppearance, phase: Double) {
         drawing.update(appearance, phase: phase)
@@ -184,16 +192,4 @@ final class StatusItemController: IconRendering {
         updateTooltip()
     }
 
-    /// T16：轉發到 `drawing`（自己管 `needsDisplay`，同 `update(_:phase:)` 的模式）。
-    func setIconPlate(_ shows: Bool) { drawing.setShowsPlate(shows) }
-
-    private func updateTooltip() {
-        item.button?.toolTip = TooltipText.text(appearance: lastAppearance, install: installState)
-    }
-
-    /// 測試觀測用：真的 `NSStatusItem.button.toolTip`，不是重算一份平行邏輯。
-    var currentTooltip: String? { item.button?.toolTip }
-
-    /// 舊窄簽章轉發（`PanelHostingTests.tooltipNeverNegative` 對齊，不必跟著改）。
-    static func tooltip(for a: IconAppearance) -> String { TooltipText.sessionSummary(a) }
 }

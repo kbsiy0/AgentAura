@@ -14,7 +14,7 @@ struct BannerLifecycleRenderTests {
 
     @Test("banner ✕ 的可點區 ≥ 20×20pt")
     func dismissButtonHitAreaIsAtLeast20pt() throws {
-        let hosting = NSHostingView(rootView: BannerView(banner: .connected(), onAction: { _ in }))
+        let hosting = NSHostingView(rootView: BannerView(banner: .connected(language: .traditionalChinese), onAction: { _ in }))
         hosting.frame = NSRect(x: 0, y: 0, width: 380, height: max(hosting.fittingSize.height, 30))
         _ = try OffscreenRender.render(hosting, over: .white)   // 強迫 layout，AppKit 橋接的按鈕才真的存在
 

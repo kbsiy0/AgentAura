@@ -73,7 +73,7 @@ struct FooterPositionStabilityTests {
         return PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                                install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
                                optionsExpanded: optionsExpanded, launchAtLogin: true, externalTargetPath: nil,
-                               banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                               banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
     }
 
     /// footer 的「Options」按鈕在真的 `NSHostingController.view` 座標系裡的 `minY`

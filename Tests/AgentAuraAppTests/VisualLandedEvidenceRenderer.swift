@@ -51,14 +51,14 @@ struct VisualLandedEvidenceRenderer {
         return PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                                install: .connected(owner: .thisApp, verified: .verified), version: "1.4.2",
                                optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil,
-                               systemReduceMotion: false, userReduceMotion: false, iconPlate: true, now: now)
+                               systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese, now: now)
     }
 
     func stateBModel() -> PanelModel {
         PanelModel.make(icon: .empty, sessions: [], palette: .default,
                         install: .broken(.hookBlockedOrBroken, owner: .thisApp), version: "1.4.2",
                         optionsExpanded: false, launchAtLogin: true, externalTargetPath: nil, banner: nil,
-                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
     }
 
     func render(_ model: PanelModel, over background: NSColor, appearance: NSAppearance.Name) throws -> CGImage {

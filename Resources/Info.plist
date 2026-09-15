@@ -14,7 +14,15 @@
     <key>LSUIElement</key><true/>
     <!-- T13（persona 附帶發現）：沒有這個鍵，標準「關於」面板不會有版權行。
          README §授權目前是「尚未決定（開源時確定）」，這裡照實寫，不瞎掰授權名字
-         （同 AboutContent.swift 的 license 常數，同一個病族）。 -->
-    <key>NSHumanReadableCopyright</key><string>版權：尚未決定（開源時確定）</string>
+         （同 AboutContent.swift 的 license 常數，同一個病族）。
+         T30（i18n）：固定英文，不隨面板顯示語言切換——查過 AppKit 標頭
+         （NSApplication.h 的 NSAboutPanelOptionKey 只有 Credits／ApplicationName／
+         ApplicationIcon／Version／ApplicationVersion 五個鍵，沒有 Copyright 的覆寫點），
+         standard about panel 的版權行只能從執行中 bundle 的 Info.plist 讀，而 Info.plist
+         的在地化只能靠 InfoPlist.strings＋.lproj，那條路是跟系統語言走、不是跟面板的
+         `language` 偏好走——兩者必然不同步（中文系統可能拿到中文版權行配英文介面）。
+         裁決：固定英文，known gap 記在
+         docs/superpowers/specs/2026-09-14-i18n-design.md 的 D-7。 -->
+    <key>NSHumanReadableCopyright</key><string>Copyright: not yet decided (to be finalized upon open-sourcing)</string>
 </dict>
 </plist>

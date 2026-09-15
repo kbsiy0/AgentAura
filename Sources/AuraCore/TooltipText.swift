@@ -10,12 +10,17 @@
 /// （與 footer chip／面板標題同一個 oracle，不手搓第二份文案，也不會漏掉任何一種
 /// 「接不上」的原因）；`connected` 時維持既有以 session 計數為主的句子。
 public enum TooltipText {
-    public static func text(appearance: IconAppearance, install: InstallState) -> String {
+    /// T27（i18n）：`language` **帶預設值 `.traditionalChinese`**——唯一跨模組呼叫點
+    /// `StatusItemController.swift`（不在任何 pendingMigrationFiles 清單，因為它自己沒有
+    /// 中文字面，只是轉呼叫這裡）帶預設值就能繼續編譯（同 `InstallAffordance.healthLabel`
+    /// 的 T27 理由）。**已知缺口**：`StatusItemController.swift` 目前吃預設值繼續顯示中文，
+    /// 需要後續 wiring task 把 `language` 傳進去。
+    public static func text(appearance: IconAppearance, install: InstallState, language: Language) -> String {
         switch install {
         case .claudeNotFound, .notConnected, .broken:
-            return install.healthLabel
+            return install.healthLabel(language)
         case .connected:
-            return sessionSummary(appearance)
+            return sessionSummary(appearance, language: language)
         }
     }
 
@@ -23,7 +28,8 @@ public enum TooltipText {
     /// `live − attention`，與 `PanelViewModel.title` 共用同一個 `SessionSummary.text`
     /// （review-t0406 B2：已結束未確認的 error 進尾巴、不算 live，沒有 guard 會印
     /// 「-1 個在跑」；B3：兩邊曾各自實作這套三元式，用詞已經漂移，收成單一來源）。
-    public static func sessionSummary(_ a: IconAppearance) -> String {
-        SessionSummary.text(attention: a.attentionCount, live: a.liveCount, done: nil, attentionWord: "需要你")
+    public static func sessionSummary(_ a: IconAppearance, language: Language) -> String {
+        SessionSummary.text(attention: a.attentionCount, live: a.liveCount, done: nil,
+                            attentionWord: .needsYou, language: language)
     }
 }

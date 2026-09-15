@@ -1,4 +1,5 @@
 import Foundation
+import AuraCore
 import AuraHookFile
 
 /// T24：D-1「完整移除」的五個動作，依序執行、冪等（D-6）——讓機器回到「從未安裝過」的
@@ -28,6 +29,9 @@ struct Uninstaller {
     /// `.terminate` 當成一個裸閉包欄位——結構型別的閉包欄位會被 Swift 6 要求 `@Sendable`，
     /// 而由 protocol existential 取出的 bound method 不是，兩者對不上（實測撞過一次）。
     let terminator: any AppTerminating
+    /// T29（i18n）：垃圾桶動作失敗時 `UninstallFailureLog` 那一行紀錄要用哪個語言寫，
+    /// 跟著呼叫端目前的顯示語言（`AppDelegate.language`）走。
+    let language: Language
 
     func run() {
         try? loginItem.set(false)
@@ -57,9 +61,9 @@ struct Uninstaller {
     /// （見 `UninstallFailureLog` 的 doc comment）。
     private func recycleBundleAndTerminate() {
         guard let bundleURL else { terminator.terminateImmediately(); return }
-        recycler.recycle(bundleURL) { [terminator, homeDirectory] error in
+        recycler.recycle(bundleURL) { [terminator, homeDirectory, language] error in
             if let error {
-                UninstallFailureLog.record(error: error, source: bundleURL, home: homeDirectory)
+                UninstallFailureLog.record(error: error, source: bundleURL, home: homeDirectory, language: language)
             }
             Task { @MainActor in terminator.terminateImmediately() }
         }
@@ -77,9 +81,10 @@ struct Uninstaller {
 enum UninstallFailureLog {
     static let filename = ".agentaura-uninstall.log"
 
-    static func record(error: Error, source: URL, home: URL) {
+    static func record(error: Error, source: URL, home: URL, language: Language) {
         let timestamp = ISO8601DateFormatter().string(from: Date())
-        let line = "[\(timestamp)] 垃圾桶動作失敗：來源 \(source.path)，錯誤：\(error.localizedDescription)\n"
+        let line = L10nUninstallConfirmation.failureLogLine(
+            timestamp: timestamp, source: source.path, error: error.localizedDescription, language: language)
         try? line.write(to: home.appendingPathComponent(filename), atomically: true, encoding: .utf8)
     }
 }

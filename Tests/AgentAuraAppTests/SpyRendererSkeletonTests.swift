@@ -28,7 +28,7 @@ struct SpyRendererSkeletonTests {
         spy.setPanel(.make(icon: .empty, sessions: [], palette: .default,
                           install: .notConnected, version: "1.0", optionsExpanded: false,
                           launchAtLogin: nil, externalTargetPath: nil, banner: nil,
-                          systemReduceMotion: false, userReduceMotion: false, iconPlate: true))
+                          systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese))
         spy.showPanel()
 
         #expect(spy.callOrder == ["attachPopover", "setPanel", "showPanel"])

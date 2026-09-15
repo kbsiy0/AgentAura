@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentAura Help</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f5f3;
+    --panel: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b6b70;
+    --border: #e2e0dc;
+    --accent: #2f6fed;
+    --code-bg: #eeece8;
+    --warn-bg: #fff4e5;
+    --warn-border: #e8b979;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --panel: #262628;
+      --text: #f2f1ee;
+      --muted: #a3a2a0;
+      --border: #3a3a3c;
+      --accent: #6ea1ff;
+      --code-bg: #333335;
+      --warn-bg: #3a2f1a;
+      --warn-border: #a67c34;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.55rem;
+    margin: 0 0 0.4rem;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin: 0 0 2.2rem;
+    font-size: 0.95rem;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.3rem 1.4rem;
+    margin-bottom: 1.1rem;
+  }
+  h2 {
+    font-size: 1.05rem;
+    margin: 0 0 0.7rem;
+  }
+  h3 {
+    font-size: 0.95rem;
+    margin: 1.1rem 0 0.4rem;
+  }
+  p { margin: 0.5rem 0; }
+  ul, ol { margin: 0.5rem 0; padding-left: 1.3rem; }
+  li { margin: 0.35rem 0; }
+  .lights {
+    list-style: none;
+    padding: 0;
+    margin: 0.6rem 0;
+  }
+  .lights li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0.5rem 0;
+  }
+  .dot {
+    flex: none;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    margin-top: 0.15rem;
+  }
+  .dot.error   { background: #e0453b; }
+  .dot.waiting { background: #f0a020; }
+  .dot.working { background: #3f6fb5; }
+  .dot.done    { background: #3a9a5c; }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.88em;
+  }
+  .note {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    margin: 0.7rem 0;
+    font-size: 0.92rem;
+  }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+  a { color: var(--accent); }
+  details {
+    border-top: 1px solid var(--border);
+    padding-top: 0.6rem;
+    margin-top: 0.6rem;
+  }
+  details:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  summary::marker { color: var(--accent); }
+  details > *:not(summary) { margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AgentAura Help</h1>
+  <p class="subtitle">This page works entirely offline — no internet connection needed, and no coding knowledge required.</p>
+
+  <section>
+    <h2>Quick start</h2>
+    <ol>
+      <li>Open AgentAura — the panel will show “Not connected.” Click the blue “Connect” button.</li>
+      <li>Start a new Claude Code conversation (a window that's already open won't pick this up automatically — see “When does this take effect” below).</li>
+      <li>From then on, whenever Claude Code is running, waiting on you, hits an error, or finishes, the menu bar light changes color on its own.</li>
+    </ol>
+    <p class="muted">The “Options ⌄” section at the bottom of the panel has a few more settings you might use often — see “What's in the Options menu” below.</p>
+  </section>
+
+  <section>
+    <h2>What the lights mean</h2>
+    <p>A color lights up in the menu bar for whichever status needs your attention most, across all your Claude Code windows:</p>
+    <ul class="lights">
+      <li><span class="dot error"></span><span><strong>Red (error)</strong> — a session hit an error and needs a look.</span></li>
+      <li><span class="dot waiting"></span><span><strong>Orange (waiting)</strong> — a session is waiting on you to respond (for example, to approve an action).</span></li>
+      <li><span class="dot working"></span><span><strong>Blue (working)</strong> — a session is running; nothing needed from you right now.</span></li>
+      <li><span class="dot done"></span><span><strong>Green (done)</strong> — a session just finished; check the result whenever you get a chance.</span></li>
+    </ul>
+    <p>When nothing is running, the menu bar stays fully dark — barely visible. That's intentional: quiet matters more than eye-catching.</p>
+    <p class="muted">When more than one status could apply at once, the display order is fixed: “error &gt; waiting &gt; working &gt; done” — if even one session has an error, the whole icon turns red, and no other session's status can override that.</p>
+  </section>
+
+  <section>
+    <h2>Why eight dots</h2>
+    <p>The menu bar icon draws eight small dots, but <strong>that number has nothing to do with how many sessions you have running</strong> — it doesn't mean “8 sessions.” All eight dots always light up in the same color together; it's purely a visual design choice that makes the color easier to catch out of the corner of your eye in the small menu bar.</p>
+    <p>To see how many sessions are actually running and what each one is doing, click the icon to open the panel — it lists every session's detailed status.</p>
+  </section>
+
+  <section>
+    <h2>How to change the colors</h2>
+    <p>Click the menu bar icon to open the panel; a row of small color dots at the bottom shows the colors currently used for the four statuses.</p>
+    <ol>
+      <li>Click the dot you want to change, and macOS's built-in color picker pops up.</li>
+      <li>While you're dragging in the picker, the menu bar light (if it's currently showing that status) and the dot in the panel update live.</li>
+      <li>The panel won't close on its own while the color picker is open, so you can take your time choosing.</li>
+      <li>To go back to the defaults, use “Reset colors” in Options to restore all four at once.</li>
+    </ol>
+    <p class="muted">The very dark gray used for “idle (nothing happening)” can't be changed — it has to stay almost invisible so it doesn't compete for attention with the other statuses.</p>
+  </section>
+
+  <section>
+    <h2>What's a “hook,” and why “Connect”?</h2>
+    <p>AgentAura can't see what Claude Code is doing on its own — Claude Code has to actively tell it at key moments (starting a run, waiting on you, hitting an error, finishing…). That notification mechanism is called a “hook” in Claude Code.</p>
+    <p>“Connect” tells Claude Code: from now on, also let AgentAura know whenever these things happen, so it can update the menu bar light. This step only sets up a mount pointing at this app — <strong>it does not change any of Claude Code's existing settings</strong>, and it can be removed with one click at any time, fully reverting.</p>
+  </section>
+
+  <section>
+    <h2>When does this take effect?</h2>
+    <p>After you click “Connect,” <strong>it only takes effect starting with the next new Claude Code session you open</strong> — that's how Claude Code loads plugins, not a delay AgentAura chose on purpose.</p>
+    <p><strong>Windows that are already open aren't affected</strong> — you don't need to restart them, and you don't need to restart AgentAura itself either. Just start a new conversation (or close the terminal and open a new one), and the new session connects automatically.</p>
+  </section>
+
+  <section>
+    <h2>How to remove the mount</h2>
+    <p>“Options” in the panel has a one-click “Remove mount…” — click it and the mount created by “Connect” is deleted. Claude Code stops notifying AgentAura of anything, and the screen goes back to “Not connected.”</p>
+    <p class="muted">Removing the mount doesn't delete this app or leave behind any settings — AgentAura never writes to Claude Code's configuration files at any point, so removing it is always clean.</p>
+  </section>
+
+  <section>
+    <h2>How to completely remove AgentAura</h2>
+    <p>If you don't want to keep the app at all, “Completely remove AgentAura…” in Options will, in order: turn off “Launch at login,” remove the mount (as above), delete every session record under <code>~/.agentaura</code>, clear color and toggle preferences, then move AgentAura.app to the Trash and quit the app.</p>
+    <p class="muted">The app can still be restored from the Trash any time before it's emptied — a dialog listing exactly these steps appears before anything happens, so nothing is done without telling you first.</p>
+  </section>
+
+  <section>
+    <h2>What's in the Options menu</h2>
+    <p>Clicking “Options ⌄” at the bottom of the panel (or right-clicking the menu bar icon) expands these items:</p>
+    <ul>
+      <li><strong>Help & quick start…</strong> — this page.</li>
+      <li><strong>Launch at login</strong> — opens AgentAura automatically at login, so you don't have to open it by hand every time.</li>
+      <li><strong>Reduce motion</strong> — turns off the breathing/blinking animation on the menu bar icon, keeping only the color itself. If you turned this on yourself (rather than the system's own “Reduce Motion” doing it for you), keep in mind that “waiting” and “error” will then only be told apart by color — take an extra look instead of relying on peripheral vision alone.</li>
+      <li><strong>Icon backdrop</strong> — on by default: adds an opaque dark backing behind the lights so contrast stays consistent on any wallpaper, in a light or dark menu bar. Turn it off and the lights sit directly on the menu bar, which can be harder to see against some wallpaper colors.</li>
+      <li><strong>Reset colors</strong> — see “How to change the colors” above.</li>
+      <li><strong>Language</strong> — switches the panel text between English and Traditional Chinese; defaults to English.</li>
+      <li><strong>Reconnect Claude Code</strong> — rebuilds the mount if it's broken or was moved; it's the same action as the very first “Connect.”</li>
+      <li><strong>Check again</strong> — only shows up in the “connected but not yet verified” state; click it to re-confirm the hook actually works.</li>
+      <li><strong>Remove mount…</strong> — see “How to remove the mount” above.</li>
+      <li><strong>Completely remove AgentAura…</strong> — see “How to completely remove AgentAura” above.</li>
+      <li><strong>About AgentAura</strong> — version number, project URL, license status.</li>
+      <li><strong>Report an issue…</strong> — opens a browser to GitHub to report a bug or suggest something.</li>
+      <li><strong>Quit AgentAura</strong> (⌘Q) — quits the app; you can also just press ⌘Q while the panel is open.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>FAQ</h2>
+
+    <details open>
+      <summary>I clicked “Connect” but the light still won't turn on</summary>
+      <p>First check whether you're still in a window that was already open before you clicked “Connect” — per “When does this take effect” above, old windows don't pick this up automatically. Try a new conversation or a new terminal window.</p>
+      <p>If a brand-new one still won't light up, it's likely the next item: macOS is blocking the hook.</p>
+    </details>
+
+    <details>
+      <summary>macOS is blocking the hook — where do I allow it</summary>
+      <p>If the app was downloaded from the internet, macOS quarantines the executables inside it, which blocks the hook every time. You'll usually see “macOS blocked the hook” in the panel. Try this:</p>
+      <ul>
+        <li>Make sure the app is already in the Applications folder (see the next item), then reopen it;</li>
+        <li>or go to System Settings → Privacy & Security and look for an allow option related to this app.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>The app is in Downloads or the project's <span class="mono">build/</span> folder</summary>
+      <p>Drag the app into the Applications folder first, then reopen it. An app sitting in Downloads or a development <span class="mono">build/</span> folder can have its location change, or get treated as a temporary file by the system, at any time — the mount can very easily break again for no obvious reason right after connecting.</p>
+      <p>Moving it into Applications is a one-time step; after that, normal use won't run into this again.</p>
+    </details>
+
+    <details>
+      <summary>The app got moved or renamed</summary>
+      <p>The mount created by “Connect” points at that specific app file — if you later move, rename, or delete the app, the light stays dark and the panel shows “Reconnect.” Put the app back where it was, or, after moving it, click “Reconnect” once in the panel.</p>
+    </details>
+
+    <details>
+      <summary>The light turned on and then off again — is something broken?</summary>
+      <p>Nothing's broken — only the statuses that need your attention (“waiting,” “error”) use an animated cue to catch your eye; “working” and “done” are deliberately quiet and don't try to grab your attention. That's a deliberate trade-off: only things that actually need handling are worth interrupting you for.</p>
+    </details>
+  </section>
+
+  <p class="muted" style="text-align:center; margin-top:2rem;">This help doc ships inside the app and opens offline.</p>
+</main>
+</body>
+</html>

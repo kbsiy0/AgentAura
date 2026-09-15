@@ -26,7 +26,7 @@ struct LegendModelTests {
     @Test("items(for:) 順序與 customizable 一致；四項、label 非空互異；色取自 palette")
     func legendItemsFollowOrderAndLabelsTotal() throws {
         let palette = Self.distinctPalette
-        let items = LegendModel.items(for: palette)
+        let items = LegendModel.items(for: palette, language: .traditionalChinese)
 
         #expect(items.count == 4, "圖例應恆為四項（D-a：四態可改色），實際 \(items.count)")
         #expect(items.map(\.activity) == [.error, .waiting, .working, .done], """
@@ -83,14 +83,14 @@ struct LegendModelTests {
 
         // T11（S0-2，對齊新契約非弱化）：`install` 從 `.notConnected` 改成 `.connected`——
         // `PanelModel.title` 現在非 connected 時改走 `install.healthLabel`（見
-        // `TooltipAndTitleConsistencyTests`），`title == PanelViewModel.title(for: icon)`
+        // `TooltipAndTitleConsistencyTests`），`title == PanelViewModel.title(for: icon, language: .traditionalChinese)`
         // 這個斷言的原意「title 委派給 PanelViewModel」只在 connected 時仍然成立，
         // 這裡改 install 讓斷言測的還是同一件事；palette／legend／isDefaultPalette／rows
         // 四個斷言與 install 無關，不受影響。
         let model = PanelModel.make(icon: icon, sessions: sessions, palette: palette,
                                     install: .connected(owner: .thisApp, verified: .verified),
                                     version: "1.0", optionsExpanded: false,
-                                    launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, now: now)
+                                    launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese, now: now)
 
         #expect(model.palette == palette, "model.palette 應等於傳入的 palette，實際 \(model.palette)")
         #expect(model.legend.count == 4, "圖例應恆為四項，實際 \(model.legend.count)")
@@ -100,7 +100,7 @@ struct LegendModelTests {
         #expect(model.isDefaultPalette == palette.isDefault, """
             isDefaultPalette 應等於 palette.isDefault，實際 model=\(model.isDefaultPalette) palette.isDefault=\(palette.isDefault)
             """)
-        #expect(model.rows == PanelViewModel.rows(from: sessions, now: now), "rows 應與 PanelViewModel.rows 相同")
-        #expect(model.title == PanelViewModel.title(for: icon), "connected 時 title 應與 PanelViewModel.title 相同")
+        #expect(model.rows == PanelViewModel.rows(from: sessions, now: now, language: .traditionalChinese), "rows 應與 PanelViewModel.rows 相同")
+        #expect(model.title == PanelViewModel.title(for: icon, language: .traditionalChinese), "connected 時 title 應與 PanelViewModel.title 相同")
     }
 }

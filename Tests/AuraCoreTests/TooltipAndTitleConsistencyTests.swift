@@ -20,7 +20,7 @@ struct TooltipAndTitleConsistencyTests {
 
     @Test("前提：sessionSummary(.empty) 恰為「沒有活著的 session」（否則下面的反例字串就選錯了）")
     func precondition_sessionSummaryOfEmptyIsTheConnectedString() {
-        #expect(TooltipText.sessionSummary(Self.emptyAppearance) == Self.connectedEmptyText)
+        #expect(TooltipText.sessionSummary(Self.emptyAppearance, language: .traditionalChinese) == Self.connectedEmptyText)
     }
 
     @Test("每一種非 connected InstallState：tooltip／面板標題都不等於 connected 字串，且彼此一致（等於 healthLabel）")
@@ -28,10 +28,11 @@ struct TooltipAndTitleConsistencyTests {
         for install in InstallStateAllCases.all() {
             guard !isConnected(install) else { continue }
 
-            let tooltip = TooltipText.text(appearance: Self.emptyAppearance, install: install)
+            let tooltip = TooltipText.text(appearance: Self.emptyAppearance, install: install,
+                                           language: .traditionalChinese)
             let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: install, version: "1.0", optionsExpanded: false,
-                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
 
             #expect(tooltip != Self.connectedEmptyText, """
                 \(install) 的 tooltip 是「\(tooltip)」—— 不得等於 connected 時的字串
@@ -41,8 +42,8 @@ struct TooltipAndTitleConsistencyTests {
                 \(install) 的面板標題是「\(model.title)」—— 不得等於 connected 時的字串
                 「\(Self.connectedEmptyText)」（同一顆根因的第二個表面：面板標題與 NotConnectedView 互相矛盾）
                 """)
-            #expect(tooltip == install.healthLabel, "\(install) 的 tooltip 應等於 healthLabel「\(install.healthLabel)」，實際「\(tooltip)」")
-            #expect(model.title == install.healthLabel, "\(install) 的面板標題應等於 healthLabel「\(install.healthLabel)」，實際「\(model.title)」")
+            #expect(tooltip == install.healthLabel(.traditionalChinese), "\(install) 的 tooltip 應等於 healthLabel「\(install.healthLabel(.traditionalChinese))」，實際「\(tooltip)」")
+            #expect(model.title == install.healthLabel(.traditionalChinese), "\(install) 的面板標題應等於 healthLabel「\(install.healthLabel(.traditionalChinese))」，實際「\(model.title)」")
             #expect(tooltip == model.title, "\(install) 的 tooltip「\(tooltip)」與面板標題「\(model.title)」不一致 —— 同一張畫面不能有兩個答案")
         }
     }
@@ -52,8 +53,9 @@ struct TooltipAndTitleConsistencyTests {
         for owner in MountOwner.allCases {
             for verified in Verification.allCases {
                 let install = InstallState.connected(owner: owner, verified: verified)
-                let tooltip = TooltipText.text(appearance: Self.emptyAppearance, install: install)
-                #expect(tooltip == TooltipText.sessionSummary(Self.emptyAppearance), """
+                let tooltip = TooltipText.text(appearance: Self.emptyAppearance, install: install,
+                                           language: .traditionalChinese)
+                #expect(tooltip == TooltipText.sessionSummary(Self.emptyAppearance, language: .traditionalChinese), """
                     connected(\(owner), \(verified)) 的 tooltip 應走 sessionSummary，實際「\(tooltip)」
                     """)
             }
@@ -73,8 +75,9 @@ struct TooltipAndTitleConsistencyTests {
                 let install = InstallState.connected(owner: owner, verified: verified)
                 let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                             install: install, version: "1.0", optionsExpanded: false,
-                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
-                let tooltip = TooltipText.text(appearance: Self.emptyAppearance, install: install)
+                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                let tooltip = TooltipText.text(appearance: Self.emptyAppearance, install: install,
+                                           language: .traditionalChinese)
 
                 #expect(model.emptyRowsMessage != model.title, """
                     connected(\(owner), \(verified)) ＋ rows 空：本體訊息「\(model.emptyRowsMessage)」

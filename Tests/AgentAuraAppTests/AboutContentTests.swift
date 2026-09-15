@@ -2,6 +2,7 @@ import Testing
 import AppKit
 import Foundation
 @testable import AgentAuraApp
+import AuraCore
 
 /// T12（B4）：「關於」面板此前只是 `NSApp.orderFrontStandardAboutPanel(nil)`——完全空的
 /// standard panel，使用者看到的是「什麼都沒有」。這裡直接測 `AboutContent.options(version:)`
@@ -10,15 +11,15 @@ import Foundation
 @Suite("B4：關於面板帶實際內容（AboutContent）")
 struct AboutContentTests {
 
-    @Test("options(version:) 含指定的版本字串")
+    @Test("options(version:language:) 含指定的版本字串")
     func containsGivenVersion() {
-        let options = AboutContent.options(version: "0.1.0")
+        let options = AboutContent.options(version: "0.1.0", language: .traditionalChinese)
         #expect(options[.applicationVersion] as? String == "0.1.0")
     }
 
-    @Test("options(version:) 的 credits 含專案網址且可點擊（.link 屬性）")
+    @Test("options(version:language:) 的 credits 含專案網址且可點擊（.link 屬性）")
     func creditsContainsClickableProjectLink() throws {
-        let options = AboutContent.options(version: "0.1.0")
+        let options = AboutContent.options(version: "0.1.0", language: .traditionalChinese)
         let credits = try #require(options[.credits] as? NSAttributedString, "應該有 .credits 欄位")
         #expect(credits.string.contains(ProjectLinks.repository.absoluteString), """
             credits 文字應含專案網址，實際「\(credits.string)」
@@ -31,9 +32,9 @@ struct AboutContentTests {
         #expect(foundLink == ProjectLinks.repository, "credits 應該有一段 .link 屬性指到專案網址")
     }
 
-    @Test("options(version:) 的 credits 含授權說明，且照實寫「尚未決定」——不得瞎掰授權名字")
+    @Test("options(version:language:) 的 credits 含授權說明，且照實寫「尚未決定」——不得瞎掰授權名字")
     func creditsContainsHonestLicenseText() throws {
-        let options = AboutContent.options(version: "0.1.0")
+        let options = AboutContent.options(version: "0.1.0", language: .traditionalChinese)
         let credits = try #require(options[.credits] as? NSAttributedString)
         #expect(credits.string.contains("尚未決定"), """
             README §授權目前是「尚未決定（開源時確定）」——credits 必須照實寫，不能寫成
@@ -41,10 +42,32 @@ struct AboutContentTests {
             """)
     }
 
+    /// T29（i18n）：英文那半的對照——同樣照實寫「尚未決定」，不瞎掰授權名字，
+    /// 只是換一種語言講同一件事。
+    @Test("英文 options(version:language:) 的 credits 同樣照實寫授權未決定，不瞎掰")
+    func englishCreditsContainsHonestLicenseText() throws {
+        let options = AboutContent.options(version: "0.1.0", language: .english)
+        let credits = try #require(options[.credits] as? NSAttributedString)
+        #expect(credits.string.contains("not yet decided"), """
+            英文版 credits 應該照實寫授權尚未決定，不能寫成 MIT／Apache 之類瞎掰的授權名字，
+            實際「\(credits.string)」
+            """)
+        for banned in ["MIT", "Apache", "BSD", "GPL"] {
+            #expect(!credits.string.contains(banned), "英文 credits 不該出現瞎掰的授權名字「\(banned)」")
+        }
+    }
+
+    @Test("兩種語言的 credits 文字不同——不是共用同一個寫死字面")
+    func licenseTextDiffersByLanguage() {
+        let zh = AboutContent.license(.traditionalChinese)
+        let en = AboutContent.license(.english)
+        #expect(zh != en, "中英文授權說明不該是同一個字面")
+    }
+
     @Test("不同版本字串各自反映在 options 裡——不是寫死的常數")
     func differentVersionsProduceDifferentOptions() {
-        let a = AboutContent.options(version: "1.0.0")
-        let b = AboutContent.options(version: "2.0.0")
+        let a = AboutContent.options(version: "1.0.0", language: .traditionalChinese)
+        let b = AboutContent.options(version: "2.0.0", language: .traditionalChinese)
         #expect(a[.applicationVersion] as? String != b[.applicationVersion] as? String)
     }
 

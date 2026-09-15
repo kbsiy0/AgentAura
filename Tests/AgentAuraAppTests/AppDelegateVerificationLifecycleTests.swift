@@ -173,7 +173,7 @@ struct AppDelegateVerificationLifecycleTests {
                                    installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         // 模擬「先前按接上失敗過」留下的錯誤 banner。
-        delegate.banner = .error(InstallState.hookBlockedPrescription)
+        delegate.banner = .error(InstallState.hookBlockedPrescription(.english))
 
         await SpawnGate.shared.run {
             delegate.applicationDidFinishLaunching(Notification(name: .init("test")))

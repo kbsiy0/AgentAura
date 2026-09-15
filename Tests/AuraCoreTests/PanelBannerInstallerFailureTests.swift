@@ -29,7 +29,7 @@ struct PanelBannerInstallerFailureTests {
     @Test("每一種 InstallerFailure 都有非空 banner 文案，kind 恆為 .error")
     func everyFailureHasNonEmptyErrorBanner() {
         for failure in Self.allFailures {
-            let banner = PanelBanner.error(for: failure)
+            let banner = PanelBanner.error(for: failure, language: .traditionalChinese)
             #expect(banner.kind == .error, "\(failure)")
             #expect(!banner.text.isEmpty, "\(failure)")
         }
@@ -37,24 +37,24 @@ struct PanelBannerInstallerFailureTests {
 
     @Test("mustMoveToApplications 用合併後的單一措辭常數")
     func mustMoveToApplicationsUsesMergedMessage() {
-        #expect(PanelBanner.error(for: .mustMoveToApplications).text
-                == InstallerFailure.mustMoveToApplicationsMessage)
+        #expect(PanelBanner.error(for: .mustMoveToApplications, language: .traditionalChinese).text
+                == InstallerFailure.mustMoveToApplicationsMessage(.traditionalChinese))
     }
 
     @Test("hookBlockedOrBroken／hookUnconfirmed 與 explanationDetail 共用同一組 prescription 常數（單一 oracle，S1-1）")
     func hookFailuresShareExplanationDetailPrescriptions() {
-        #expect(PanelBanner.error(for: .hookBlockedOrBroken(stamp: "x")).text
-                == InstallState.hookBlockedPrescription)
-        #expect(PanelBanner.error(for: .hookUnconfirmed(stamp: "x")).text
-                == InstallState.hookUnconfirmedPrescription)
+        #expect(PanelBanner.error(for: .hookBlockedOrBroken(stamp: "x"), language: .traditionalChinese).text
+                == InstallState.hookBlockedPrescription(.traditionalChinese))
+        #expect(PanelBanner.error(for: .hookUnconfirmed(stamp: "x"), language: .traditionalChinese).text
+                == InstallState.hookUnconfirmedPrescription(.traditionalChinese))
     }
 
     @Test("cannotConnect(nil) 與 cannotConnect(reason) 跟 healthLabel 是同一個 oracle")
     func cannotConnectMatchesHealthLabel() {
-        #expect(PanelBanner.error(for: .cannotConnect(nil)).text == InstallState.claudeNotFound.healthLabel)
+        #expect(PanelBanner.error(for: .cannotConnect(nil), language: .traditionalChinese).text == InstallState.claudeNotFound.healthLabel(.traditionalChinese))
         for reason in InstallState.Reason.allCases {
-            #expect(PanelBanner.error(for: .cannotConnect(reason)).text
-                    == InstallState.broken(reason, owner: .unknown).healthLabel, "\(reason)")
+            #expect(PanelBanner.error(for: .cannotConnect(reason), language: .traditionalChinese).text
+                    == InstallState.broken(reason, owner: .unknown).healthLabel(.traditionalChinese), "\(reason)")
         }
     }
 }

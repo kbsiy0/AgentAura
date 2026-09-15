@@ -35,12 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var userReduceMotion = false
     /// T16：燈條底板開關，預設 true——internal 理由同 `userReduceMotion`。
     var iconPlate = true
+    /// T26（i18n）：D-2 預設英文；key／preference／load／perform 都在 +PanelActions.swift。
+    var language: Language = .english
     /// internal（不是 private）：`AppDelegate+PanelActions.swift` 的 `presentAbout` 要讀它。
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
 
     static let didConnectOnceKey = "AgentAuraDidConnectOnce"
-    /// T12（B5）：`UserDefaults` 鍵，走既有的 `defaults` 注入點（比照 `didConnectOnceKey`）。
-    static let reduceMotionKey = "AgentAuraReduceMotion"
 
     /// **`installer` 生產預設值就是真的 `~/.claude`**（`productionUsesRealInstaller` 斷言）。
     let installer: Installer
@@ -55,11 +55,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let openURL: @MainActor (URL) -> Void
     let showAboutPanel: @MainActor ([NSApplication.AboutPanelOptionKey: Any]) -> Void
     let terminator: any AppTerminating
-    let confirmDisconnect: @MainActor (@escaping () -> Void) -> Void
+    /// T29（i18n）：帶 `Language`——`wireActions()` 送出時傳 `self.language`。
+    let confirmDisconnect: @MainActor (Language, @escaping () -> Void) -> Void
     /// A5（T11 commit3）／T24：`.replaceExternalMount`／`.uninstall` 各自的確認框——同
     /// `confirmDisconnect` 的注入縫（測試不真的彈 `NSAlert`，spec §6.4）。
-    let confirmReplaceExternalMount: @MainActor (@escaping () -> Void) -> Void
-    let confirmUninstall: @MainActor (@escaping () -> Void) -> Void
+    let confirmReplaceExternalMount: @MainActor (Language, @escaping () -> Void) -> Void
+    let confirmUninstall: @MainActor (Language, @escaping () -> Void) -> Void
 
     init(root: URL = SnapshotIO.defaultRoot,
          livenessInterval: TimeInterval = 5,
@@ -75,15 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              NSApp.orderFrontStandardAboutPanel(options)
          },
          terminator: any AppTerminating = RealTerminator(),
-         confirmDisconnect: @escaping @MainActor (@escaping () -> Void) -> Void = { onConfirm in
-             DisconnectConfirmation.present(onConfirm: onConfirm)
-         },
-         confirmReplaceExternalMount: @escaping @MainActor (@escaping () -> Void) -> Void = { onConfirm in
-             ReplaceMountConfirmation.present(onConfirm: onConfirm)
-         },
-         confirmUninstall: @escaping @MainActor (@escaping () -> Void) -> Void = { onConfirm in
-             UninstallConfirmation.present(onConfirm: onConfirm)
-         },
+         confirmDisconnect: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
+             { language, onConfirm in DisconnectConfirmation.present(language: language, onConfirm: onConfirm) },
+         confirmReplaceExternalMount: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
+             { language, onConfirm in ReplaceMountConfirmation.present(language: language, onConfirm: onConfirm) },
+         confirmUninstall: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
+             { language, onConfirm in UninstallConfirmation.present(language: language, onConfirm: onConfirm) },
          makeRenderer: @escaping @MainActor () -> any IconRendering = { StatusItemController() }) {
         self.root = root
         self.livenessInterval = livenessInterval
@@ -117,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         userReduceMotion = Self.reduceMotionPreference.load(from: defaults)
         driver.setUserReduceMotion(userReduceMotion)
         loadIconPlate()   // T16：同一段同步區內套上持久化的底板偏好，理由同上
+        loadLanguage()    // T26：同一段同步區內套上持久化的語言偏好，理由同上（D-5(4)：預設英文）
 
         paletteStore.onChange = { [weak self] in
             guard let self else { return }

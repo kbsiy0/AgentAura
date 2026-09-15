@@ -24,6 +24,9 @@ public enum PanelAction: Equatable, Sendable {
     /// T16：燈條底板開關（`LEDStripView.showsPlate`）——修正 spec §4.1 算術錯誤後補的
     /// 使用者控制，預設 true（見 `AppDelegate.iconPlateKey`）。
     case setIconPlate(Bool)
+    /// T26（i18n）：面板顯示語言——帶目標語言（比照 `pickColor(Activity)`，不是
+    /// `setLaunchAtLogin` 那種布林 toggle：語言不是二元「開/關」語意，是選了哪一個）。
+    case setLanguage(Language)
 
     /// 窮盡 switch：新增 case 這裡編不過，逼你同時補 `PanelActionKind`。
     public var kind: PanelActionKind {
@@ -44,6 +47,7 @@ public enum PanelAction: Equatable, Sendable {
         case .reportIssue: .reportIssue
         case .setReduceMotion: .setReduceMotion
         case .setIconPlate: .setIconPlate
+        case .setLanguage: .setLanguage
         }
     }
 }
@@ -54,7 +58,7 @@ public enum PanelActionKind: String, Sendable, CaseIterable {
     case pickColor, resetColors, toggleOptions, connect, replaceExternalMount, disconnect
     case uninstall
     case setLaunchAtLogin, recheckHook, openHelp, about, dismissBanner, quit
-    case reportIssue, setReduceMotion, setIconPlate
+    case reportIssue, setReduceMotion, setIconPlate, setLanguage
 }
 
 extension PanelAction {
@@ -80,6 +84,7 @@ extension PanelAction {
         case .reportIssue: [.reportIssue]
         case .setReduceMotion: [.setReduceMotion(true), .setReduceMotion(false)]
         case .setIconPlate: [.setIconPlate(true), .setIconPlate(false)]
+        case .setLanguage: Language.allCases.map(PanelAction.setLanguage)
         }
     }
 }

@@ -152,38 +152,70 @@ struct InstallStateTests {
         .occupiedByFile: "路徑被一個檔案佔住",
     ]
 
+    /// T27（i18n）：D-4 對齊——明確指定 `.traditionalChinese`，內容不變。
     @Test("broken 的 chip 文字只依 Reason（owner 不影響文字），tone 恆 .warn")
     func brokenHealthLabelAndToneCoverEveryReasonAndOwner() {
         for reason in InstallState.Reason.allCases {
             for owner in MountOwner.allCases {
                 let state = InstallState.broken(reason, owner: owner)
-                #expect(state.healthLabel == Self.brokenLabels[reason], "\(reason)／\(owner) 的 chip 文字對不上 §3.3 的表")
+                #expect(state.healthLabel(.traditionalChinese) == Self.brokenLabels[reason], "\(reason)／\(owner) 的 chip 文字對不上 §3.3 的表")
                 #expect(state.healthTone == .warn, "\(reason)／\(owner) 的 tone 應為 .warn")
             }
         }
     }
 
+    /// D-4：補英文版——每個 Reason 的英文都非空、且跟中文不同（不是漏翻）。
+    @Test("broken 的 chip 文字（英文）每個 Reason 都非空且與中文不同")
+    func brokenHealthLabelEnglishDiffersFromChinese() {
+        for reason in InstallState.Reason.allCases {
+            let state = InstallState.broken(reason, owner: .unknown)
+            let en = state.healthLabel(.english)
+            #expect(!en.isEmpty, "\(reason) 的英文 chip 文字是空的")
+            #expect(en != state.healthLabel(.traditionalChinese), "\(reason) 的英文跟中文一樣，像是漏翻")
+        }
+    }
+
     @Test("claudeNotFound／notConnected 的 chip 文字與 tone")
     func topLevelHealthLabelAndTone() {
-        #expect(InstallState.claudeNotFound.healthLabel == "找不到 Claude Code")
+        #expect(InstallState.claudeNotFound.healthLabel(.traditionalChinese) == "找不到 Claude Code")
         #expect(InstallState.claudeNotFound.healthTone == .warn)
-        #expect(InstallState.notConnected.healthLabel == "還沒接上")
+        #expect(InstallState.notConnected.healthLabel(.traditionalChinese) == "還沒接上")
         #expect(InstallState.notConnected.healthTone == .warn)
+    }
+
+    @Test("claudeNotFound／notConnected 的 chip 文字（英文）")
+    func topLevelHealthLabelEnglish() {
+        #expect(InstallState.claudeNotFound.healthLabel(.english) == "Claude Code not found")
+        #expect(InstallState.notConnected.healthLabel(.english) == "Not connected yet")
     }
 
     /// S2（T11 A9–A11 批次）：三個子句用「 · 」串接（不再是兩層括號疊字），
     /// `owner==.external` 的子句排在 verified 子句之前——見 `InstallAffordance.healthLabel`。
+    /// T27（i18n）：D-4 對齊——明確指定 `.traditionalChinese`，內容不變。
     @Test("connected 的 chip 對 (owner, verified) 逐格：owner 決定要不要插入掛載子句、verified 決定要不要加驗證狀態；tone 恆 .ok")
     func connectedHealthLabelAndToneCoverEveryOwnerAndVerification() {
         for owner in MountOwner.allCases {
             let ownerClause = owner == .external ? " · 你的 repo 掛載" : ""
             let state = { (v: Verification) in InstallState.connected(owner: owner, verified: v) }
-            #expect(state(.verified).healthLabel == "已接上" + ownerClause)
-            #expect(state(.inFlight).healthLabel == "已接上" + ownerClause + " · 檢查中…",
+            #expect(state(.verified).healthLabel(.traditionalChinese) == "已接上" + ownerClause)
+            #expect(state(.inFlight).healthLabel(.traditionalChinese) == "已接上" + ownerClause + " · 檢查中…",
                     ".inFlight 與 .unknown 必須不同文案（R2：檢查中是關於進行中的宣稱）")
-            #expect(state(.unknown).healthLabel == "已接上" + ownerClause + " · 未驗證")
+            #expect(state(.unknown).healthLabel(.traditionalChinese) == "已接上" + ownerClause + " · 未驗證")
             for verified in Verification.allCases {
                 #expect(state(verified).healthTone == .ok, "connected 恆 .ok，\(owner)／\(verified) 不應例外")
+            }
+        }
+    }
+
+    /// D-4：補英文版——`owner`／`verified` 每一格都非空、跟中文不同。
+    @Test("connected 的 chip 對 (owner, verified) 逐格（英文）：每格都非空且與中文不同")
+    func connectedHealthLabelEnglishDiffersFromChinese() {
+        for owner in MountOwner.allCases {
+            for verified in Verification.allCases {
+                let state = InstallState.connected(owner: owner, verified: verified)
+                let en = state.healthLabel(.english)
+                #expect(!en.isEmpty, "\(owner)／\(verified) 的英文 chip 文字是空的")
+                #expect(en != state.healthLabel(.traditionalChinese), "\(owner)／\(verified) 的英文跟中文一樣，像是漏翻")
             }
         }
     }

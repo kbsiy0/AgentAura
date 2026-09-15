@@ -30,7 +30,7 @@ struct PanelViewModelTests {
         let rows = PanelViewModel.rows(from: [
             state("w", .working), state("d", .done),
             state("e", .error), state("a", .waiting),
-        ], now: now)
+        ], now: now, language: .traditionalChinese)
         #expect(rows.map { $0.id } == ["e", "a", "w", "d"])
     }
 
@@ -40,7 +40,7 @@ struct PanelViewModelTests {
             state("old", .working, updated: 300),
             state("new", .working, updated: 5),
             state("mid", .working, updated: 60),
-        ], now: now)
+        ], now: now, language: .traditionalChinese)
         #expect(rows.map { $0.id } == ["new", "mid", "old"])
     }
 
@@ -49,7 +49,7 @@ struct PanelViewModelTests {
         let rows = PanelViewModel.rows(from: [
             state("ended", .done, updated: 5, live: false),
             state("alive", .done, updated: 300, live: true),
-        ], now: now)
+        ], now: now, language: .traditionalChinese)
         #expect(rows.map { $0.id } == ["alive", "ended"], "活著的優先，即使它更久沒動")
     }
 
@@ -57,7 +57,7 @@ struct PanelViewModelTests {
 
     @Test("已結束的列：副行以「已結束 · 」起頭，後接 detail 與相對時間")
     func endedFooterLeadsWithEnded() {
-        let rows = PanelViewModel.rows(from: [state("e", .done, turnStart: 192, updated: 120, live: false)], now: now)
+        let rows = PanelViewModel.rows(from: [state("e", .done, turnStart: 192, updated: 120, live: false)], now: now, language: .traditionalChinese)
         let f = rows[0].footer
         #expect(f.hasPrefix("已結束 · "), "「已結束」是唯一的存活訊號，要在行首，實際：\(f)")
         #expect(!rows[0].detail.isEmpty && f.contains(rows[0].detail), "行首之後要有 detail，實際：\(f)")
@@ -66,14 +66,14 @@ struct PanelViewModelTests {
 
     @Test("已結束但沒有 detail：不留懸空分隔符")
     func endedFooterWithoutDetail() {
-        let rows = PanelViewModel.rows(from: [state("e", .done, updated: 120, live: false)], now: now)
+        let rows = PanelViewModel.rows(from: [state("e", .done, updated: 120, live: false)], now: now, language: .traditionalChinese)
         #expect(rows[0].detail.isEmpty, "前提：無本輪、無 subagent、無失敗 → detail 空，實際：\(rows[0].detail)")
         #expect(rows[0].footer == "已結束 · \(rows[0].relativeTime)", "實際：\(rows[0].footer)")
     }
 
     @Test("活著的列副行不含「已結束」；活著且無 detail 時整行空（view 不畫，既有行為）")
     func aliveFooter() {
-        let rows = PanelViewModel.rows(from: [state("a", .working, turnStart: 30), state("b", .working)], now: now)
+        let rows = PanelViewModel.rows(from: [state("a", .working, turnStart: 30), state("b", .working)], now: now, language: .traditionalChinese)
         let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
         let a = byID["a"]!, b = byID["b"]!
         #expect(!a.footer.contains("已結束") && a.footer.hasPrefix(a.detail), "實際：\(a.footer)")
@@ -84,7 +84,7 @@ struct PanelViewModelTests {
 
     @Test("waiting 的主行說出在等什麼，不只是 tool 名")
     func waitingHeadlineNamesWhatIsAsked() {
-        let rows = PanelViewModel.rows(from: [state("p", .waiting, tool: "Bash")], now: now)
+        let rows = PanelViewModel.rows(from: [state("p", .waiting, tool: "Bash")], now: now, language: .traditionalChinese)
         let h = rows[0].headline
         #expect(h.contains("Bash"))
         #expect(h.contains("等") || h.contains("批准"), "要看得出是在等你，實際：\(h)")
@@ -92,14 +92,14 @@ struct PanelViewModelTests {
 
     @Test("working 的主行顯示目前的 tool")
     func workingHeadlineShowsTool() {
-        let rows = PanelViewModel.rows(from: [state("p", .working, tool: "Edit")], now: now)
+        let rows = PanelViewModel.rows(from: [state("p", .working, tool: "Edit")], now: now, language: .traditionalChinese)
         #expect(rows[0].headline.contains("Edit"))
     }
 
     @Test("done 的主行顯示完成訊息的摘要")
     func doneHeadlineShowsMessage() {
         let long = String(repeating: "完成了很多事情。", count: 40)
-        let rows = PanelViewModel.rows(from: [state("p", .done, lastMessage: long)], now: now)
+        let rows = PanelViewModel.rows(from: [state("p", .done, lastMessage: long)], now: now, language: .traditionalChinese)
         #expect(rows[0].headline.count <= 90, "摘要要截斷，實際 \(rows[0].headline.count) 字")
         #expect(!rows[0].headline.isEmpty)
     }
@@ -108,7 +108,7 @@ struct PanelViewModelTests {
     func errorHeadlineShowsError() {
         let rows = PanelViewModel.rows(from: [
             state("p", .error, toolError: "overloaded_error"),
-        ], now: now)
+        ], now: now, language: .traditionalChinese)
         #expect(rows[0].headline.contains("overloaded_error"))
     }
 
@@ -116,7 +116,7 @@ struct PanelViewModelTests {
     func detailHasCounters() {
         let rows = PanelViewModel.rows(from: [
             state("p", .working, turnStart: 487, subagents: ["Explore": 2, "implementer": 1], failures: 3),
-        ], now: now)
+        ], now: now, language: .traditionalChinese)
         let d = rows[0].detail
         #expect(d.contains("8m") || d.contains("8 m") || d.contains("487"), "要有本輪時長，實際：\(d)")
         #expect(d.contains("3"), "要有 subagent 總數 3，實際：\(d)")
@@ -125,7 +125,7 @@ struct PanelViewModelTests {
 
     @Test("沒有計數時副行不顯示 0，避免視覺噪音")
     func detailOmitsZeros() {
-        let rows = PanelViewModel.rows(from: [state("p", .working)], now: now)
+        let rows = PanelViewModel.rows(from: [state("p", .working)], now: now, language: .traditionalChinese)
         #expect(!rows[0].detail.contains("0 subagent"))
         #expect(!rows[0].detail.contains("0 失敗"))
     }
@@ -136,7 +136,7 @@ struct PanelViewModelTests {
     // 淨 #expect 數從 2 條增加到 4 條。
     @Test("meta 顯示的是人話，不是原始代碼字（套用 Jargon）")
     func metaShowsPlainLanguageNotRawCodes() {
-        let rows = PanelViewModel.rows(from: [state("p", .working)], now: now)
+        let rows = PanelViewModel.rows(from: [state("p", .working)], now: now, language: .traditionalChinese)
         #expect(rows[0].meta.contains("Opus 5"), "應顯示映射後的模型名，實際：\(rows[0].meta)")
         #expect(rows[0].meta.contains("每次問我"), "應顯示映射後的 permission_mode，實際：\(rows[0].meta)")
         #expect(!rows[0].meta.contains("claude-opus-5"), "不得殘留原始代碼字，實際：\(rows[0].meta)")
@@ -145,7 +145,7 @@ struct PanelViewModelTests {
 
     @Test("模型缺失時 meta 不顯示空白欄位，且 permission_mode 仍是人話")
     func metaHandlesMissingModel() {
-        let rows = PanelViewModel.rows(from: [state("p", .working, model: nil)], now: now)
+        let rows = PanelViewModel.rows(from: [state("p", .working, model: nil)], now: now, language: .traditionalChinese)
         #expect(!rows[0].meta.hasPrefix(" ·"), "不得留下懸空的分隔符，實際：\(rows[0].meta)")
         #expect(rows[0].meta.contains("每次問我"), "實際：\(rows[0].meta)")
         #expect(!rows[0].meta.contains("default"), "不得殘留原始代碼字，實際：\(rows[0].meta)")
@@ -157,14 +157,14 @@ struct PanelViewModelTests {
     func clockSkewClampsToZero() {
         // updatedAt 在未來
         let s = state("p", .working, updated: -600)
-        let rows = PanelViewModel.rows(from: [s], now: now)
+        let rows = PanelViewModel.rows(from: [s], now: now, language: .traditionalChinese)
         #expect(!rows[0].relativeTime.contains("-"), "實際：\(rows[0].relativeTime)")
     }
 
     @Test("turnStartedAt 在未來時，本輪時長不是負數")
     func futureTurnStartClamps() {
         let s = state("p", .working, turnStart: -300)
-        let rows = PanelViewModel.rows(from: [s], now: now)
+        let rows = PanelViewModel.rows(from: [s], now: now, language: .traditionalChinese)
         #expect(!rows[0].detail.contains("-"), "實際：\(rows[0].detail)")
     }
 
@@ -183,14 +183,14 @@ struct PanelViewModelTests {
     func titleLeadsWithAttention() {
         let icon = IconState(activity: .waiting,
                              counts: [.waiting: 1, .working: 2], liveCount: 3)
-        let t = PanelViewModel.title(for: icon)
+        let t = PanelViewModel.title(for: icon, language: .traditionalChinese)
         #expect(t.contains("1"))
         #expect(t.contains("等"), "實際：\(t)")
     }
 
     @Test("沒有 session 時標題明確說沒有，不留空白")
     func titleWhenEmpty() {
-        #expect(!PanelViewModel.title(for: .empty).isEmpty)
+        #expect(!PanelViewModel.title(for: .empty, language: .traditionalChinese).isEmpty)
     }
 
     // MARK: - 最終 review 的 I3 / I4
@@ -203,15 +203,15 @@ struct PanelViewModelTests {
     @Test("waiting 的主行用 toolDescription，不是只有 tool 名")
     func waitingHeadlineUsesToolDescription() {
         let s = state(.waiting, tool: "Bash", desc: "Download example.com to dl2.html")
-        #expect(PanelViewModel.headline(for: s) == "等你批准：Download example.com to dl2.html")
+        #expect(PanelViewModel.headline(for: s, language: .traditionalChinese) == "等你批准：Download example.com to dl2.html")
     }
 
     @Test("沒有 toolDescription 時退回 notificationMessage，再退回 tool 名")
     func waitingHeadlineFallbacks() {
         let m = state(.waiting, tool: "Bash", notif: "MCP server 在等你輸入")
-        #expect(PanelViewModel.headline(for: m) == "等你批准：MCP server 在等你輸入")
+        #expect(PanelViewModel.headline(for: m, language: .traditionalChinese) == "等你批准：MCP server 在等你輸入")
         let t = state(.waiting, tool: "Bash")
-        #expect(PanelViewModel.headline(for: t) == "等你批准：Bash")
+        #expect(PanelViewModel.headline(for: t, language: .traditionalChinese) == "等你批准：Bash")
     }
 
     /// **主 agent 的 tool 是主行，subagent 的是附註**（spec §2.5 結尾）。
@@ -222,21 +222,21 @@ struct PanelViewModelTests {
     @Test("working 的主行是主 agent 的 tool，subagent 只出現在副行")
     func workingHeadlineKeepsMainTool() {
         let s = state(.working, tool: "Bash", sub: "Explore → Grep")
-        #expect(PanelViewModel.headline(for: s) == "Bash", "主行被 subagent 蓋掉了")
-        #expect(PanelViewModel.detail(for: s, now: Date()).contains("Explore → Grep"),
+        #expect(PanelViewModel.headline(for: s, language: .traditionalChinese) == "Bash", "主行被 subagent 蓋掉了")
+        #expect(PanelViewModel.detail(for: s, now: Date(), language: .traditionalChinese).contains("Explore → Grep"),
                 "subagent 應以附註形式出現在副行")
     }
 
     @Test("沒有主 tool 時才退回 subagent 的")
     func workingHeadlineFallsBackToSubagent() {
         let s = state(.working, sub: "Explore → Grep")
-        #expect(PanelViewModel.headline(for: s) == "Explore → Grep")
+        #expect(PanelViewModel.headline(for: s, language: .traditionalChinese) == "Explore → Grep")
     }
 
     @Test("tool 耗時出現在副行")
     func detailShowsToolDuration() {
         let s = state(.working, tool: "Bash", durationMs: 12_403)
-        #expect(PanelViewModel.detail(for: s, now: Date()).contains("12"), "應含 tool 耗時")
+        #expect(PanelViewModel.detail(for: s, now: Date(), language: .traditionalChinese).contains("12"), "應含 tool 耗時")
     }
 
     // MARK: - T23 review S2-4：主 agent 已完成，燈卻被背景具名 subagent 拖回 working
@@ -258,18 +258,18 @@ struct PanelViewModelTests {
     func workingHeadlineRevealsBackgroundSubagentWhenMainIsDone() {
         let s = state(.working, tool: "Bash", mainActivity: .done, lastMessage: "全部完成")
 
-        let headline = PanelViewModel.headline(for: s)
+        let headline = PanelViewModel.headline(for: s, language: .traditionalChinese)
         #expect(headline != "Bash", "不能顯示主 agent 早就跑完的 tool，那會讓人誤以為主 agent 還在動")
         #expect(headline.contains("背景"), "主行必須說得出「背景還有東西在跑」這件事，不只是燈色對")
 
-        #expect(PanelViewModel.detail(for: s, now: Date()).contains("全部完成"),
+        #expect(PanelViewModel.detail(for: s, now: Date(), language: .traditionalChinese).contains("全部完成"),
                 "主 agent 自己的完成訊息不能因為這個特例就不見了")
     }
 
     @Test("working 且 mainActivity 也是 working（正常前景工作）：headline 維持原本行為，不受這個特例影響")
     func workingHeadlineUnaffectedWhenMainIsStillWorking() {
         let s = state(.working, tool: "Bash", mainActivity: .working)
-        #expect(PanelViewModel.headline(for: s) == "Bash", "沒有背景 subagent 撐著時，行為不變")
+        #expect(PanelViewModel.headline(for: s, language: .traditionalChinese) == "Bash", "沒有背景 subagent 撐著時，行為不變")
     }
 
     /// 這幾條共用的建構器 —— 只填會用到的欄位，其餘給中性值。

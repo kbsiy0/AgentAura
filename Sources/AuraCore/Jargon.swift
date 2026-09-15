@@ -6,28 +6,42 @@ import Foundation
 ///
 /// `effortMap`／`permissionModeMap` 用**字典**，不是 `switch`——G9a／G9b 要迭代它們
 /// 本身當來源集合（S1-Q4），`switch` 推導不出 case 的完整集合。
+///
+/// T27（i18n）：兩個查表搬進 `L10nJargon` 字串表，這裡只是按語言把字典組出來——
+/// **帶預設值 `.traditionalChinese`**（同 `OptionsMenuModel.rows` 的 T26 review 裁決）：
+/// `FixtureCodeAnchorTests`／`JargonTests` 既有呼叫點很多，都不關心語言，改成無預設值
+/// 會逼著一次改完所有呼叫點；生產路徑（`PanelViewModel.meta(for:)`）才是真正需要明確傳
+/// `language` 的地方，見該檔案。
 public enum Jargon {
-    public static let effortMap: [String: String] = [
-        "low": "思考低",
-        "medium": "思考中",
-        "high": "思考高",
-        "xhigh": "思考極高",
-    ]
+    public static func effortMap(_ language: Language) -> [String: String] {
+        [
+            "low": L10nJargon.effortLow.text(language),
+            "medium": L10nJargon.effortMedium.text(language),
+            "high": L10nJargon.effortHigh.text(language),
+            "xhigh": L10nJargon.effortXhigh.text(language),
+        ]
+    }
 
     /// `auto` 是實測 141 個真實 payload 裡**最常見**的值，r1 漏了它（S1-Q4）。
     /// brainstorm §4 的示意寫「自動接受」，這裡**刻意改成「自動判斷」**：
     /// auto 的語意是自動決定要不要問，不是一律接受（S2-3）。
-    public static let permissionModeMap: [String: String] = [
-        "auto": "自動判斷",
-        "default": "每次問我",
-        "acceptEdits": "自動接受編輯",
-        "bypassPermissions": "全部自動",
-        "plan": "計畫模式",
-    ]
+    public static func permissionModeMap(_ language: Language) -> [String: String] {
+        [
+            "auto": L10nJargon.permissionAuto.text(language),
+            "default": L10nJargon.permissionDefault.text(language),
+            "acceptEdits": L10nJargon.permissionAcceptEdits.text(language),
+            "bypassPermissions": L10nJargon.permissionBypass.text(language),
+            "plan": L10nJargon.permissionPlan.text(language),
+        ]
+    }
 
     /// 查表，未命中原樣回傳——payload 的欄位是自由字串，映射不得吃掉資訊。
-    public static func effort(_ raw: String) -> String { effortMap[raw] ?? raw }
-    public static func permissionMode(_ raw: String) -> String { permissionModeMap[raw] ?? raw }
+    public static func effort(_ raw: String, language: Language) -> String {
+        effortMap(language)[raw] ?? raw
+    }
+    public static func permissionMode(_ raw: String, language: Language) -> String {
+        permissionModeMap(language)[raw] ?? raw
+    }
 
     /// 六條規則（spec §3.4，附反例表）：
     /// 1. 抓出 `[...]` 後綴 → ` (內容大寫)`；其餘部分繼續處理

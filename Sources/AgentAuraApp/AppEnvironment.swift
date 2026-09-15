@@ -1,4 +1,5 @@
 import AppKit
+import AuraCore
 
 /// T08：composition-root 的其餘生產副作用縫——與 `makeRenderer`／`defaults` 同一個理由
 /// （spec §6.4：測試裡絕不真的 `NSApp.terminate`／彈 `NSAlert`／開瀏覽器）。
@@ -38,15 +39,20 @@ struct RealTerminator: AppTerminating {
 /// 後果是使用者按「取消」卻執行了破壞性動作。收成一個共用建構式，兩個既有 enum
 /// 變成呼叫它的兩組常數：注入縫（`confirmDisconnect`／`confirmReplaceExternalMount`）
 /// 完全不動，測試不受影響。
+///
+/// T29（i18n）：「取消」按鈕文案改讀 `L10nConfirmationAlerts.cancelButtonTitle`——三個
+/// 呼叫端（disconnect／replaceMount／uninstall）共用同一顆取消鈕，`language` 因此在這裡
+/// 收斂一次，不必三處各自傳一次「取消」的翻譯。
 @MainActor
 enum ConfirmationAlert {
-    static func present(title: String, body: String, confirmTitle: String, onConfirm: () -> Void) {
+    static func present(title: String, body: String, confirmTitle: String, language: Language,
+                       onConfirm: () -> Void) {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = title
         alert.informativeText = body
         alert.addButton(withTitle: confirmTitle)
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L10nConfirmationAlerts.cancelButtonTitle.text(language))
         if alert.runModal() == .alertFirstButtonReturn {
             onConfirm()
         }
@@ -58,16 +64,12 @@ enum ConfirmationAlert {
 /// 只有使用者按下「移除掛載」（第一顆按鈕）才呼叫 `onConfirm`。
 @MainActor
 enum DisconnectConfirmation {
-    static func present(onConfirm: () -> Void) {
+    static func present(language: Language, onConfirm: () -> Void) {
         ConfirmationAlert.present(
-            title: "移除 Claude Code 掛載？",
-            body: """
-                這會移除 ~/.claude/skills/agentaura 這個掛載，讓 Claude Code 的 hook 停止回報執行狀態。
-
-                不會刪除 AgentAura 本身、不會刪除任何 session 紀錄或你的顏色設定——AgentAura 會留在選單列，\
-                要再用的話隨時可以按「接上」。
-                """,
-            confirmTitle: "移除掛載", onConfirm: onConfirm)
+            title: L10nConfirmationAlerts.disconnectTitle.text(language),
+            body: L10nConfirmationAlerts.disconnectBody.text(language),
+            confirmTitle: L10nConfirmationAlerts.disconnectConfirmButton.text(language),
+            language: language, onConfirm: onConfirm)
     }
 }
 
@@ -77,47 +79,41 @@ enum DisconnectConfirmation {
 /// 同 `DisconnectConfirmation` 的注入縫（測試不真的彈 `NSAlert`，spec §6.4）。
 @MainActor
 enum ReplaceMountConfirmation {
-    static func present(onConfirm: () -> Void) {
+    static func present(language: Language, onConfirm: () -> Void) {
         ConfirmationAlert.present(
-            title: "改指向這個 App？",
-            body: """
-                目前的掛載指向別的地方（例如你自己的開發用 repo）。改指向這個 App 之後，
-                那份掛載會被換成 App 內建的版本，原本的掛載不會再生效。
-
-                不會刪除原本掛載指向的任何檔案——只是換了 ~/.claude/skills/agentaura 指向哪裡，
-                要換回去的話可以到原本的位置重新接上一次。
-                """,
-            confirmTitle: "改指向這個 App", onConfirm: onConfirm)
+            title: L10nConfirmationAlerts.replaceMountTitle.text(language),
+            body: L10nConfirmationAlerts.replaceMountBody.text(language),
+            confirmTitle: L10nConfirmationAlerts.replaceMountConfirmButton.text(language),
+            language: language, onConfirm: onConfirm)
     }
 }
 
 /// T24（D-1）：`.uninstall`——比 `.disconnect` 更進一步。文案是使用者原話要求改過的
 /// 第二版：條列、短句、講**使用者感受得到的後果**，不寫技術名詞（不提 symlink／
 /// persistent domain／`~/.claude/skills/agentaura` 這類字面）。`title`／`body` 拆成
-/// 獨立常數（不是內嵌在 `present()` 裡）：`UninstallConfirmationCopyTests` 需要在
+/// 獨立函式（不是內嵌在 `present()` 裡）：`UninstallConfirmationCopyTests` 需要在
 /// 不彈真 `NSAlert` 的前提下驗文案語意，這是唯一的讀取點。
 ///
 /// T25（真機事故）：結尾原本寫「都可以救回來」，是無條件保證——垃圾桶動作曾經在無法
 /// 解釋的情況下沒有真的落地，那句話對那次的使用者是假話。這個對話框在動作**之前**
 /// 顯示，沒辦法等垃圾桶動作真的回報成功才講這句話，所以改成不做絕對承諾，
 /// 而不是把承諾綁在事實上（`recoveryClaimIsHedgedNotAbsolute` 驗證這個決定）。
+///
+/// T29（i18n）：`title`／`body`／`confirmButtonTitle` 從 `static let`／字面改成吃
+/// `language:` 的函式（無預設值）——內容搬進 `L10nUninstallConfirmation`（AuraCore），
+/// 這裡只留「哪句話對應哪個角色」的組裝。
 @MainActor
 enum UninstallConfirmation {
-    static let title = "完整移除 AgentAura？"
-    static let body = """
-        這會依序做這些事：
+    static func title(_ language: Language) -> String { L10nUninstallConfirmation.title.text(language) }
+    static func body(_ language: Language) -> String { L10nUninstallConfirmation.body.text(language) }
+    static func confirmButtonTitle(_ language: Language) -> String {
+        L10nUninstallConfirmation.confirmButtonTitle.text(language)
+    }
 
-        • 關閉開機自動啟動
-        • 選單列不再顯示狀態
-        • 顏色和開關恢復預設
-        • 清空所有使用紀錄
-        • 移到垃圾桶
-
-        垃圾桶清空前，通常都能救回來。
-        """
-
-    static func present(onConfirm: () -> Void) {
-        ConfirmationAlert.present(title: title, body: body, confirmTitle: "完整移除", onConfirm: onConfirm)
+    static func present(language: Language, onConfirm: () -> Void) {
+        ConfirmationAlert.present(title: title(language), body: body(language),
+                                  confirmTitle: confirmButtonTitle(language),
+                                  language: language, onConfirm: onConfirm)
     }
 }
 

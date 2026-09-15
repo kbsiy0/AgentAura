@@ -32,13 +32,13 @@ extension AppDelegate {
             // `externalTargetPath` 得是 reprobe 之後的值）。
             if !wasAlreadyConnected { verificationStore.writeVerified(stamp) }
             reprobe()
-            banner = wasAlreadyConnected ? .alreadyConnected(target: externalTargetPath)
-                    : force ? .mountReplaced(from: priorExternalTarget)
-                    : .connected()
+            banner = wasAlreadyConnected ? .alreadyConnected(target: externalTargetPath, language: language)
+                    : force ? .mountReplaced(from: priorExternalTarget, language: language)
+                    : .connected(language: language)
         } catch let failure as InstallerFailure {
             handleConnectFailure(failure)
         } catch {
-            banner = .error("接上失敗：\(error.localizedDescription)")
+            banner = .error(L10nConfirmationAlerts.connectFailed(underlying: error.localizedDescription, language: language))
             reprobe()
         }
         refreshPanel()
@@ -57,7 +57,7 @@ extension AppDelegate {
              .bundleIncomplete, .writeTargetOccupied, .renameFailed, .verificationFailed:
             break   // 這幾種不寫任何驗證憑證鍵——文案仍在下面窮盡處理
         }
-        banner = .error(for: failure)
+        banner = .error(for: failure, language: language)
         reprobe()
     }
 
@@ -66,9 +66,9 @@ extension AppDelegate {
         do {
             try installer.disconnect()
             reprobe()
-            banner = .disconnected()
+            banner = .disconnected(language: language)
         } catch {
-            banner = .error("移除掛載失敗：\(error.localizedDescription)")
+            banner = .error(L10nConfirmationAlerts.disconnectFailed(underlying: error.localizedDescription, language: language))
             reprobe()
         }
         refreshPanel()
@@ -95,7 +95,7 @@ extension AppDelegate {
                    bundleIdentifier: bundleID, stateDirectory: root.deletingLastPathComponent(),
                    homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
                    recycler: WorkspaceRecycler(), bundleURL: bundleID != nil ? Bundle.main.bundleURL : nil,
-                   terminator: terminator).run()
+                   terminator: terminator, language: language).run()
     }
 
     /// §4.2：設完**重讀實際值**——`.requiresApproval` 等失敗時開關要彈回去，
@@ -104,13 +104,13 @@ extension AppDelegate {
         do {
             try loginItem.set(on)
         } catch LoginItemError.requiresApproval {
-            banner = .error("需要在系統設定 → 一般 → 登入項目 允許 AgentAura，之後才會真的生效。")
+            banner = .error(L10nConfirmationAlerts.loginItemRequiresApproval.text(language))
         } catch LoginItemError.mustMoveToApplications {
             // 波次2接線：與 `InstallerFailure.mustMoveToApplications` 共用同一句合併措辭
             // （B2，AuraCore）——先前這裡與那邊各自手搓一句，已經漂成兩種說法。
-            banner = .error(InstallerFailure.mustMoveToApplicationsMessage)
+            banner = .error(InstallerFailure.mustMoveToApplicationsMessage(language))
         } catch {
-            banner = .error("設定開機自動啟動失敗：\(error.localizedDescription)")
+            banner = .error(L10nConfirmationAlerts.setLaunchAtLoginFailed(underlying: error.localizedDescription, language: language))
         }
         launchAtLogin = loginItem.isSupported ? loginItem.isEnabled : nil
         refreshPanel()

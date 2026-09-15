@@ -32,6 +32,11 @@ public enum InstallerFailure: Error, Equatable {
     /// 應用程式」這件事有兩種說法（`InstallerFailure.mustMoveToApplications` 用一種、
     /// `LoginItemError.mustMoveToApplications` 用另一種），已經漂移。這裡給通用措辭，
     /// 不綁單一動作（「接上」或「設定開機自動啟動」），兩處呼叫端之後都能共用（wave 2）。
-    public static let mustMoveToApplicationsMessage =
-        "請先把 AgentAura 搬進「應用程式」資料夾（或搬出 Downloads）再繼續。"
+    ///
+    /// T27（i18n）：**帶預設值 `.traditionalChinese`**——`PanelBanner.error(for:)`（AuraCore
+    /// 內部）是目前唯一呼叫點，會明確傳 `language`；`AppDelegate+Connect.swift`（T28 清單內）
+    /// 直接引用這個常數的地方之後要接上英文畫面時，一樣走這個函式。
+    public static func mustMoveToApplicationsMessage(_ language: Language) -> String {
+        L10nPanelBanner.mustMoveToApplicationsMessage.text(language)
+    }
 }

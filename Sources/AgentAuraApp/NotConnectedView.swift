@@ -43,7 +43,7 @@ struct NotConnectedView: View {
                 }
                 .buttonStyle(.borderless)
             }
-            Button("這是什麼？") { onAction(.openHelp) }
+            Button(L10nPanel.whatIsThisButton.text(model.language)) { onAction(.openHelp) }
                 .buttonStyle(.borderless)
                 .font(.system(size: 11))
         }

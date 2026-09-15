@@ -10,10 +10,13 @@ extension PanelModel {
     /// `install.explanationDetail`（S1-1 已放寬到 7 個 broken reason，見
     /// `InstallAffordance.swift`）；兩者都沒有時退回最原始的通用句（`.notConnected`，
     /// 從未壞過的第一次使用）。
+    /// T27（i18n）：`language` 不是新參數——`PanelModel` 已經有 `language` 欄位（D-3），
+    /// 這裡直接讀 `self.language` 就好，零簽章變動，`NotConnectedView.swift`（T28 清單內）
+    /// 不必跟著改。
     public var notConnectedDetailText: String {
         if let note = mountTargetNote { return note }
-        if let detail = install.explanationDetail { return detail }
-        return "接上之後，Claude Code 的執行狀態會顯示在選單列。"
+        if let detail = install.explanationDetail(language) { return detail }
+        return L10nPanel.notConnectedGenericFallback.text(language)
     }
 
     /// B6（/simplify 波次1，altitude#5／reuse#3,4）：「現有掛載指向哪裡」的單一措辭——
@@ -22,6 +25,6 @@ extension PanelModel {
     /// 「現有掛載指向：」不一樣）。收成一個 derived property，AuraCore 內的兩個呼叫點
     /// 先改用它；app 層那一份留給下一波接手（B6 的第三個消費者）。
     public var mountTargetNote: String? {
-        externalTargetPath.map { "現有掛載指向：\($0)" }
+        externalTargetPath.map { L10nPanel.mountTargetNote($0, language: language) }
     }
 }

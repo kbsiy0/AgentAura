@@ -29,10 +29,10 @@ struct PanelHostingTests {
         let icon = IconState(activity: .working, counts: [.working: 1], liveCount: 1)
         let m1 = PanelModel.make(icon: icon, sessions: [session("a")], palette: .default,
                                  install: .notConnected, version: "1.0", optionsExpanded: false,
-                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         let m3 = PanelModel.make(icon: icon, sessions: [session("a"), session("b"), session("c")], palette: .default,
                                  install: .notConnected, version: "1.0", optionsExpanded: false,
-                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
 
         controller.setPanel(m1)
         let first = try #require(controller.hostingController, "第一次 setPanel 之後 hostingController 應該非 nil")
@@ -109,7 +109,7 @@ struct PanelHostingTests {
         let icon = IconState(activity: attention > 0 ? .error : (live > 0 ? .working : .idle),
                              counts: attention > 0 ? [.error: attention] : [:], liveCount: live)
         let appearance = AppearancePolicy.appearance(for: icon, reduceMotion: true)
-        let text = StatusItemController.tooltip(for: appearance)
+        let text = StatusItemController.tooltip(for: appearance, language: .traditionalChinese)
         #expect(text == expected, "attention=\(attention) live=\(live) → 應為「\(expected)」，實際「\(text)」")
         #expect(!text.contains("-"), "tooltip 不得出現負數：\(text)")
     }
@@ -121,6 +121,16 @@ struct PanelHostingTests {
     func tooltipReflectsInstallState() throws {
         let controller = StatusItemController()
         defer { controller.removeFromStatusBar() }
+
+        // i18n 接線：`setPanel` 是語言唯一的傳遞路徑（`PanelModel` 每次 refreshPanel 都帶著
+        // 當下語言過來）。這裡先把語言推成中文再斷言中文字串——**等於順便驗證了那條接線**：
+        // 若 `setPanel` 沒把 `model.language` 記下來、或 `updateTooltip` 沒用它，
+        // tooltip 會停在預設的英文（D-2），下面三條全部變紅。
+        controller.setPanel(PanelModel.make(icon: .empty, sessions: [], palette: .default,
+                                            install: .notConnected, version: "1.0", optionsExpanded: false,
+                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil,
+                                            systemReduceMotion: false, userReduceMotion: false,
+                                            iconPlate: true, language: .traditionalChinese))
 
         let empty = AppearancePolicy.appearance(for: .empty, reduceMotion: true)
         controller.apply(empty, phase: 0)

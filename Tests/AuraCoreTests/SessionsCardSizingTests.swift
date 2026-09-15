@@ -18,7 +18,7 @@ struct SessionsCardSizingTests {
                              turnStartedAt: nil, subagents: [:], toolFailures: 0,
                              lastMessage: nil, errorType: nil, toolError: nil,
                              liveness: .alive(pid: 1), updatedAt: Date())
-        return PanelViewModel.rows(from: [s]).first!
+        return PanelViewModel.rows(from: [s], language: .traditionalChinese).first!
     }
 
     @Test("空陣列：高度為 0")

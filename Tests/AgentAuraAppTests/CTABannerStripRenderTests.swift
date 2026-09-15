@@ -28,7 +28,7 @@ struct CTABannerStripRenderTests {
         let icon = IconState(activity: .working, counts: [.working: 1], liveCount: 1)
         return PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                                install: install, version: "1.0", optionsExpanded: false,
-                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
     }
 
     func renderFixedCanvas(_ m: PanelModel) throws -> OffscreenRender.Bitmap {

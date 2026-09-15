@@ -27,7 +27,7 @@ struct OptionsMenuModelTests {
                 for isDefaultPalette in [true, false] {
                     let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
                                                      isDefaultPalette: isDefaultPalette,
-                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
                     let kinds = rows.map(\.action.kind)
                     #expect(Set(kinds).count == kinds.count, """
                         install=\(install) launchAtLogin=\(String(describing: launchAtLogin)) \
@@ -47,7 +47,7 @@ struct OptionsMenuModelTests {
     @Test("setLaunchAtLogin 列在 launchAtLogin == nil 時整列隱藏")
     func launchAtLoginRowHiddenWhenUnsupported() {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: nil, isDefaultPalette: true,
-                                              systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                              systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
         #expect(!rows.contains { $0.action.kind == .setLaunchAtLogin })
     }
 
@@ -55,29 +55,29 @@ struct OptionsMenuModelTests {
     func recheckHookRowOnlyWhenVerificationUnknown() {
         let unknownRows = OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .unknown),
                                                 launchAtLogin: true, isDefaultPalette: true,
-                                                systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
         #expect(unknownRows.contains { $0.action.kind == .recheckHook })
 
         let verifiedRows = OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .verified),
                                                  launchAtLogin: true, isDefaultPalette: true,
-                                                 systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                 systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
         #expect(!verifiedRows.contains { $0.action.kind == .recheckHook })
 
         let notConnectedRows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
-                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
         #expect(!notConnectedRows.contains { $0.action.kind == .recheckHook })
     }
 
     @Test("resetColors 列在 isDefaultPalette 時仍在，只是 disabled")
     func resetColorsRowDisabledNotHiddenWhenDefaultPalette() {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
-                                         systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                         systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
         let resetRow = rows.first { $0.action.kind == .resetColors }
         #expect(resetRow != nil, "resetColors 列不該因為 isDefaultPalette 而消失——只准 disabled")
         #expect(resetRow?.isDisabled == true)
 
         let nonDefaultRows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: false,
-                                                   systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                   systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
         #expect(nonDefaultRows.first { $0.action.kind == .resetColors }?.isDisabled == false)
     }
 
@@ -92,7 +92,7 @@ struct OptionsMenuModelTests {
                 for isDefaultPalette in [true, false] {
                     let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
                                                      isDefaultPalette: isDefaultPalette,
-                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
                     guard let first = rows.first else { continue }
                     #expect(first.toggleValue == nil, """
                         install=\(install) launchAtLogin=\(String(describing: launchAtLogin)) 的第一列是
@@ -107,7 +107,7 @@ struct OptionsMenuModelTests {
 
     private static func reduceMotionRow(system: Bool, user: Bool) -> OptionsRow {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
-                                         systemReduceMotion: system, userReduceMotion: user, iconPlate: true, palette: .default)
+                                         systemReduceMotion: system, userReduceMotion: user, iconPlate: true, palette: .default, language: .traditionalChinese)
         return rows.first { $0.action.kind == .setReduceMotion }!
     }
 
@@ -170,7 +170,7 @@ struct OptionsMenuModelTests {
     private static func iconPlateRow(_ iconPlate: Bool, palette: IconPalette = .default) -> OptionsRow {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: palette.isDefault,
                                          systemReduceMotion: false, userReduceMotion: false,
-                                         iconPlate: iconPlate, palette: palette)
+                                         iconPlate: iconPlate, palette: palette, language: .traditionalChinese)
         return rows.first { $0.action.kind == .setIconPlate }!
     }
 
@@ -247,7 +247,7 @@ struct OptionsMenuModelTests {
                     for systemReduceMotion in [true, false] {
                         let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
                                                          isDefaultPalette: isDefaultPalette,
-                                                         systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                         systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
                         var collapsed: [OptionsRowGroup] = []
                         for row in rows where collapsed.last != row.group { collapsed.append(row.group) }
                         #expect(Set(collapsed).count == collapsed.count, """
@@ -267,7 +267,7 @@ struct OptionsMenuModelTests {
         for install in InstallStateAllCases.all() {
             for launchAtLogin: Bool? in [true, false, nil] {
                 let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
-                                                 isDefaultPalette: true, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default)
+                                                 isDefaultPalette: true, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, palette: .default, language: .traditionalChinese)
                 seen.formUnion(rows.map(\.group))
             }
         }

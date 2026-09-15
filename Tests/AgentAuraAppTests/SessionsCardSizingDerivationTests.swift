@@ -31,7 +31,7 @@ struct SessionsCardSizingDerivationTests {
                              turnStartedAt: nil, subagents: [:], toolFailures: 0,
                              lastMessage: nil, errorType: nil, toolError: nil,
                              liveness: .alive(pid: 1), updatedAt: Date())
-        return PanelViewModel.rows(from: [s]).first!
+        return PanelViewModel.rows(from: [s], language: .traditionalChinese).first!
     }
 
     func measuredHeight(_ row: PanelRow) -> CGFloat {

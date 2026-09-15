@@ -79,9 +79,9 @@ struct AppDelegatePanelActionsWiredTests {
             openURL: { recorder.openedURLs.append($0) },
             showAboutPanel: { recorder.aboutOptions = $0 },
             terminator: recorder.fakeTerminator,
-            confirmDisconnect: { onConfirm in recorder.confirmedDisconnects += 1; onConfirm() },
-            confirmReplaceExternalMount: { onConfirm in recorder.confirmedReplaceExternalMounts += 1; onConfirm() },
-            confirmUninstall: { onConfirm in recorder.confirmedUninstalls += 1; onConfirm() },
+            confirmDisconnect: { _, onConfirm in recorder.confirmedDisconnects += 1; onConfirm() },
+            confirmReplaceExternalMount: { _, onConfirm in recorder.confirmedReplaceExternalMounts += 1; onConfirm() },
+            confirmUninstall: { _, onConfirm in recorder.confirmedUninstalls += 1; onConfirm() },
             makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
@@ -231,6 +231,7 @@ struct AppDelegatePanelActionsWiredTests {
 
             case .setIconPlate:   // T16：case body 在 `+T16.swift`（同上，避免撞 300 行上限）
                 try await verifySetIconPlate(samples: samples)
+            case .setLanguage: try await verifyLanguage(samples: samples)   // T26：body 在 +Language.swift
             }
         }
     }
@@ -277,7 +278,7 @@ struct AppDelegatePanelActionsWiredTests {
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults, installer: installer,
                                    makeLoginItem: { FakeLoginItem() },
-                                   confirmDisconnect: { $0() }, makeRenderer: { spy })
+                                   confirmDisconnect: { _, onConfirm in onConfirm() }, makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

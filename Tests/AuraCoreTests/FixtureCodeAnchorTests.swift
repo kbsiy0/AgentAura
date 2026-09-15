@@ -45,25 +45,31 @@ struct FixtureCodeAnchorTests {
                           effortLevels: effortLevels, models: models)
     }
 
-    @Test("permission_mode：fixture 裡出現過的每一個值都在 permissionModeMap 裡（含 auto）")
+    @Test("permission_mode：fixture 裡出現過的每一個值都在 permissionModeMap 裡（含 auto）——兩種語言都要（T27）")
     func everyFixturePermissionModeIsMapped() throws {
         let result = try Self.scanFixtures()
         #expect(result.scannedFiles >= 3, "只掃到 \(result.scannedFiles) 個 .ndjson —— gate 不能空跑")
         #expect(!result.permissionModes.isEmpty, "fixture 裡沒掃到任何 permission_mode —— 解析可能壞了")
         #expect(result.permissionModes.contains("auto"), "141 個真實 payload 裡最常見的值 auto 應該要出現在 fixture 裡")
-        for v in result.permissionModes.sorted() {
-            #expect(Jargon.permissionModeMap[v] != nil,
-                    "fixture 裡出現過 permission_mode=\"\(v)\"，但 Jargon.permissionModeMap 沒有它的人話對應")
+        for language in Language.allCases {
+            let map = Jargon.permissionModeMap(language)
+            for v in result.permissionModes.sorted() {
+                #expect(map[v] != nil,
+                        "fixture 裡出現過 permission_mode=\"\(v)\"，但 \(language) 的 Jargon.permissionModeMap 沒有它的人話對應")
+            }
         }
     }
 
-    @Test("effort.level：fixture 裡出現過的每一個值都在 effortMap 裡")
+    @Test("effort.level：fixture 裡出現過的每一個值都在 effortMap 裡——兩種語言都要（T27）")
     func everyFixtureEffortLevelIsMapped() throws {
         let result = try Self.scanFixtures()
         #expect(!result.effortLevels.isEmpty, "fixture 裡沒掃到任何 effort.level —— 解析可能壞了")
-        for v in result.effortLevels.sorted() {
-            #expect(Jargon.effortMap[v] != nil,
-                    "fixture 裡出現過 effort.level=\"\(v)\"，但 Jargon.effortMap 沒有它的人話對應")
+        for language in Language.allCases {
+            let map = Jargon.effortMap(language)
+            for v in result.effortLevels.sorted() {
+                #expect(map[v] != nil,
+                        "fixture 裡出現過 effort.level=\"\(v)\"，但 \(language) 的 Jargon.effortMap 沒有它的人話對應")
+            }
         }
     }
 
@@ -95,7 +101,7 @@ struct FixtureCodeAnchorTests {
                              lastMessage: nil, errorType: nil, toolError: nil,
                              liveness: .alive(pid: 1), updatedAt: Date())
 
-        let meta = PanelViewModel.rows(from: [s]).first!.meta
+        let meta = PanelViewModel.rows(from: [s], language: .traditionalChinese).first!.meta
         #expect(!meta.contains(model), "meta 回顯了原始 model 代碼字「\(model)」，實際：\(meta)")
         #expect(!meta.contains(mode), "meta 回顯了原始 permission_mode 代碼字「\(mode)」，實際：\(meta)")
         #expect(!meta.contains(effort), "meta 回顯了原始 effort.level 代碼字「\(effort)」，實際：\(meta)")

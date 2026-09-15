@@ -38,7 +38,7 @@ struct PanelView: View {
                 // （`connectCTAStyle == .banner` 依 `PanelModel` 的定義恆搭配非空 rows）。
                 if model.connectCTAStyle == .banner,
                    let cta = model.connectCTAText, let action = model.connectCTAAction {
-                    ConnectCTABannerView(label: model.install.healthLabel, subtitle: model.connectCTASubtitle,
+                    ConnectCTABannerView(label: model.install.healthLabel(model.language), subtitle: model.connectCTASubtitle,
                                         ctaText: cta, action: action, onAction: onAction)
                 }
                 if model.rows.isEmpty {
@@ -55,7 +55,7 @@ struct PanelView: View {
                     sessionsCard
                 }
             }
-            LegendRowView(legend: model.legend, onAction: onAction)
+            LegendRowView(legend: model.legend, onAction: onAction, language: model.language)
 
             PanelFooterView(model: model, onAction: onAction)
 

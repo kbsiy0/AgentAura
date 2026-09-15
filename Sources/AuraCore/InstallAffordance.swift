@@ -75,24 +75,27 @@ extension InstallState {
     /// 與 `everyBrokenReasonHasNonEmptyDetail` 這兩條既有 gate 因此從「碰巧成立」
     /// （`affordance` 剛好把 9 個 reason 分成兩組，兩組都被填了字串）變成「結構上必然」
     /// （`Reason.allCases` 9 格在這裡被逐一窮盡，不會再漏）。
-    public var explanationDetail: String? {
+    /// T27（i18n）：`language` **帶預設值 `.traditionalChinese`**（同 `Jargon`／`PanelViewModel.rows`
+    /// 的 T27 理由）——這個屬性目前只有 `PanelModel+NotConnectedDetail.swift` 這一個消費點
+    /// （AuraCore 內部，會改成明確傳 `language`），沒有跨模組呼叫點需要立刻改。
+    public func explanationDetail(_ language: Language) -> String? {
         switch self {
         case .claudeNotFound:
-            return "看起來還沒用過 Claude Code，先跑一次（隨便問它一句話）再回來，通常就能一鍵接上。"
+            return L10nInstallAffordance.claudeNotFoundExplanation.text(language)
         case .notConnected, .connected:
             return nil
         case .broken(let reason, _):
             switch reason {
             case .occupiedByFile:
-                return "~/.claude/skills/agentaura 目前是一個普通檔案，不是掛載用的位置。手動刪除或搬走這個檔案，再從 Options 選「重新接上 Claude Code」。"
+                return L10nInstallAffordance.occupiedByFileExplanation.text(language)
             case .occupiedByDirectory:
-                return "~/.claude/skills/agentaura 目前是別的安裝在用的目錄，AgentAura 不會動它。確認那個安裝不再需要之後手動移除該目錄，再從 Options 選「重新接上 Claude Code」。"
+                return L10nInstallAffordance.occupiedByDirectoryExplanation.text(language)
             case .hookBlockedOrBroken:
-                return Self.hookBlockedPrescription
+                return Self.hookBlockedPrescription(language)
             case .hookUnconfirmed:
-                return Self.hookUnconfirmedPrescription
+                return Self.hookUnconfirmedPrescription(language)
             case .targetMissing, .targetUnresolvable, .notAPlugin, .hookMissing, .hookNotExecutable:
-                return "按下面的按鈕會重新建立掛載，通常就能修好。"
+                return L10nInstallAffordance.genericConnectExplanation.text(language)
             }
         }
     }
@@ -100,9 +103,17 @@ extension InstallState {
     /// S1-1：與 `AppDelegate+Connect.swift` 的 `handleConnectFailure` 共用同一句——按下「接上」
     /// 真的失敗之後的錯誤 banner，與按下之前 `explanationDetail` 顯示的處方是同一句話，
     /// 只維護一份，不允許兩處各自抄一份而之後各自漂移。
-    public static let hookBlockedPrescription =
-        "macOS 擋住了 hook。把 App 拖進「應用程式」再開一次；或到系統設定 → 隱私與安全性允許。"
-    public static let hookUnconfirmedPrescription = "無法確認 hook 能不能跑，稍後再試一次。"
+    ///
+    /// T27（i18n）：兩句常數搬成帶 `language` 參數的函式，一樣**帶預設值 `.traditionalChinese`**——
+    /// `PanelBanner+InstallerFailure.swift`（AuraCore 內部）是目前唯一呼叫點，會明確傳 `language`；
+    /// `AppDelegate+Connect.swift`（T28 清單內）尚未直接引用這兩句，之後要接上英文畫面時
+    /// 一樣走這個函式，不必再改一次簽章。
+    public static func hookBlockedPrescription(_ language: Language) -> String {
+        L10nInstallAffordance.hookBlockedPrescription.text(language)
+    }
+    public static func hookUnconfirmedPrescription(_ language: Language) -> String {
+        L10nInstallAffordance.hookUnconfirmedPrescription.text(language)
+    }
 }
 
 /// §3.3：`healthTone` 的實際色值寫死——`ok` 與 done 同色、`warn` 與 waiting 同色，
@@ -128,39 +139,47 @@ extension InstallState {
     /// S2（T11 A9–A11 批次，team-lead 自查）：三個子句一律用「 · 」串接，不再用兩層括號
     /// 疊字（舊版 `owner==.external ＋ unknown` 會印出「已接上（未驗證）（你的 repo 掛載）」，
     /// 兩個括號子句疊在一起）——改成「已接上 · 你的 repo 掛載 · 未驗證」，唸起來是一句話。
-    public var healthLabel: String {
+    /// T27（i18n）：**帶預設值 `.traditionalChinese`**——這個屬性有兩個跨模組呼叫點
+    /// （`Sources/AgentAuraApp/PanelFooterView.swift`／`PanelView.swift`）目前不在 T27／T28
+    /// 任何一份 `pendingMigrationFiles` 清單裡（因為它們自己沒有中文字面，只是轉呼叫這裡），
+    /// 帶預設值讓它們不必跟著這次改動同步修改就能繼續編譯、行為不變（同 `Jargon`／
+    /// `PanelViewModel.rows` 的 T27 理由）。**已知缺口**：這兩處目前會吃預設值繼續顯示中文，
+    /// 即使整個 App 切成英文——那是「有機制、沒接線」的缺口，需要一個小 wiring task 把
+    /// `language` 傳進去（見 T27 回報）。`PanelModel.title(for:install:)`（AuraCore 內部）
+    /// 已經明確傳 `language`，不受影響。
+    public func healthLabel(_ language: Language) -> String {
         switch self {
         case .claudeNotFound:
-            return "找不到 Claude Code"
+            return L10nInstallAffordance.claudeNotFoundLabel.text(language)
         case .notConnected:
-            return "還沒接上"
+            return L10nInstallAffordance.notConnectedLabel.text(language)
         case .connected(let owner, let verified):
-            var parts = ["已接上"]
-            if owner == .external { parts.append("你的 repo 掛載") }
+            var parts = [L10nInstallAffordance.connectedBase.text(language)]
+            if owner == .external { parts.append(L10nInstallAffordance.connectedExternalOwnerClause.text(language)) }
             switch verified {
             case .verified:
                 break
             case .inFlight:
-                parts.append("檢查中…")
+                parts.append(L10nInstallAffordance.connectedCheckingClause.text(language))
             case .unknown, .blocked, .unconfirmed:
                 // `InstallState.from` 永遠不會產出 `.blocked`／`.unconfirmed` 這兩個組合
                 // （分別導向 `broken(.hookBlockedOrBroken, _)`／`broken(.hookUnconfirmed, _)`，
                 // r6②），但 `connected` 的 case 型別上仍可被直接建構，窮盡 switch 必須列出；
                 // 回傳與 `.unknown` 一致的保守文案，不得 crash。
-                parts.append("未驗證")
+                parts.append(L10nInstallAffordance.connectedUnverifiedClause.text(language))
             }
             return parts.joined(separator: " · ")
         case .broken(let reason, _):
             switch reason {
-            case .targetMissing:       return "接不上：App 被搬走了"
-            case .targetUnresolvable:  return "接不上：掛載解不開"
-            case .notAPlugin:          return "接不上：掛載內容不對"
-            case .hookMissing:         return "接不上：少了 hook 程式"
-            case .hookNotExecutable:   return "接不上：hook 沒有執行權限"
-            case .hookBlockedOrBroken: return "接不上：macOS 擋住了 hook"
-            case .hookUnconfirmed:     return "接不上：無法確認 hook 能不能跑"
-            case .occupiedByDirectory: return "已被其他安裝佔用"
-            case .occupiedByFile:      return "路徑被一個檔案佔住"
+            case .targetMissing:       return L10nInstallAffordance.brokenTargetMissing.text(language)
+            case .targetUnresolvable:  return L10nInstallAffordance.brokenTargetUnresolvable.text(language)
+            case .notAPlugin:          return L10nInstallAffordance.brokenNotAPlugin.text(language)
+            case .hookMissing:         return L10nInstallAffordance.brokenHookMissing.text(language)
+            case .hookNotExecutable:   return L10nInstallAffordance.brokenHookNotExecutable.text(language)
+            case .hookBlockedOrBroken: return L10nInstallAffordance.brokenHookBlockedOrBrokenLabel.text(language)
+            case .hookUnconfirmed:     return L10nInstallAffordance.brokenHookUnconfirmedLabel.text(language)
+            case .occupiedByDirectory: return L10nInstallAffordance.brokenOccupiedByDirectory.text(language)
+            case .occupiedByFile:      return L10nInstallAffordance.brokenOccupiedByFile.text(language)
             }
         }
     }

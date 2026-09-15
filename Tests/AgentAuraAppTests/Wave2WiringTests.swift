@@ -107,12 +107,12 @@ struct Wave2WiringTests {
 
         delegate.performConnect(force: false)
 
-        #expect(delegate.banner?.text == PanelBanner.error(for: .cannotConnect(nil)).text, """
+        #expect(delegate.banner?.text == PanelBanner.error(for: .cannotConnect(nil), language: delegate.language).text, """
             banner 文案應該與 PanelBanner.error(for:) 這個窮盡表算出來的一致，實際 \
             \(String(describing: delegate.banner?.text))—— \
             如果 handleConnectFailure 又手搓了第二份文案，這裡會漂移而不自知
             """)
-        #expect(delegate.banner?.text == InstallState.claudeNotFound.healthLabel,
+        #expect(delegate.banner?.text == InstallState.claudeNotFound.healthLabel(delegate.language),
                 "與 healthLabel 是同一個 oracle，不應該各自維護一份")
     }
 
@@ -125,7 +125,7 @@ struct Wave2WiringTests {
                                         install: .connected(owner: .external, verified: .verified), version: "1.0",
                                         optionsExpanded: true, launchAtLogin: nil,
                                         externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
-                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         let note = try #require(connected.mountTargetNote, "前提：connected(.external) 應該有 mountTargetNote")
 
         var dumped = ""
@@ -142,7 +142,7 @@ struct Wave2WiringTests {
                                              install: .broken(.hookMissing, owner: .external), version: "1.0",
                                              optionsExpanded: true, launchAtLogin: nil,
                                              externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
-                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true)
+                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
         var dumpedBroken = ""
         dump(OptionsSectionView(model: brokenExternal, onAction: { _ in }).body, to: &dumpedBroken)
         #expect(!dumpedBroken.contains(note), """
