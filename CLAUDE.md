@@ -6,12 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 把 Claude Code 的運行狀態顯示在 macOS 選單列。plugin hook → 狀態檔 → FSEvents → 一顆聚合燈 + 面板。
 
-> **狀態（2026-09-13）**：M0–M5、Change 2、change `app-shell`（phase 2 UI/UX 完整化）、
-> change `panel-interaction-fixes` 皆已完成並 merge 進 main。實機清單 13 條：8 條通過、
-> ⑥ 右鍵**觀察中**（重現不出來）、①②④⑤ 改列 known gap（只有全新安裝才測得到，觸發條件見
-> DoD 帳本）。
-> change `subagent-state-priority` 亦已完成：背景具名 subagent 讓燈號說謊的三個落差已修
-> （設計、實測證據與**燈號實機時間線**在 `docs/2026-09-11-subagent-state-priority-audit.html`）。
+> **狀態（2026-09-15）**：M0–M5、Change 2、`app-shell`（phase 2 UI/UX）、
+> `panel-interaction-fixes`、`subagent-state-priority`、`clean-uninstall`、`i18n`
+> 全部完成並 merge 進 main。
+> **雙語**：介面與說明文件中英雙語，**預設英文**，Options 裡可切換
+> （設計 `docs/superpowers/specs/2026-09-14-i18n-design.md`；`language` 一律不給預設值，
+> 漏傳即編譯錯誤）。
+> **完整移除**：Options 裡的「完整移除」讓機器回到從未安裝過的狀態，
+> `./scripts/verify-uninstall.sh` 逐項驗收——**移除乾淨是測試能力的前提**，
+> 先前「只有乾淨機器才測得到」的項目因此解鎖（實機 ⑤ 首啟自動開面板已通過）。
+> **subagent 燈號**：背景具名 subagent 讓燈號說謊的三個落差已修
+> （實測證據與燈號時間線在 `docs/2026-09-11-subagent-state-priority-audit.html`）。
+> 實機清單 13 條：9 條通過、⑥ 右鍵**觀察中**（重現不出來）、①②④ 需全新安裝環境。
 > 重啟指標：`docs/superpowers/specs/2026-09-08-agentaura-design.md` §8 里程碑表。
 > PR／branch 的 merge 狀態屬易腐事實，**不記本檔**，用 `gh pr list --state all` 現場查。
 
