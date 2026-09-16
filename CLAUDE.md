@@ -82,14 +82,14 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 格式：禁令（出處 —— 根因）。
 
 - **絕不修改 `~/.claude/settings.json`**（D3/R6 —— 安裝走 `~/.claude/skills/agentaura` symlink）。`verify-install.sh` 掃**整個**檔案而不只 `hooks` 鍵。
-- **`waiting` 不得進入「已結束但未確認」的尾巴**（spec §2.4.1 / `e90931c` —— 實測按 Deny 不產生任何 hook 事件，否則早已回答過的 session 會讓 icon 一直亮橘燈）。
+- **`waiting` 不得進入「已結束但未確認」的尾巴**（spec §2.4.1 / `d1def42` —— 實測按 Deny 不產生任何 hook 事件，否則早已回答過的 session 會讓 icon 一直亮橘燈）。
 - **`Notification(idle_prompt)` 不得映射到 `waiting`**（spec §2.2.1 / `IdlePromptTests` —— 一輪結束 60s 後必送；歸 waiting 等於每個講完話的 session 都亮橘）。
 - **acknowledge 只在面板關閉（`NSPopover.didClose`），開啟路徑不得 acknowledge**（spec §3.7 / `acknowledgeFiresOnCloseNotOpen` —— 舊順序讓已結束的列在畫出前就被移出 registry）。
-- **主／副槽分開，activity 取優先序 max；內部 subagent（`agent_type` 空字串）的事件在主槽靜止時一律忽略**（spec §2.5／§2.5.1 / `efccc03` —— subagent 與父 session 共用 `session_id`，實測最密相鄰 20ms；內部 subagent 的 `SubagentStop` 實測在主 agent `Stop` 後 2.58s–186s 才到）。**具名** subagent 走獨立集合，見 subagent 審計文件。
+- **主／副槽分開，activity 取優先序 max；內部 subagent（`agent_type` 空字串）的事件在主槽靜止時一律忽略**（spec §2.5／§2.5.1 / `2ed9e9a` —— subagent 與父 session 共用 `session_id`，實測最密相鄰 20ms；內部 subagent 的 `SubagentStop` 實測在主 agent `Stop` 後 2.58s–186s 才到）。**具名** subagent 走獨立集合，見 subagent 審計文件。
 - **`aura-hook` 一律 `exit 0`，stdout / stderr 一律空**（觀測性絕不可干擾 agent。代價：exit code 無法用來驗收，驗收必須看產物）。
-- **解析失敗 ≠ 檔案不存在**（spec §3.3 / `dae435d` —— 損壞檔要保留上次已知狀態並重試）。
-- **`PipelineGraph.registry` 是 `internal` 且未加鎖，對外只走上鎖的 `visibleSessions`**（`7f9d7b8` —— `onIconStateChange` 從 FSEvents 背景 queue 上來）。
-- **`Sources/AuraCore/` 不得載入 Foundation 閉包以外的任何 module**（`58ea4b5` —— 白名單基準而非黑名單）。
+- **解析失敗 ≠ 檔案不存在**（spec §3.3 / `035b5d5` —— 損壞檔要保留上次已知狀態並重試）。
+- **`PipelineGraph.registry` 是 `internal` 且未加鎖，對外只走上鎖的 `visibleSessions`**（`f5133c5` —— `onIconStateChange` 從 FSEvents 背景 queue 上來）。
+- **`Sources/AuraCore/` 不得載入 Foundation 閉包以外的任何 module**（`fc46545` —— 白名單基準而非黑名單）。
 - **單檔上限：`Sources/` 200 行、`Tests/` 300 行**（`IsolationTests.fileLengthLimit` 從磁碟推導）。
 - **`Installer` 只准碰 `<claudeHome>/skills/agentaura`（必要時加 `<claudeHome>/skills/`），判定一律以 `realpath` 解析後為準；`~/.claude` 不存在時拒絕接上、不得建立它**（spec D-h —— `skills` 自己可能是 symlink；gate `installerTouchesOnlyAllowedPaths`）。
 
