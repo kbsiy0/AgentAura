@@ -1,7 +1,7 @@
 <h1 align="center">AgentAura</h1>
 
 <p align="center">
-  <b>See what your Claude Code sessions are doing — from the menu bar.</b><br>
+  <b>See what your Claude Code sessions are doing, from the menu bar.</b><br>
   One light for all of them. Only the states that need you ever move.
 </p>
 
@@ -10,49 +10,51 @@
 </p>
 
 <p align="center">
-  <img src="docs/readme/icon-states.gif" alt="The menu bar icon in all five states: idle and done sit still, waiting and error pulse" width="620">
+  <img src="docs/readme/icon-states.gif" alt="The menu bar icon in five states. Idle, working and done sit still. Waiting and error pulse." width="620">
 </p>
 
 <p align="center">
-  <sub>Real frames, rendered from the production views. <code>idle</code>, <code>working</code> and <code>done</code> hold still. Only <code>waiting</code> and <code>error</code> move.</sub>
+  <sub><code>idle</code>, <code>working</code> and <code>done</code> hold still. Only <code>waiting</code> and <code>error</code> move.</sub>
 </p>
 
 ---
 
-## The problem
+## What it's for
 
-Run several Claude Code sessions at once — a few agents, an overnight pipeline — and your
-screen stops telling you anything. Which one is blocked on a permission prompt? Which one
-died twenty minutes ago? Which one finished while you were in another window?
+Run several Claude Code sessions at once and your screen stops telling you anything useful.
 
-You find out by cycling through terminal tabs.
+Which one is waiting on a permission prompt? Which one died twenty minutes ago? Which one
+finished while you were in another window? Right now you find out by clicking through
+terminal tabs.
 
-AgentAura puts a single light in the menu bar that **aggregates every session**, and a panel
-that lists them individually. You glance up instead of hunting.
+AgentAura puts one light in your menu bar for all of your sessions. Click it and you get a
+panel listing each session on its own. You glance up instead of hunting.
 
-## The one rule
+## One rule: only what needs you moves
 
-**Only states that need you are allowed to move.**
+An indicator that animates all the time is just a second thing competing for your attention.
+So movement is rationed. It is spent where it buys something and nowhere else.
 
-A status indicator that animates constantly is just a second thing competing for your
-attention. So motion is rationed, and it is spent only where it buys something:
-
-| State | Look | Motion |
+| State | Look | Movement |
 |---|---|---|
-| `idle` | Nearly invisible | None |
-| `working` (the common case) | Dim, low contrast | A 4-second breath, barely there |
-| `done` | Steady green | **None** — you can look when you want |
-| `waiting` (needs you) | Amber | Visible 1.1s pulse |
-| `error` (needs you) | Red | Double blink |
+| `idle` | Almost invisible | None |
+| `working` | Dim and low contrast | A 4-second breath, barely there |
+| `done` | Steady green | **None.** You can look when you want |
+| `waiting` | Amber | A clear 1.1-second pulse |
+| `error` | Red | Double blink |
 
-The aggregate takes the highest-priority state across all sessions —
-`error > waiting > working > done > idle` — **regardless of which session wrote last**.
-A subagent finishing its tool call must never overwrite "the main agent is waiting for you".
+The single light shows the most urgent state across all your sessions:
+`error > waiting > working > done > idle`.
+
+Priority wins, not recency. If a subagent finishes a tool call one moment after the main agent
+asks you for permission, the light must keep saying "waiting". Getting this wrong was the
+first real bug the project found, and it is the one thing the product cannot afford to get
+wrong.
 
 ## The panel
 
-Click the icon for the full list: one row per session, with the project name, what it is
-doing, and how long the current tool has been running.
+One row per session: project name, what it's doing, and how long the current tool has been
+running.
 
 <p align="center">
   <picture>
@@ -61,12 +63,12 @@ doing, and how long the current tool has been running.
   </picture>
 </p>
 
-The legend row at the bottom is permanent — and the four coloured dots are buttons. Click one
-to open the system colour picker and recolour that state; the menu bar icon and the legend
-update live as you drag. Colours persist.
+The four coloured dots along the bottom are buttons. Click one to open the system colour
+picker and recolour that state. The menu bar icon updates live as you drag, and your colours
+are remembered.
 
 <details>
-<summary><b>Options menu</b> — everything else lives here (click to expand)</summary>
+<summary><b>Everything else is in the Options menu</b> (click to expand)</summary>
 
 <p align="center">
   <picture>
@@ -75,169 +77,212 @@ update live as you drag. Colours persist.
   </picture>
 </p>
 
-Launch at login · Reduce motion (OR-ed with the system setting) · Icon backdrop ·
-Menu bar icon shape · Reset colours · Language (English / 繁體中文) · Reconnect ·
-Remove mount · Completely remove AgentAura · About · Report an issue · Quit (⌘Q really works).
+Launch at login · Reduce motion · Icon backdrop · Menu bar icon shape · Reset colours ·
+Language (English / 繁體中文) · Reconnect · Remove mount · Completely remove AgentAura ·
+About · Report an issue · Quit
 
-Right-clicking the menu bar icon opens the same menu directly.
+Reduce motion is combined with your system setting, so turning it on in macOS is enough.
+Right-clicking the menu bar icon opens this menu directly.
 </details>
 
-## Menu bar icon shapes
+## Icon shapes
 
-Six shapes. The LED strip is the default; the other five are SF Symbols.
+Six to choose from. The LED strip is the default. The other five are SF Symbols.
 
 <p align="center">
-  <img src="docs/readme/icon-shapes.png" alt="Six selectable menu bar icon shapes: LED strip, dot, ring, capsule, sparkle, half circle" width="620">
+  <img src="docs/readme/icon-shapes.png" alt="Six menu bar icon shapes: LED strip, dot, ring, capsule, sparkle, half circle" width="620">
 </p>
 
-The picker shows a live thumbnail of each shape, animated at the current state — the
-thumbnails are drawn by **the same renderer that draws the real icon**, so they cannot drift
-away from what you will actually get.
+The picker shows each shape as a live thumbnail, animated in your current state. The
+thumbnails are drawn by the same code that draws the real icon, so they can't drift away from
+what you'll actually get.
 
 ## Install
 
-Requires macOS 13+, Claude Code, and the Swift 6 toolchain (`xcode-select --install`).
+You need macOS 13 or later, Claude Code, and the Swift 6 toolchain
+(`xcode-select --install`). There is no prebuilt download yet.
 
 ```bash
 git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
-
-./scripts/build-plugin.sh          # builds the universal aura-hook binary (not in version control)
-./scripts/build-app.sh             # produces build/AgentAura.app
-open build/AgentAura.app
+./scripts/build-plugin.sh      # builds the aura-hook binary
+./scripts/build-app.sh         # produces build/AgentAura.app
 ```
 
-Then in the panel press **Connect**, and **start a new Claude Code session**.
+Then drag `build/AgentAura.app` into Applications, open it, click **Connect**, and **start a
+new Claude Code session**.
 
-> **The next session, not the current one.** Claude Code loads plugins when a session starts;
-> windows that are already open will not pick it up mid-flight. The app says so rather than
-> claiming it works immediately.
+> **The next session, not the one you have open.** Claude Code loads plugins when a session
+> starts. A window that is already running won't pick one up part-way through. The app says so
+> rather than pretending it works right away.
 
-Connecting creates exactly one symlink: `~/.claude/skills/agentaura` → the app.
-**`~/.claude/settings.json` is never written to** — not "cleaned up afterwards", never touched
-at all, so there is no way to leave behind a dead hook pointing at a deleted binary.
+To uninstall, use Options → *Remove mount* to unhook it, or Options → *Completely remove
+AgentAura* to put the machine back how it was. `./scripts/verify-uninstall.sh` checks that
+second claim one item at a time.
 
-**Removing it:** Options → *Remove mount* unhooks it; Options → *Completely remove AgentAura*
-returns the machine to the state it was in before installation. `./scripts/verify-uninstall.sh`
-checks that claim item by item. Full details and troubleshooting in
-[`docs/INSTALL.md`](docs/INSTALL.md).
+Full instructions, uninstall details and troubleshooting: [`docs/INSTALL.md`](docs/INSTALL.md).
 
-## What it touches on your machine
+## What it does to your Mac
 
-Worth knowing before you install anything that watches your work. Each row below was
-checked against the source, not written from memory.
+Fair questions to ask about anything that watches you work. Short answers first.
 
-| | |
-|---|---|
-| **Network** | The app opens no connections of its own — no telemetry, no update check, no crash reporting. There is no HTTP client in the codebase at all. The only two URLs in the source are the repository and *Report an issue*; clicking those hands a URL to your default browser. |
-| **Writes** | `~/.agentaura/sessions/` (the directory, `0700`) and `<session-id>.json` inside it (`0600`, re-tightened on every write) · the symlink `~/.claude/skills/agentaura`, creating `~/.claude/skills/` if that level is missing · a scratch directory `$TMPDIR/aura-verify-<uuid>/` during verification, deleted afterwards · `~/.agentaura-uninstall.log`, only if uninstall fails to reach the Trash. |
-| **Deletes** | Its own state files as sessions end. *Completely remove* additionally clears the `io.agentaura.app` preferences domain, deletes `~/.agentaura`, and moves the app itself **to the Trash** (recoverable, not an unlink). |
-| **Reads** | Its own state files, its own preferences, and the help page inside its own bundle. It also `lstat`s / `readlink`s its own mount point and `stat`s the two files under it. **It does not read your transcripts, your prompts, or your code.** |
-| **Runs** | One executable, ever: `~/.claude/skills/agentaura/bin/aura-hook`, to confirm the hook actually works — and it removes that file's `com.apple.quarantine` attribute first, because a quarantined binary is SIGKILLed rather than failing visibly. It runs with no arguments, not through a shell, with a self-generated JSON on stdin and output discarded. **If you point the mount somewhere by hand, that is the binary this will un-quarantine and run.** |
-| **`~/.claude/settings.json`** | Never written — not "cleaned up afterwards", not one byte, ever. A test asserts the file is byte-identical across connect, and that the only difference anywhere under `~/.claude` is `{skills, skills/agentaura}`. If `~/.claude` does not exist, connecting is **refused** rather than creating it. |
-| **Permissions** | No macOS privacy permissions (TCC) are requested — no screen recording, accessibility, automation, or full disk access; `Info.plist` contains zero usage descriptions. But be clear about the flip side: the app is **not sandboxed and ships no entitlements** (it has to write `~/.claude` and `~/.agentaura`), so it runs with your account's ordinary file access. "Launch at login" is off by default and uses `SMAppService`. |
-| **Signing** | Ad-hoc signed, **not notarized**. macOS 15 removed the right-click → Open bypass, so the first launch needs *System Settings → Privacy & Security → Open Anyway*. |
-| **Dependencies** | Zero third-party packages — `Package.swift` has no `.package(url:)` and there is no `Package.resolved`. `plugin/bin/aura-hook` is not in version control, so the binary you run is one you built from this source yourself. |
+- **It never connects to the internet.** No telemetry, no update check, no crash reports.
+- **It writes two things:** session state in `~/.agentaura/`, and one symlink at
+  `~/.claude/skills/agentaura`.
+- **It never touches `~/.claude/settings.json`.** Not one byte, ever.
+- **It doesn't read your work.** Not your transcripts, not your prompts, not your code.
+- **It runs one binary:** `aura-hook`, to check the hook actually works. It clears that
+  file's quarantine flag first.
+- **It asks for no macOS permissions,** but it is not sandboxed, and it is not notarized.
+- **It has no third-party dependencies.** The binary you run is one you built yourself.
 
-**Trust boundary.** Installing the plugin means allowing Claude Code to execute
-`plugin/bin/aura-hook` on 19 hook events. Pressing **Connect** in the app always mounts the
-copy inside the app bundle. Running `ln -sfn` yourself to point the mount at someone else's
-directory is a different decision — that authorises their code, and the verification step
-above will clear its quarantine flag for them.
+<details>
+<summary><b>The precise version</b> — every line below was checked against the source</summary>
 
-What Claude Code sends to the hook is metadata — session id, project directory name, event
-type, tool name, timing. AgentAura keeps a reduced form of that on disk so the panel can be
-redrawn, and deletes it on uninstall.
+**Network.** The app opens no connections of its own. There is no HTTP client in the
+codebase. Two URLs exist in the source, for the repository and *Report an issue*. Clicking
+those hands a URL to your browser.
+
+**Writes.**
+- `~/.agentaura/sessions/` — the directory, `0700`
+- `<session-id>.json` inside it — `0600`, re-tightened on every write
+- the symlink `~/.claude/skills/agentaura`, creating `~/.claude/skills/` if that level is
+  missing
+- `$TMPDIR/aura-verify-<uuid>/` during verification, deleted afterwards
+- `~/.agentaura-uninstall.log`, only if uninstall can't reach the Trash
+
+**Deletes.** Its own state files as sessions end. *Completely remove* also clears the
+`io.agentaura.app` preferences, deletes `~/.agentaura`, and moves the app to the Trash. That
+last one is recoverable until you empty the Trash.
+
+**Reads.** Its own state files, its own preferences, and the help page inside its own bundle.
+It also inspects its own mount point with `lstat` and `readlink`, and `stat`s the two files
+underneath it. It does not read your transcripts, prompts or code.
+
+**Runs.** Exactly one executable: `~/.claude/skills/agentaura/bin/aura-hook`, to confirm the
+hook works. **It removes that file's `com.apple.quarantine` attribute first**, because a
+quarantined binary gets SIGKILLed instead of failing visibly. It runs with no arguments, not
+through a shell, with self-generated JSON on stdin and its output discarded. If you point the
+mount somewhere by hand, that is the binary this will un-quarantine and run.
+
+**`~/.claude/settings.json`.** Never written. A test asserts the file is byte-identical
+before and after connecting, and that the only change anywhere under `~/.claude` is
+`{skills, skills/agentaura}`. If `~/.claude` doesn't exist, connecting is refused rather than
+creating it.
+
+**Permissions.** No macOS privacy permissions are requested — no screen recording,
+accessibility, automation or full disk access. `Info.plist` contains zero usage descriptions.
+The other side of that: the app is **not sandboxed and ships no entitlements**, because it has
+to write `~/.claude` and `~/.agentaura`. It runs with your account's ordinary file access.
+*Launch at login* is off by default and uses `SMAppService`.
+
+**Signing.** Ad-hoc signed, **not notarized**. macOS 15 removed the right-click → Open
+bypass, so the first launch needs *System Settings → Privacy & Security → Open Anyway*.
+
+**Dependencies.** None. `Package.swift` has no `.package(url:)` and there is no
+`Package.resolved`. `plugin/bin/aura-hook` is not in version control, so the binary you run is
+one you built from this source.
+
+**Trust boundary.** Installing the plugin lets Claude Code run `plugin/bin/aura-hook` on 19
+hook events. Clicking **Connect** always mounts the copy inside the app bundle. Running
+`ln -sfn` yourself, to point the mount at someone else's directory, is a different decision:
+it authorises their code, and the verification step above will clear its quarantine flag.
+
+**What the hook receives.** Metadata: session id, project directory name, event type, tool
+name, timing. AgentAura keeps a reduced copy on disk so the panel can be redrawn, and deletes
+it when you uninstall.
+</details>
 
 ## How it works
 
 ```
-Claude Code plugin hooks (19 events, all async: true)
+Claude Code plugin hooks (19 events, all async)
         │
         ▼
-aura-hook ──read-merge-write under flock──▶ ~/.agentaura/sessions/<id>.json (0600)
+aura-hook ──read-merge-write under flock──▶ ~/.agentaura/sessions/<id>.json
                                                   │ FSEvents
                                                   ▼
-                                          PipelineGraph (composition root)
-                                          ├─ NSStatusItem + custom-drawn animation
+                                          PipelineGraph
+                                          ├─ menu bar icon + animation
                                           └─ SwiftUI panel
 ```
 
-Four modules: `AuraCore` (pure logic, zero UI imports — enforced by a compiler-driven test),
-`AuraHookFile` (files + FSEvents), `aura-hook` (the CLI), `AgentAuraApp` (AppKit).
+Four modules. `AuraCore` holds the pure logic and imports no UI at all, which a
+compiler-driven test enforces. `AuraHookFile` does files and FSEvents. `aura-hook` is the
+command-line tool Claude Code calls. `AgentAuraApp` is the interface.
 
-`aura-hook` **always exits 0, with empty stdout and stderr, whatever happens.** Observability
-must never interfere with the thing it observes. The cost is that exit codes are useless for
-verification, so every check looks at the artefact instead of the return value.
+`aura-hook` always exits 0 and never prints anything, whatever happens. A tool that watches
+your agent must never interfere with it. The price is that exit codes tell you nothing, so
+every check in this project looks at the file that was written instead.
 
-## Built from measurement, not documentation
+## The contract came from measurement, not the docs
 
-The event contract was written against **141 real hook payloads** captured over three rounds,
-not from the documentation. Measurement overturned several documented assumptions and caught
-three bugs that reading could not have:
+It was written against **141 real hook payloads**, captured over three rounds. Measuring
+overturned several things the documentation implied, and caught three bugs that reading could
+not have.
 
-1. **Subagent tool events share the parent's `session_id`.** Measured: main and subagent
-   events interleaved five times in one session, 20 ms apart at the closest. Under
-   last-write-wins, a subagent's `PostToolUse` overwrites the main agent's `PermissionRequest`
-   within 20 ms — *silently erasing the single most important signal the product has.*
-   Fixed by giving main and subagent separate slots and taking the priority max.
+**Subagents share the parent's session id.** Main and subagent events interleaved five times
+in a single session, 20 ms apart at the closest. With last-write-wins, a subagent's
+`PostToolUse` overwrites the main agent's `PermissionRequest` within 20 ms. That silently
+erases the most important signal the product has. Fixed by giving main and subagent separate
+slots and taking the highest priority.
 
-2. **Denying a permission prompt produces no hook event at all.** The sequence is
-   `PermissionRequest` → (you press Deny) → nothing → `SessionEnd`. So `waiting` must never
-   survive into the "ended but unacknowledged" tail, or a session you already answered keeps
-   the icon amber forever.
+**Denying a permission prompt produces no event at all.** The sequence is
+`PermissionRequest`, then you press Deny, then nothing, then `SessionEnd`. So `waiting` must
+never survive into the "ended but unacknowledged" tail. Otherwise a session you already
+answered keeps the icon amber forever.
 
-3. **`PostToolUseFailure`'s error field is called `error`, not `tool_error`.** The first
-   conclusion written into the spec was "it has no error field" — because the payloads were
-   being inspected through a hand-written key filter that did not contain the real field name.
-   *Looking at data through your own assumptions only ever shows you your assumptions.*
+**The error field is called `error`, not `tool_error`.** The first conclusion written into the
+spec was that there was no error field at all. The payloads were being inspected through a
+hand-written key filter, and that filter didn't contain the real field name. Looking at data
+through your own assumptions only shows you your assumptions.
 
-> The payload fixtures in `Tests/AuraCoreTests/Fixtures/` are **de-identified**: paths, prompts,
-> assistant messages and file contents were replaced before this repository was made public.
-> The event structure — which is what the contract and its tests actually depend on — is
-> untouched, and the raw captures are not published.
+The method corrects itself too. Round one concluded that no event carries `model`; round two
+disproved it. Both rounds stay in the spec, along with the reasoning for the reversal.
 
-The method corrects itself, too: round one concluded "no event carries `model`", and round two
-disproved it. Both rounds are kept in the spec, with the reasoning for the reversal.
+> The fixtures in `Tests/AuraCoreTests/Fixtures/` are **de-identified**. Paths, prompts,
+> messages and file contents were replaced before this repository was made public. The event
+> structure is untouched, which is what the contract and its tests actually depend on. The raw
+> captures are not published.
 
 ## Documentation
 
-| Document | Contents |
+| Document | What's in it |
 |---|---|
-| [`docs/superpowers/specs/2026-09-08-agentaura-design.md`](docs/superpowers/specs/2026-09-08-agentaura-design.md) | **The canonical design.** Where documents conflict, this one wins |
 | [`docs/INSTALL.md`](docs/INSTALL.md) | Install, uninstall, troubleshooting, upgrading |
-| [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | Build audit — eight families of *tests that guard nothing*, with the fixes |
-| [`docs/2026-09-11-subagent-state-priority-audit.html`](docs/2026-09-11-subagent-state-priority-audit.html) | How background subagents made the light lie, and the measured timeline |
-| [`CLAUDE.md`](CLAUDE.md) | Project instructions for Claude Code: invariants with their provenance, and the traps |
+| [`docs/superpowers/specs/2026-09-08-agentaura-design.md`](docs/superpowers/specs/2026-09-08-agentaura-design.md) | The canonical design. Where documents disagree, this one wins |
+| [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | Eight families of tests that guarded nothing, and their fixes |
+| [`docs/2026-09-11-subagent-state-priority-audit.html`](docs/2026-09-11-subagent-state-priority-audit.html) | How background subagents made the light lie, with the measured timeline |
+| [`CLAUDE.md`](CLAUDE.md) | Project instructions for Claude Code: each rule with the failure that produced it |
 
-HTML documents open straight from disk (`file://`). Nothing is account-gated.
+The HTML files open straight from disk. Nothing needs an account.
 
 ## Development
 
 ```bash
-swift test                         # full suite
-swift test --filter <test name>    # one test (the function name, not the file)
+swift test                         # everything
+swift test --filter <test name>    # one test, by function name
 ```
 
-760 tests across 144 suites. Swift 6 with strict concurrency; tests use
-[swift-testing](https://github.com/swiftlang/swift-testing) (`@Test` / `#expect`), not XCTest.
+760 tests across 144 suites. Swift 6 with strict concurrency. Tests use
+[swift-testing](https://github.com/swiftlang/swift-testing), not XCTest.
 
-A clean clone needs `./scripts/build-plugin.sh` first — `plugin/bin/aura-hook` is a build
-product and is not in version control, and three install-layout tests are red without it.
+A fresh clone needs `./scripts/build-plugin.sh` first. `plugin/bin/aura-hook` is a build
+product and isn't in version control, so three install-layout tests fail without it.
 
-The testing philosophy — ask the platform rather than approximating it, derive every number
-from types or disk rather than freezing it as a constant, and require a mutation record for
-every gate — is written up in [`CLAUDE.md`](CLAUDE.md), along with the failures that produced
-each rule.
-
-The README's images are generated, not screenshotted:
+The images in this README are generated, not screenshotted:
 
 ```bash
 AURA_RENDER_README=1 swift test --filter ReadmeAssetRenderer
 ```
 
-They render the real production views offscreen, which keeps them reproducible and keeps real
-project names and paths out of a public repository.
+They render the real views offscreen. That keeps them reproducible, and keeps real project
+names and paths out of a public repository.
+
+The testing approach is written up in [`CLAUDE.md`](CLAUDE.md), together with the mistake
+that produced each rule. Three ideas run through it. Ask the platform instead of
+approximating it. Derive every number from types or from disk, never freeze it as a constant.
+And prove that each test can actually fail.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)

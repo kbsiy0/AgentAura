@@ -52,14 +52,23 @@ struct TerminologyUnificationSourceScanTests {
             """)
     }
 
-    /// T13：`docs/INSTALL.md` 是單一檔案，直接讀比對；`Sources/AuraCore/` 沿用既有
-    /// `scan(under:)`（全是 `.swift`，不需要新的檔案類型過濾）。
-    @Test("T13 擴大範圍：docs/INSTALL.md 與 Sources/AuraCore/ 底下也不得出現「捷徑」或「連結」")
+    /// T13：安裝文件直接讀比對；`Sources/AuraCore/` 沿用既有 `scan(under:)`
+    /// （全是 `.swift`，不需要新的檔案類型過濾）。
+    ///
+    /// 2026-09-16：掃描對象從 `docs/INSTALL.md` 改成 **`docs/INSTALL.zh-TW.md`**。
+    /// 安裝文件拆成中英兩份之後，`INSTALL.md` 變成英文——**拿中文詞去掃英文檔，
+    /// 永遠掃不到，這條 gate 會安靜地變成恆綠**。術語統一這件事只對中文文案成立，
+    /// 所以掃描對象必須跟著語言走，不是跟著檔名走。
+    @Test("T13 擴大範圍：中文安裝文件與 Sources/AuraCore/ 底下也不得出現「捷徑」或「連結」")
     func noShortcutOrLinkWordingInExpandedScope() throws {
-        let installMD = Gate.repoRoot().appendingPathComponent("docs/INSTALL.md")
+        let installMD = Gate.repoRoot().appendingPathComponent("docs/INSTALL.zh-TW.md")
         let mdText = try String(contentsOf: installMD, encoding: .utf8)
+        #expect(mdText.contains("掛載"), """
+            `docs/INSTALL.zh-TW.md` 裡連「掛載」都找不到 —— 讀到的多半不是中文文件，
+            這條 gate 已經空轉。
+            """)
         let mdHits = Self.needles.filter { mdText.contains($0) }
-        #expect(mdHits.isEmpty, "docs/INSTALL.md 仍出現：\(mdHits.joined(separator: "、"))")
+        #expect(mdHits.isEmpty, "docs/INSTALL.zh-TW.md 仍出現：\(mdHits.joined(separator: "、"))")
 
         let auraCoreDir = Gate.repoRoot().appendingPathComponent("Sources/AuraCore")
         let (scannedCore, hitsCore) = try Self.scan(under: auraCoreDir)
