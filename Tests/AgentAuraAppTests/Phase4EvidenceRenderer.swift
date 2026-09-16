@@ -39,7 +39,7 @@ struct Phase4EvidenceRenderer {
         let hookBlocked = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                           install: .broken(.hookBlockedOrBroken, owner: .thisApp), version: "1.0",
                                           optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil,
-                                          banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                                          banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
         try Phase2EvidenceRenderer.renderPair(dir: dir, name: "T13-S1-1-hookBlocked-prescription-before-press",
                                               model: hookBlocked, render: render)
 
@@ -48,7 +48,7 @@ struct Phase4EvidenceRenderer {
         let targetMissing = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                             install: .broken(.targetMissing, owner: .thisApp), version: "1.0",
                                             optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil,
-                                            banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                                            banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
         try Phase2EvidenceRenderer.renderPair(dir: dir, name: "T13-S1-1-targetMissing-prescription",
                                               model: targetMissing, render: render)
 

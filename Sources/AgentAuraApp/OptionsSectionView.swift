@@ -19,7 +19,8 @@ struct OptionsSectionView: View {
         OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                               isDefaultPalette: model.isDefaultPalette,
                               systemReduceMotion: model.systemReduceMotion, userReduceMotion: model.userReduceMotion,
-                              iconPlate: model.iconPlate, palette: model.palette, language: model.language)
+                              iconPlate: model.iconPlate, iconShape: model.iconShape,
+                              palette: model.palette, language: model.language)
     }
 
     var body: some View {
@@ -129,6 +130,7 @@ private struct OptionsRowIconView: View {
         case .setLaunchAtLogin: "power"
         case .setReduceMotion: "tortoise"
         case .setIconPlate: "rectangle.on.rectangle"
+        case .pickIconShape: "square.grid.2x2"
         case .resetColors: "arrow.counterclockwise"
         case .connect: "arrow.triangle.2.circlepath"
         case .recheckHook: "arrow.clockwise"

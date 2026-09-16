@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 把 Claude Code 的運行狀態顯示在 macOS 選單列。plugin hook → 狀態檔 → FSEvents → 一顆聚合燈 + 面板。
 
-> **狀態（2026-09-15）**：M0–M5、Change 2、`app-shell`（phase 2 UI/UX）、
-> `panel-interaction-fixes`、`subagent-state-priority`、`clean-uninstall`、`i18n`
-> 全部完成並 merge 進 main。
+> **狀態（2026-09-16）**：M0–M5、Change 2、`app-shell`（phase 2 UI/UX）、
+> `panel-interaction-fixes`、`subagent-state-priority`、`clean-uninstall`、`i18n`、
+> `icon-shapes` 全部完成並 merge 進 main。
 > **雙語**：介面與說明文件中英雙語，**預設英文**，Options 裡可切換
 > （設計 `docs/superpowers/specs/2026-09-14-i18n-design.md`；`language` 一律不給預設值，
 > 漏傳即編譯錯誤）。
@@ -17,6 +17,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > 先前「只有乾淨機器才測得到」的項目因此解鎖（實機 ⑤ 首啟自動開面板已通過）。
 > **subagent 燈號**：背景具名 subagent 讓燈號說謊的三個落差已修
 > （實測證據與燈號時間線在 `docs/2026-09-11-subagent-state-priority-audit.html`）。
+> **選單列造型**：6 種造型可選（`ledStrip` 預設 ＋ 5 個 SF Symbol），Options 裡換，
+> 選單每一項左邊顯示縮圖、選單開著時縮圖跟著動
+> （設計 `docs/superpowers/specs/2026-09-15-icon-shapes-design.md`；縮圖由**真正的繪製器**
+> 產生，不是另外畫一份示意圖）。底板幾何收在 `IconPlate.rect(in:)`／`draw(in:)` 給兩個
+> `IconDrawing` conformer 共用，由 `IconPlateGeometryTests` 在**生產高度**
+> （`NSStatusBar.system.thickness`，不是測試方便的 18pt）下逐造型守住。
 > 實機清單 13 條：9 條通過、⑥ 右鍵**觀察中**（重現不出來）、①②④ 需全新安裝環境。
 > 重啟指標：`docs/superpowers/specs/2026-09-08-agentaura-design.md` §8 里程碑表。
 > PR／branch 的 merge 狀態屬易腐事實，**不記本檔**，用 `gh pr list --state all` 現場查。
@@ -112,6 +118,7 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 1. **平台契約要問平台** —— 問編譯器（module trace）、`claude plugin validate --strict`、`swift package dump-package`。不要在它們外面再包一層自己的近似。
    **平台沒有 getter 時才退而問原始碼**（`RightClickSendActionGuardTests`：`sendAction(on:)` 的遮罩 AppKit 讀不回來，拿掉那行右鍵會安靜失效而全測試照綠）。
 2. **「涵蓋每一個 X」與**每一個數字**都必須從型別／磁碟／真實 view 推導**，不能寫死也不能只寫在 doc-comment 裡。實證：`LEDStripView.preferredWidth` 把算術錯誤凍成常數（34 vs 正確的 38），gate 又退化成跟自己比對；`SessionsCardSizing.rowHeight` 用「沒有副行」的列量成 33pt，真實有副行是 49pt，會把唯一一列裁掉。兩次都是使用者實機才發現。
+   **第三次（2026-09-16，`/simplify` 抓到）形狀不同**：`FooterPositionStabilityTests` 的畫布常數寫死 600pt（當時 headroom 97pt），面板長大後 expanded 自然高度已達 599pt —— 它凍住的不是錯誤，是**題目**。加大 session 列留白讓自然高度越過 600，畫布反而比內容小，落進它自己註解裡寫明「已知且承認做不到」的區域；紅燈的意思從「版面被推移了」變成「測試畫布不夠大了」，而我照著它把使用者要的留白砍到 2pt，還寫下「那條 gate 是對的，我收斂到它為止」。**收斂到一個已經換了題目的 gate，看起來跟正確的紀律一模一樣。**
 3. **每個 gate 都要有 mutation 紀錄** —— 生產碼改壞，指名測試必須**在指定秒數內**變紅（不是掛住）。用完整字串取代，且先確認編譯成功再看測試結果。
 4. **守「宣告順序」不等於守「渲染結果」**（A4 vs T22）：A4 的 gate 斷言 Options 區塊宣告在 footer 之後，一直是綠的；實機上 footer 仍被推走 −257pt，因為外層畫布高度與理想高度不一致時 `ScrollView` 會吃滿提案、`VStack` 會把多餘空間置中。**位置類的 gate 要量渲染後的座標。**
 5. **離屏渲染有兩個會咬人的平台限制**（T07 實測）：`.bordered`／`.borderedProminent` 會把真 `NSButton` 包進 `_FocusRingView`，沒有真 `NSWindow` 時走訪不到 —— 要能從測試觸發的按鈕**必須用 `.borderless`**；離屏讀不到 `.title` 也讀不到 `.accessibilityIdentifier`，定位只能用位置索引，所以**新增按鈕時要一併檢查既有的索引斷言**。

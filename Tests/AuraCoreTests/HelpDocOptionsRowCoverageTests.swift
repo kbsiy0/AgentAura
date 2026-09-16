@@ -22,7 +22,7 @@ struct HelpDocOptionsRowCoverageTests {
         OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .unknown),
                               launchAtLogin: true, isDefaultPalette: false,
                               systemReduceMotion: false, userReduceMotion: false,
-                              iconPlate: true, palette: .default, language: language)
+                              iconPlate: true, iconShape: .ledStrip, palette: .default, language: language)
     }
 
     /// 去掉純裝飾性的尾綴（「…」／「 ⌘Q」）——help 文件不必逐字複製選單列的標點符號，

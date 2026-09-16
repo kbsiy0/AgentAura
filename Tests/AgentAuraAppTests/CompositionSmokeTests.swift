@@ -36,6 +36,9 @@ final class SpyRenderer: IconRendering {
     /// T16：`AppDelegatePanelActionsWiredTests`（G5）的 `.setIconPlate` case 用它證明
     /// `AppDelegate` 真的轉發到 `status.setIconPlate`，不是只更新自己的欄位。
     private(set) var iconPlateValues: [Bool] = []
+    /// T32：`AppDelegatePanelActionsWiredTests+IconShape.swift`（G5）的 `.setIconShape` case
+    /// 用它證明 `AppDelegate` 真的轉發到 `status.setIconShape`——同 `iconPlateValues` 的理由。
+    private(set) var iconShapes: [IconShape] = []
 
     /// T17／T18：`colorPanelAnchorIsWired` 用固定值證明 `AppDelegate` 真的把它傳進 coordinator。
     /// 值刻意是「面板」的尺寸而不是圖示的——生產路徑優先回面板 frame（色板要避開它）。
@@ -48,6 +51,7 @@ final class SpyRenderer: IconRendering {
     func showPanel() { showPanelCallCount += 1; callOrder.append("showPanel") }
     func setInstallState(_ state: InstallState) { installStates.append(state) }
     func setIconPlate(_ shows: Bool) { iconPlateValues.append(shows) }
+    func setIconShape(_ shape: IconShape) { iconShapes.append(shape) }
 }
 
 @Suite("Composition root smoke（spec §5.2）", .serialized)

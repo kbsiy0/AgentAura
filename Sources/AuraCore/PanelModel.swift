@@ -84,6 +84,9 @@ public struct PanelModel: Equatable, Sendable {
     /// T16：燈條底板開關目前值——`OptionsSectionView` 只從這個欄位算「燈條底板」列，
     /// 不自己問 `UserDefaults`（同 `userReduceMotion` 的理由，唯一寫入點是 `AppDelegate.performSetIconPlate`）。
     public let iconPlate: Bool
+    /// T32：選單列 icon 造型目前值——`OptionsSectionView` 只從這個欄位算「icon 造型」列，
+    /// 不自己問 `UserDefaults`（同 `iconPlate` 的理由，唯一寫入點是 `AppDelegate.performSetIconShape`）。
+    public let iconShape: IconShape
     /// D-3（i18n）：顯示層參數，不是全域狀態——唯一來源是 `AppDelegate.language`
     /// （落盤預設英文，見 `LanguagePreference`），往下傳給 `OptionsSectionView` 等消費端。
     public let language: Language
@@ -97,7 +100,7 @@ public struct PanelModel: Equatable, Sendable {
     public static func make(icon: IconState, sessions: [SessionState], palette: IconPalette,
                             install: InstallState, version: String, optionsExpanded: Bool,
                             launchAtLogin: Bool?, externalTargetPath: String?, banner: PanelBanner?,
-                            systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool,
+                            systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
                             language: Language, now: Date = Date()) -> PanelModel {
         PanelModel(title: title(for: icon, install: install, language: language),
                   rows: PanelViewModel.rows(from: sessions, now: now, language: language),
@@ -107,7 +110,7 @@ public struct PanelModel: Equatable, Sendable {
                   install: install, version: version, optionsExpanded: optionsExpanded,
                   launchAtLogin: launchAtLogin, externalTargetPath: externalTargetPath, banner: banner,
                   systemReduceMotion: systemReduceMotion, userReduceMotion: userReduceMotion, iconPlate: iconPlate,
-                  language: language)
+                  iconShape: iconShape, language: language)
     }
 
     /// T11 commit2（S0-2）：非 `connected` 時面板標題改用 `install.healthLabel`——與

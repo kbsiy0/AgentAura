@@ -26,7 +26,9 @@ final class LEDStripView: NSView, IconDrawing {
     static let plateHeight: CGFloat = 18
     static let plateCornerRadius: CGFloat = 5
     /// 不透明 `#141416`（20,20,22）——背景無關，深淺模式一律（spec §4.1）。
-    static let plateColor = NSColor(srgbRed: 20 / 255, green: 20 / 255, blue: 22 / 255, alpha: 1)
+    /// 底板色。字面住在 `IconPlate.colorRGBA`（兩個造型 conformer 共用的同一份），
+    /// 這裡只是它的 `NSColor` 面貌——simplify#B2 之前是反過來的，導致同一組數字有三份。
+    static let plateColor = IconPlate.color
 
     /// view bounds 含底板（spec §4.1）——離屏畫布與生產畫布一致，r1 的「bounds 外擴」不再發生。
     /// **從 `ledSpan`／`plateInset` 推導，不寫字面值**——這正是原本 42 這個錯數字被凍住的病根
@@ -41,10 +43,10 @@ final class LEDStripView: NSView, IconDrawing {
     private(set) var showsPlate = true
 
     /// internal（不是 private）：`LEDPlateSymmetryTests`（T16）要從外面讀它，跟四邊邊距比對。
-    var plateRect: NSRect {
-        NSRect(x: 0, y: (bounds.height - Self.plateHeight) / 2,
-               width: bounds.width, height: Self.plateHeight)   // 底板 = bounds（spec §4.1），不是常數
-    }
+    /// 底板矩形——幾何收在 `IconPlate.rect(in:)`，兩個 `IconDrawing` conformer 共用同一份
+    /// （reuse#1：原本各寫一份，SF Symbol 那份畫滿整個 bounds，在選單列上高度就對不上）。
+    /// 仍是 `LEDStripView` 的公開成員，`LEDPlateSymmetryTests` 讀的還是它。
+    var plateRect: NSRect { IconPlate.rect(in: bounds) }
 
     /// 第 `index` 顆 LED 的畫布矩形，供測試從幾何推導取樣點，不寫魔術數字。
     func ledRect(at index: Int) -> NSRect {
@@ -67,26 +69,14 @@ final class LEDStripView: NSView, IconDrawing {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if showsPlate {
-            let plate = plateRect
-            Self.plateColor.setFill()
-            NSBezierPath(roundedRect: plate, xRadius: Self.plateCornerRadius, yRadius: Self.plateCornerRadius).fill()
+        // 底板繪製收在 `IconPlate.draw(in:)`——原本這裡與 `IconPlate` 各有一份逐行平行的
+        // fill → inset → stroke，兩份已經漂開過一次（reuse#1）。
+        if showsPlate { IconPlate.draw(in: plateRect) }
 
-            // 描邊路徑內縮 0.25pt，否則外側 0.25pt 會被 bounds 裁掉（spec §4.1）。
-            let strokePath = NSBezierPath(roundedRect: plate.insetBy(dx: 0.25, dy: 0.25),
-                                          xRadius: Self.plateCornerRadius, yRadius: Self.plateCornerRadius)
-            strokePath.lineWidth = 0.5
-            NSColor.white.withAlphaComponent(0.10).setStroke()
-            strokePath.stroke()
-        }
-
-        // 顏色與 alpha 全部來自 IconAppearance —— 不再自己 switch activity、
-        // 不再自己算曲線，idle 也無 per-state 特例（spec §4.1）。
-        let c = iconAppearance.color
-        let alpha = c.a * AnimationCurve.alpha(for: iconAppearance.animation, phase: phase)
-        // E13（/simplify 波次2，reuse#13）：改走 `ColorBridge` 的 `NSColor(rgba:alpha:)`——
-        // 不再自己手寫 `NSColor(srgbRed:...)` 繞過既有的唯一轉換點。
-        let ledColor = NSColor(rgba: c, alpha: alpha)
+        // 顏色與 alpha 全部來自 IconAppearance —— 不自己 switch activity、不自己算曲線，
+        // idle 也無 per-state 特例（spec §4.1）。公式本身收在 `ColorBridge` 的
+        // `NSColor(appearance:phase:)`，與 `SFSymbolIconView` 共用同一份（reuse#3）。
+        let ledColor = NSColor(appearance: iconAppearance, phase: phase)
         for i in 0..<Self.ledCount {
             ledColor.setFill()
             NSBezierPath(roundedRect: ledRect(at: i), xRadius: 1.5, yRadius: 1.5).fill()

@@ -73,7 +73,7 @@ struct FooterPositionStabilityTests {
         return PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                                install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
                                optionsExpanded: optionsExpanded, launchAtLogin: true, externalTargetPath: nil,
-                               banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                               banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
     }
 
     /// footer 的「Options」按鈕在真的 `NSHostingController.view` 座標系裡的 `minY`
@@ -107,16 +107,40 @@ struct FooterPositionStabilityTests {
         return -1
     }
 
-    @Test("外層畫布被提案 600pt（超過 collapsed／expanded 兩邊自然高度）時，footer 位置差 0pt")
+    /// 畫布高度**從現場量到的自然高度推導**，不寫死（`/simplify` icon-shapes 波次，altitude#1）。
+    ///
+    /// T22 當初寫死 `600`，理由是「> 兩邊自然高度（211／503）」——當時 headroom 97pt。
+    /// 面板此後長了（T26 語言列、T32 造型列、列高 33→37），2026-09-15 實測
+    /// **collapsed 223／expanded 599**，headroom 只剩 **1pt**。
+    ///
+    /// 後果不是「這條 gate 快要失效」而已，是**它已經開始回答別的問題**：加大 session 列
+    /// 垂直留白時（使用者要求「上下太擠」），5pt 讓它紅、3pt 也紅、2pt 才歸零，於是 2pt 被
+    /// 當成「版面極限」寫進 `PanelView`。實際上那是自然高度漲過 600、畫布反而變得比內容小，
+    /// 掉進本檔開頭 doc comment 白紙黑字寫明**「已知、且承認做不到的部分」**的那個區域
+    /// （`NSHostingView` 把內容置中塞進偏小的 frame，不是 `PanelView` 這層能覆寫的）——
+    /// 跟這條 gate 的主場（畫布**大於**自然高度時 `ScrollView` 貪婪，修前 −257pt）是不同族的現象。
+    ///
+    /// **這不是放寬 gate，是把它拉回它宣稱守的那個區域**，並讓它隨面板成長自動跟上。
+    /// 同 repo 正典：`OptionsPanelSizing.heightCeiling(forRowCount:)`（「門檻不該是手動調的
+    /// 魔術數字」）。單位：pt。
+    func surplusCanvasHeight(_ controller: StatusItemController) throws -> CGFloat {
+        controller.setPanel(model(optionsExpanded: false))
+        let collapsed = try #require(controller.hostingController).preferredContentSize.height
+        controller.setPanel(model(optionsExpanded: true))
+        let expanded = try #require(controller.hostingController).preferredContentSize.height
+        return max(collapsed, expanded) + 100      // 100pt 餘裕：確定落在「畫布大於自然高度」那一側
+    }
+
+    @Test("外層畫布超過 collapsed／expanded 兩邊自然高度時，footer 位置差 0pt")
     func footerTopUnchangedUnderSurplusCanvas() throws {
         let controller = StatusItemController()
         defer { controller.removeFromStatusBar() }
-        let surplusHeight: CGFloat = 600   // > 兩邊自然高度（211／503），見檔案開頭 doc comment
+        let surplusHeight = try surplusCanvasHeight(controller)
         let collapsedTop = try footerButtonTop(controller, model(optionsExpanded: false), height: surplusHeight)
         let expandedTop = try footerButtonTop(controller, model(optionsExpanded: true), height: surplusHeight)
 
         #expect(collapsedTop == expandedTop, """
-            外層畫布固定 600pt（超過兩邊自然高度）時，footer 按鈕的位置不該隨 Options 展開改變，\
+            外層畫布 \(surplusHeight)pt（超過兩邊自然高度）時，footer 按鈕的位置不該隨 Options 展開改變，\
             實際 collapsed=\(collapsedTop)pt expanded=\(expandedTop)pt（差 \(expandedTop - collapsedTop)pt，\
             修之前實測 -257pt）—— 外層畫布比內容需要的還寬裕時（真的 popover 也可能發生），\
             使用者若滑鼠沒動再點一次，會誤觸到被推移的圖例列，而不是收合 Options。

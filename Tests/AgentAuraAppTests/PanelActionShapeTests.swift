@@ -43,4 +43,16 @@ struct PanelActionShapeTests {
         #expect(samples.contains(.setLanguage(.english)))
         #expect(samples.contains(.setLanguage(.traditionalChinese)))
     }
+
+    /// T32：`.pickIconShape` 同 `.setLanguage`（N7）——`IconShape.allCases` 每個都要送，
+    /// 不能只送一個代表值（七種造型各自要有人接線）。
+    @Test("setIconShape 的 samples 覆蓋 IconShape.allCases 全部七個值")
+    func setIconShapeCoversAllShapes() {
+        let samples = PanelAction.samples(.pickIconShape)
+        let shapes = samples.compactMap { action -> IconShape? in
+            if case let .pickIconShape(s) = action { return s }
+            return nil
+        }
+        #expect(Set(shapes) == Set(IconShape.allCases), "setIconShape 應覆蓋 IconShape.allCases 全部七個值")
+    }
 }

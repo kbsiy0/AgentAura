@@ -37,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var iconPlate = true
     /// T26（i18n）：D-2 預設英文；key／preference／load／perform 都在 +PanelActions.swift。
     var language: Language = .english
+    /// T32：D-3 預設 `.ledStrip`（不驚動既有使用者）；key／preference／load／perform
+    /// 都在 `AppDelegate+IconShape.swift`。
+    var iconShape: IconShape = .ledStrip
     /// internal（不是 private）：`AppDelegate+PanelActions.swift` 的 `presentAbout` 要讀它。
     let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
 
@@ -61,6 +64,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `confirmDisconnect` 的注入縫（測試不真的彈 `NSAlert`，spec §6.4）。
     let confirmReplaceExternalMount: @MainActor (Language, @escaping () -> Void) -> Void
     let confirmUninstall: @MainActor (Language, @escaping () -> Void) -> Void
+    /// T32：`.setIconShape` 觸發時開啟的造型選單——同 `confirmDisconnect` 的注入縫，
+    /// 測試不真的彈 `NSMenu`（spec §6.4）。
+    /// T34：多帶 `IconAppearance`／`showsPlate` 為了畫縮圖（挑造型要看得到造型）——
+    /// 兩個值都從 composition root 現場取，不是 view 自己去猜。
+    let presentIconShapeMenu: @MainActor (IconShape, Language, IconAppearance, Bool, @escaping (IconShape) -> Void) -> Void
 
     init(root: URL = SnapshotIO.defaultRoot,
          livenessInterval: TimeInterval = 5,
@@ -82,6 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              { language, onConfirm in ReplaceMountConfirmation.present(language: language, onConfirm: onConfirm) },
          confirmUninstall: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
              { language, onConfirm in UninstallConfirmation.present(language: language, onConfirm: onConfirm) },
+         presentIconShapeMenu: @escaping @MainActor (IconShape, Language, IconAppearance, Bool, @escaping (IconShape) -> Void) -> Void =
+             { current, language, appearance, showsPlate, onSelect in
+                 IconShapeMenu.present(current: current, language: language,
+                                       appearance: appearance, showsPlate: showsPlate, onSelect: onSelect) },
          makeRenderer: @escaping @MainActor () -> any IconRendering = { StatusItemController() }) {
         self.root = root
         self.livenessInterval = livenessInterval
@@ -94,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.confirmDisconnect = confirmDisconnect
         self.confirmReplaceExternalMount = confirmReplaceExternalMount
         self.confirmUninstall = confirmUninstall
+        self.presentIconShapeMenu = presentIconShapeMenu
         self.makeRenderer = makeRenderer
         super.init()
     }
@@ -116,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         driver.setUserReduceMotion(userReduceMotion)
         loadIconPlate()   // T16：同一段同步區內套上持久化的底板偏好，理由同上
         loadLanguage()    // T26：同一段同步區內套上持久化的語言偏好，理由同上（D-5(4)：預設英文）
+        loadIconShape()   // T32：同上，理由同 loadIconPlate（D-3：預設 .ledStrip）
 
         paletteStore.onChange = { [weak self] in
             guard let self else { return }
@@ -171,28 +185,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// §4.4：`!didConnectOnce && !connected` 才自動開面板；`didConnectOnce` 由
-    /// `performConnect` 在真的接上成功時才寫（見 `AppDelegate+Connect.swift`），
-    /// 不是這裡用當下狀態反推——旗標語意是「曾經走過接上流程成功」，不是巧合已連上。
-    private func runFirstRunSequenceIfNeeded() {
-        // B5（波次2接線）：`InstallState.isConnected` 取代自己重寫的 IIFE（N9／S2-6）。
-        guard !defaults.bool(forKey: Self.didConnectOnceKey), !installState.isConnected else { return }
-        status.showPanel()
-    }
-
-    /// `store.set` 先 `onChange`（driver.setPalette + refreshPanel 立刻反映）再落盤。
-    func applyColor(_ color: RGBA, for activity: Activity) {
-        paletteStore.set(color, for: activity)
-    }
-
-    func resetColors() {
-        paletteStore.reset()
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        livenessTimer?.invalidate()
-        graph?.stop()
-        colorCoordinator?.detach()   // 收尾動作各自獨立（Lessons #8）；也讓每條建 AppDelegate 的 smoke 不留 observer
-        driver?.stop()   // E4：同理，別留下 NSWorkspace 的三個死註冊
-    }
 }

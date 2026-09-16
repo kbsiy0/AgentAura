@@ -15,7 +15,7 @@ struct OptionsExpandTests {
         return PanelModel.make(icon: icon, sessions: [], palette: .default,
                                install: .connected(owner: .thisApp, verified: .verified),
                                version: "1.0", optionsExpanded: optionsExpanded,
-                               launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                               launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
     }
 
     @Test("同一個 hostingController：collapsed → setPanel(expanded) 後 preferredContentSize.height 變高")
@@ -78,12 +78,12 @@ struct OptionsExpandTests {
         let systemReduceMotion = true
         let rowCount = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin, isDefaultPalette: true,
                                              systemReduceMotion: systemReduceMotion, userReduceMotion: false,
-                                             iconPlate: false, palette: .default, language: .traditionalChinese).count
+                                             iconPlate: false, iconShape: .ledStrip, palette: .default, language: .traditionalChinese).count
         let worstCase = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: install, version: "1.0",
                                         optionsExpanded: true, launchAtLogin: launchAtLogin,
                                         externalTargetPath: "/Users/dev/some/very/long/path/to/repo/plugin", banner: nil,
-                                        systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: false, language: .traditionalChinese)
+                                        systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: false, iconShape: .ledStrip, language: .traditionalChinese)
         controller.setPanel(worstCase)
         let height = try #require(controller.hostingController).preferredContentSize.height
         let ceiling = OptionsPanelSizing.heightCeiling(forRowCount: rowCount)

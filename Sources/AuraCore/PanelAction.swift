@@ -27,6 +27,16 @@ public enum PanelAction: Equatable, Sendable {
     /// T26（i18n）：面板顯示語言——帶目標語言（比照 `pickColor(Activity)`，不是
     /// `setLaunchAtLogin` 那種布林 toggle：語言不是二元「開/關」語意，是選了哪一個）。
     case setLanguage(Language)
+    /// T32：選單列 icon 造型——Options 列的觸發送出「目前選中的造型」（給選單建打勾用），
+    /// AppDelegate 開啟造型選單（注入縫，見 `AppEnvironment.swift` 的 `IconShapeMenu`），
+    /// 使用者真的選了新造型之後，`performSetIconShape` 直接落地，**不**再送第二次
+    /// `.pickIconShape` 回這個 switch——同 `.pickColor(Activity)` 的既有形狀：action 帶的是
+    /// 「開啟選什麼的脈絡」，不是「已經決定的新值」。
+    ///
+    /// **T33 後改名 `setIconShape` → `pickIconShape`**：原名會讓下一個讀的人以為
+    /// 「送這個 action 就會把造型設成參數那個值」而誤用。對照組：
+    /// `IconRendering.setIconShape(_:)` 那個 protocol 方法**是**真的 setter，名字不動。
+    case pickIconShape(IconShape)
 
     /// 窮盡 switch：新增 case 這裡編不過，逼你同時補 `PanelActionKind`。
     public var kind: PanelActionKind {
@@ -48,6 +58,7 @@ public enum PanelAction: Equatable, Sendable {
         case .setReduceMotion: .setReduceMotion
         case .setIconPlate: .setIconPlate
         case .setLanguage: .setLanguage
+        case .pickIconShape: .pickIconShape
         }
     }
 }
@@ -58,7 +69,7 @@ public enum PanelActionKind: String, Sendable, CaseIterable {
     case pickColor, resetColors, toggleOptions, connect, replaceExternalMount, disconnect
     case uninstall
     case setLaunchAtLogin, recheckHook, openHelp, about, dismissBanner, quit
-    case reportIssue, setReduceMotion, setIconPlate, setLanguage
+    case reportIssue, setReduceMotion, setIconPlate, setLanguage, pickIconShape
 }
 
 extension PanelAction {
@@ -85,6 +96,7 @@ extension PanelAction {
         case .setReduceMotion: [.setReduceMotion(true), .setReduceMotion(false)]
         case .setIconPlate: [.setIconPlate(true), .setIconPlate(false)]
         case .setLanguage: Language.allCases.map(PanelAction.setLanguage)
+        case .pickIconShape: IconShape.allCases.map(PanelAction.pickIconShape)
         }
     }
 }

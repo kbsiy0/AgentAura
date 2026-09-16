@@ -10,6 +10,8 @@ public enum L10nOptionsMenuRows: L10nCatalog, Sendable {
     /// 減少動態：使用者自己打開時的說明（T13 S1-4'：等你／錯誤只靠顏色區分）。
     case reduceMotionUserEnabledWarning
     case iconPlate
+    /// T32：Options 列標題——「選單列 icon 造型」（點擊彈出造型選單）。
+    case iconShape
     case resetColors
     case reconnect
     case recheckHook
@@ -55,6 +57,11 @@ public enum L10nOptionsMenuRows: L10nCatalog, Sendable {
             switch language {
             case .english: return "Icon backdrop"
             case .traditionalChinese: return "燈條底板"
+            }
+        case .iconShape:
+            switch language {
+            case .english: return "Menu bar icon shape"
+            case .traditionalChinese: return "選單列 icon 造型"
             }
         case .resetColors:
             switch language {

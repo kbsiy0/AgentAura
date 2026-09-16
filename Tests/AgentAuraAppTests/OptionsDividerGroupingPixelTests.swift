@@ -42,7 +42,7 @@ struct OptionsDividerGroupingPixelTests {
         PanelModel.make(icon: .empty, sessions: [], palette: .default,
                         install: .connected(owner: .external, verified: .unknown), version: "1.0",
                         optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil,
-                        systemReduceMotion: true, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                        systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
     }
 
     @Test("worst-case：production OptionsSectionView（分組）vs 每列都隔開的對照組，像素明顯不同")
@@ -51,7 +51,7 @@ struct OptionsDividerGroupingPixelTests {
         let rows = OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                                          isDefaultPalette: model.isDefaultPalette,
                                          systemReduceMotion: model.systemReduceMotion,
-                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, palette: model.palette, language: .traditionalChinese)
+                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, iconShape: .ledStrip, palette: model.palette, language: .traditionalChinese)
         #expect(rows.count >= 9, "worst-case 應該有夠多列（含 launchAtLogin／recheckHook）才有代表性，實際 \(rows.count)")
 
         let grouped = try render(OptionsSectionView(model: model, onAction: { _ in }), appearance: .aqua)

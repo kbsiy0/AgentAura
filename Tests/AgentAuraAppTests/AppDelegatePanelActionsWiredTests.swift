@@ -47,6 +47,9 @@ struct AppDelegatePanelActionsWiredTests {
         /// A5（T11 commit3）：`.replaceExternalMount` 現在也要先走確認框，同 `confirmedDisconnects`。
         var confirmedReplaceExternalMounts = 0
         var confirmedUninstalls = 0   // T24：`.uninstall` 同理
+        /// T32：`.pickIconShape` 每次真的走過選單呈現閉包才 +1——同 `confirmedDisconnects`
+        /// 的理由，證明這一步沒有被跳過。
+        var presentedIconShapeMenuCount = 0
     }
 
     @MainActor
@@ -82,6 +85,7 @@ struct AppDelegatePanelActionsWiredTests {
             confirmDisconnect: { _, onConfirm in recorder.confirmedDisconnects += 1; onConfirm() },
             confirmReplaceExternalMount: { _, onConfirm in recorder.confirmedReplaceExternalMounts += 1; onConfirm() },
             confirmUninstall: { _, onConfirm in recorder.confirmedUninstalls += 1; onConfirm() },
+            presentIconShapeMenu: { current, _, _, _, onSelect in recorder.presentedIconShapeMenuCount += 1; onSelect(current) },
             makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
@@ -198,13 +202,8 @@ struct AppDelegatePanelActionsWiredTests {
                     }
                 }
 
-            // E3（/simplify 波次2）：case body 搬到 `+E3.swift`，理由同 T12／T16（避免撞 300 行上限）。
-            case .openHelp:
-                try await verifyOpenHelp(samples: samples)
-
-            // T12（B4）：case body 移到 `AppDelegatePanelActionsWiredTests+T12.swift`。
-            case .about:
-                try await verifyAbout(samples: samples)
+            case .openHelp: try await verifyOpenHelp(samples: samples)   // E3：body 在 +E3.swift（避免撞 300 行上限）
+            case .about: try await verifyAbout(samples: samples)   // T12（B4）：body 在 +T12.swift
 
             case .dismissBanner:
                 try await withFreshRig { rig in
@@ -232,6 +231,7 @@ struct AppDelegatePanelActionsWiredTests {
             case .setIconPlate:   // T16：case body 在 `+T16.swift`（同上，避免撞 300 行上限）
                 try await verifySetIconPlate(samples: samples)
             case .setLanguage: try await verifyLanguage(samples: samples)   // T26：body 在 +Language.swift
+            case .pickIconShape: try await verifyIconShape(samples: samples)   // T32：body 在 +IconShape.swift
             }
         }
     }

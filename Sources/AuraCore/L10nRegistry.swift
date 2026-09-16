@@ -44,6 +44,9 @@ public enum L10nRegistry {
         for c in L10nUninstallConfirmation.allCases {
             out.append(("L10nUninstallConfirmation.\(c)", byLanguage(c)))
         }
+        for c in L10nIconShape.allCases {
+            out.append(("L10nIconShape.\(c)", byLanguage(c)))
+        }
         return out
     }
 

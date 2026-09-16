@@ -50,7 +50,7 @@ struct PanelPixelTests {
         for (label, sessions) in [("空 rows", [SessionState]()), ("非空 rows", [session("a", .working)])] {
             let wildModel = PanelModel.make(icon: icon, sessions: sessions, palette: Self.wildPalette,
                                             install: .notConnected, version: "1.0", optionsExpanded: false,
-                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
             let wildBitmap = try renderPanel(wildModel)
             for activity in [Activity.error, .waiting, .working, .done] {
                 let hits = wildBitmap.count(near: Self.wildPalette[activity])
@@ -61,7 +61,7 @@ struct PanelPixelTests {
 
             let defaultModel = PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                                                install: .notConnected, version: "1.0", optionsExpanded: false,
-                                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
             let defaultBitmap = try renderPanel(defaultModel)
             for activity in [Activity.error, .waiting, .working, .done] {
                 let hits = defaultBitmap.count(near: Self.wildPalette[activity])
@@ -233,7 +233,7 @@ struct PanelPixelTests {
         // 轉發，與安裝狀態無關，只是需要一個不多不少的按鈕組合。
         let model = PanelModel.make(icon: icon, sessions: [session("a", .working)], palette: Self.wildPalette,
                                     install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                    optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, language: .traditionalChinese)
+                                    optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
         var received: [PanelAction] = []
         let hosting = NSHostingView(rootView: PanelView(model: model, onAction: { received.append($0) }))
         hosting.frame = NSRect(x: 0, y: 0, width: 380, height: max(hosting.fittingSize.height, 44))

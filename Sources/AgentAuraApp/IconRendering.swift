@@ -41,4 +41,6 @@ protocol IconRendering: AnyObject {
     /// T16：轉發到 `drawing.setShowsPlate`——`AppDelegate` 不綁死 `StatusItemController`
     /// 型別，同這個 protocol 其餘成員的理由。
     func setIconPlate(_ shows: Bool)
+    /// T32：換選單列 icon 造型——同 `setIconPlate` 的理由，`AppDelegate` 不綁死型別。
+    func setIconShape(_ shape: IconShape)
 }

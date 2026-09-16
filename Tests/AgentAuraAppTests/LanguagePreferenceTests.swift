@@ -6,8 +6,15 @@ import AuraCore
 /// D-2：語言偏好的 `UserDefaults` 搬運層——比照 `BoolPreference` 的形狀，值域換成
 /// `Language`。**預設英文**，且缺鍵／存了無法辨識的字串都要 fallback 回英文，不跟隨
 /// 系統語言（design doc D-2：中文系統上第一次啟動也是英文）。
-@Suite("LanguagePreference：預設英文，不跟隨系統語言")
+/// **reuse#4 之後改測生產物件本身**：預設值移到組裝點（`AppDelegate.languagePreference`）
+/// 之後，測試若自己建一個 `RawValuePreference(key:defaultValue:)`，驗到的就是測試自己寫的
+/// `.english`——生產那邊改成別的語言也照樣全綠。理由同 `IconShapePreferenceTests`。
+@MainActor
+@Suite("語言偏好：預設英文，不跟隨系統語言")
 struct LanguagePreferenceTests {
+
+    var pref: RawValuePreference<Language> { AppDelegate.languagePreference }
+    var key: String { AppDelegate.languageKey }
 
     func freshDefaults() -> (UserDefaults, String) {
         let suite = "io.agentaura.tests.langpref.\(UUID().uuidString)"
@@ -18,7 +25,6 @@ struct LanguagePreferenceTests {
     func missingKeyDefaultsToEnglish() {
         let (defaults, suite) = freshDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
-        let pref = LanguagePreference(key: "TestLang")
         #expect(pref.load(from: defaults) == .english)
     }
 
@@ -26,8 +32,6 @@ struct LanguagePreferenceTests {
     func persistRoundTrips() {
         let (defaults, suite) = freshDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
-        let pref = LanguagePreference(key: "TestLang")
-
         pref.persist(.traditionalChinese, to: defaults)
         #expect(pref.load(from: defaults) == .traditionalChinese)
 
@@ -40,7 +44,6 @@ struct LanguagePreferenceTests {
         let (defaults, suite) = freshDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set("français", forKey: "TestLang")
-        let pref = LanguagePreference(key: "TestLang")
         #expect(pref.load(from: defaults) == .english)
     }
 }

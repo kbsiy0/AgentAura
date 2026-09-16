@@ -12,7 +12,7 @@ struct PanelModelLanguageTests {
         PanelModel.make(icon: .empty, sessions: [], palette: .default,
                         install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
                         optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil,
-                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
+                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip,
                         language: language)
     }
 

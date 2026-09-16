@@ -151,6 +151,20 @@ struct PanelRowView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
-        .frame(minHeight: 28)
+        // T37：使用者回報「正在執行中的 session 上下邊區有一點點太小」——原本只有水平
+        // 留白，列與列之間靠 `minHeight` 撐，文字幾乎貼著分隔線。垂直留白讓每一列有呼吸。
+        //
+        // 這個值一度只給到 2pt，因為 5pt／3pt 會讓 `FooterPositionStabilityTests` 紅，
+        // 而我把那個紅讀成「版面到極限了」。**那是誤讀**（altitude#1）：那條 gate 的畫布
+        // 高度當時寫死 600pt，而面板的 expanded 自然高度已經長到 599pt——加大留白讓它
+        // 越過 600，畫布反而變得比內容小，掉進 gate 自己註解裡寫明「已知且承認做不到」
+        // 的那一側。畫布常數改成從自然高度推導之後，這裡不再被它綁住。
+        .padding(.vertical, 5)
+        // 這裡原本還有 `.frame(minHeight: 28)`。**它已經恆不生效**：列本身的自然高度是
+        // 43pt（無副行）／59pt（有副行），28pt 的下限永遠碰不到。實測撤掉它之後
+        // `SessionsCardSizingDerivation`／`RowHeight`／`FooterPositionStability`／
+        // `PanelPixel`／`OptionsExpand` 全綠、量到的列高一個像素都沒變，所以刪掉——
+        // 留著會讓下一個人以為列高有個 28pt 的地板在管事（`OptionsSectionView` 裡的
+        // 同名下限是真的在管事，別跟這裡搞混）。
     }
 }

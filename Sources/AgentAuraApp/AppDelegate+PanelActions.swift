@@ -62,6 +62,19 @@ extension AppDelegate {
                 self.performSetIconPlate(on)
             case .setLanguage(let language):
                 self.performSetLanguage(language)
+            case .pickIconShape(let shape):
+                // 同 .pickColor 的既有形狀：action 帶的是「開啟選單當下的現值」（給打勾用），
+                // 使用者真的選了新造型之後 performSetIconShape 直接落地，不再送第二次 action。
+                // T35：reduceMotion 併入 appearance（同 AnimationDriver.update 的既有 OR
+                // 邏輯）——選單裡的動畫預覽靠 appearance.targetFPS == 0 判斷該不該動。
+                let reduceMotion = self.driver.systemReduceMotion || self.userReduceMotion
+                self.presentIconShapeMenu(shape, self.language,
+                                          AppearancePolicy.appearance(for: self.graph.iconState,
+                                                                      palette: self.paletteStore.palette,
+                                                                      reduceMotion: reduceMotion),
+                                          self.iconPlate) { [weak self] chosen in
+                    self?.performSetIconShape(chosen)
+                }
             }
         }
     }
@@ -77,7 +90,8 @@ extension AppDelegate {
                                     install: installState, version: appVersion, optionsExpanded: optionsExpanded,
                                     launchAtLogin: launchAtLogin, externalTargetPath: externalTargetPath, banner: banner,
                                     systemReduceMotion: driver.systemReduceMotion,
-                                    userReduceMotion: userReduceMotion, iconPlate: iconPlate, language: language)
+                                    userReduceMotion: userReduceMotion, iconPlate: iconPlate, iconShape: iconShape,
+                                    language: language)
         status.setPanel(model)
         // T11（S0-2）：installState 唯一的傳遞路徑——tooltip 才能反映「還沒接上」而不是
         // 一律說「沒有活著的 session」。`refreshPanel()` 是每次 install 可能改變後都會呼叫的
@@ -97,7 +111,8 @@ extension AppDelegate {
     static let reduceMotionPreference = BoolPreference(key: reduceMotionKey, defaultValue: false)
     /// T26（i18n）：`UserDefaults` 鍵，走既有的 `defaults` 注入點（比照 `reduceMotionKey`）。
     static let languageKey = "AgentAuraLanguage"
-    static let languagePreference = LanguagePreference(key: languageKey)
+    /// D-2：**預設英文**，不跟隨系統語言（中文系統上第一次啟動也是英文）。
+    static let languagePreference = RawValuePreference(key: languageKey, defaultValue: Language.english)
 
     /// 啟動時讀回持久化值。
     func loadIconPlate() {
@@ -131,6 +146,17 @@ extension AppDelegate {
     /// 正確的 URL，不得真的開瀏覽器，spec §6.4）。
     func reportIssue() {
         openURL(ProjectLinks.newIssue)
+    }
+
+    /// `store.set` 先 `onChange`（driver.setPalette + refreshPanel 立刻反映）再落盤。
+    /// 搬自 `AppDelegate.swift`（T32，為 composition root 的新增欄位騰行數，同 T16／T26
+    /// 把 key／preference／load／perform 都放在這個檔案的既有慣例）。
+    func applyColor(_ color: RGBA, for activity: Activity) {
+        paletteStore.set(color, for: activity)
+    }
+
+    func resetColors() {
+        paletteStore.reset()
     }
 
     /// B5：與系統值取 OR 的唯一寫入點——落盤、轉發給 `driver`、重畫面板三件事綁在一起，

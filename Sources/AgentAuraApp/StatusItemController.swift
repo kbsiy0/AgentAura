@@ -4,14 +4,15 @@ import SwiftUI      // NSHostingController
 import AuraCore
 
 /// 擁有 `NSStatusItem`，把 `IconAppearance` 交給 `drawing` 畫。`drawing` 型別是
-/// `any IconDrawing`，但只有一個 conformer（`LEDStripView`，A2 定案於
-/// `docs/2026-09-09-m4-ab-decision.md`）——protocol 仍在是因為測試經 `@testable import`
-/// 讀 `drawing` 斷言接線與繪製，且 controller 不綁死 view 型別（spec §2）。
+/// `any IconDrawing`，conformer 有兩個：`LEDStripView`（A2 定案於
+/// `docs/2026-09-09-m4-ab-decision.md`）與 `SFSymbolIconView`（T32 起的可選造型），
+/// 由 `makeDrawingView(for:)` 依 `IconShape` 決定——controller 不綁死 view 型別（spec §2）。
 @MainActor
 final class StatusItemController: IconRendering {
     /// `internal`（不是 `private`）：`StatusItemController+IconFrame.swift` 要讀它取螢幕座標。
     let item: NSStatusItem
-    let drawing: any IconDrawing
+    /// T32：`let` → `var`（跨檔 extension `setIconShape` 要能整個換掉 conformer）。
+    var drawing: any IconDrawing
     /// B1：右鍵/左鍵判別的注入點（測試灌假事件型別，生產讀真的 `NSApp.currentEvent`）。
     /// `@MainActor` 的函式型別：預設值閉包本身不帶隔離標記會被推成 nonisolated，
     /// 讀 `NSApp`（main actor-isolated）就過不了型別檢查（同 `RealTerminator` 的理由）。
@@ -19,22 +20,25 @@ final class StatusItemController: IconRendering {
     /// B3：面板顯示期間的 ⌘Q 監聽（注入以避免測試裝真的全域 monitor，見 `QuitKeyMonitor`）。
     /// internal（不是 `private`）：`StatusItemController+Dismiss.swift` 的 `presentPopover` 要用它。
     let quitMonitor: QuitKeyMonitor
-    /// T20：面板釘住期間裝的滑鼠 monitor（`PanelDismissMonitor`，接線在 `+Dismiss.swift` 的
-    /// `setPopoverPinned`）。internal 理由同 `quitMonitor`。
+    /// T20／T37：**面板顯示期間**裝的滑鼠 monitor（`PanelDismissMonitor`，接線在
+    /// `+Dismiss.swift` 的 `startDismissMonitorIfNeeded`）。T37 之前只在釘住期間裝，
+    /// 平常靠 `.transient` 收面板，而那對 `LSUIElement` app 不可靠。internal 理由同 `quitMonitor`。
     let dismissMonitor: PanelDismissMonitor
+    /// T32：底板偏好的快取——`setIconShape`（`+IconShape.swift`）換掉 `drawing` 時要用它
+    /// 讓新 view 延續使用者原本的選擇，`IconDrawing` 只有 `setShowsPlate`（單向），沒有 getter。
+    var showsPlate = true
 
     init(currentEventType: @escaping @MainActor () -> NSEvent.EventType? = { NSApp.currentEvent?.type },
          quitMonitor: QuitKeyMonitor = QuitKeyMonitor(),
-         dismissMonitor: PanelDismissMonitor = PanelDismissMonitor()) {
+         dismissMonitor: PanelDismissMonitor = PanelDismissMonitor(),
+         iconShape: IconShape = .ledStrip) {
         self.currentEventType = currentEventType
         self.quitMonitor = quitMonitor
         self.dismissMonitor = dismissMonitor
         item = NSStatusBar.system.statusItem(withLength: 0)
-        let view = LEDStripView()
+        let view = Self.makeDrawingView(for: iconShape)
         drawing = view
-        item.length = drawing.preferredWidth + 8
-        view.frame = NSRect(x: 4, y: 0, width: drawing.preferredWidth, height: NSStatusBar.system.thickness)
-        item.button?.addSubview(view)
+        Self.mount(view, on: item)          // 與 `setIconShape` 共用同一份掛載程序（reuse#2）
         item.button?.toolTip = "AgentAura"
         panelOnAction = { [weak self] action in self?.onAction?(action) }
     }
@@ -108,7 +112,7 @@ final class StatusItemController: IconRendering {
                                  install: .notConnected, version: "", optionsExpanded: false,
                                  launchAtLogin: nil, externalTargetPath: nil, banner: nil,
                                  systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
-                                 language: .english))
+                                 iconShape: .ledStrip, language: .english))
     }
 
     /// 首次建 `NSHostingController` 並設 `sizingOptions = [.preferredContentSize]`

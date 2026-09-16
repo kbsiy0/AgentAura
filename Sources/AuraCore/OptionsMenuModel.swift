@@ -71,7 +71,7 @@ public enum OptionsMenuModel {
     /// （只關心 kind／isDisabled／toggleValue，不關心語言）維持不變，符合 D-4「這輪受影響的
     /// 很少」——生產路徑（`OptionsSectionView`）明確傳 `model.language`，不吃這個預設值。
     public static func rows(install: InstallState, launchAtLogin: Bool?, isDefaultPalette: Bool,
-                            systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool,
+                            systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
                             palette: IconPalette, language: Language) -> [OptionsRow] {
         var rows: [OptionsRow] = []
 
@@ -111,6 +111,13 @@ public enum OptionsMenuModel {
                                subtitle: lightBarWarning(iconPlate: iconPlate, palette: palette, language: language),
                                action: .setIconPlate(!iconPlate), isDisabled: false,
                                toggleValue: iconPlate, group: .settings))
+        // T32：造型不是二元開/關語意（七選一），不用 toggleValue——比照 `.setLanguage` 的既有
+        // 形狀。`action` 帶「目前選中的造型」當開啟選單的脈絡（同 `.pickColor(Activity)`），
+        // subtitle 顯示目前選了哪個造型，讓使用者不必點開選單就看得到現況。
+        rows.append(OptionsRow(title: L10nOptionsMenuRows.iconShape.text(language),
+                               subtitle: iconShape.displayName(language),
+                               action: .pickIconShape(iconShape), isDisabled: false,
+                               toggleValue: nil, group: .settings))
         rows.append(OptionsRow(title: L10nOptionsMenuRows.resetColors.text(language), action: .resetColors, isDisabled: isDefaultPalette,
                                toggleValue: nil, group: .settings))
         // T26（i18n）：D-1 示範 2/3、3/3——標題（純靜態）與副標（帶參數，插值目標語言的

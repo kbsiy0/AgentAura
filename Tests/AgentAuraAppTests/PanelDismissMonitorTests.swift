@@ -88,8 +88,27 @@ struct PanelDismissMonitorTests {
 
     // MARK: - (b) StatusItemController 生命週期
 
-    @Test("setPopoverPinned(true) 裝兩個 monitor；(false) 各移除一次；再 pin 一次能重裝")
-    func controllerLifecycleInstallsAndRemoves() {
+    /// **T37 改寫（對齊新契約，不是弱化）。**
+    ///
+    /// 改寫前釘的是「釘住才裝、解除釘住就拆」。那個生命週期**本身就是使用者回報的 bug**：
+    /// monitor 只在改色期間存在，平常完全沒裝，收起面板得靠 `.transient` 的系統行為——
+    /// 而實機上點別的應用程式時面板不會收，使用者被迫回頭點選單列圖示。
+    ///
+    /// 新契約：monitor 的生命週期是**「面板顯示中」**，不是「改色中」。
+    /// 釘住／解除釘住只換 `popover.behavior`，不再拆掉 monitor——收起的責任一路都在我們自己身上，
+    /// 不是一半靠系統一半靠自己（那種形狀裡壞掉的永遠是沒人看顧的那一半）。
+    ///
+    /// 這條測的仍然是同一件事：**monitor 的裝與拆有沒有跟著它該跟的生命週期走**。
+    /// 只是那個生命週期被修正了，所以斷言跟著改。拆除本身由下面那條
+    /// `didClose` 的測試守（面板關閉才拆），兩條合起來涵蓋完整生命週期。
+    /// altitude#3 之後再收一次：`setPopoverPinned` 不再有任何 monitor 副作用，所以這裡
+    /// 改成直接呼叫 `startDismissMonitorIfNeeded()` 代表「面板已顯示」（離屏渲染下
+    /// `popover.show` 恆無效，拿不到真正的顯示狀態），並把兩個方向的斷言都加強成
+    /// 「釘住狀態怎麼變都不影響 monitor」。**斷言內容沒有變弱**，但也要誠實說它的極限：
+    /// monitor 已經裝著時 `startIfNeeded` 是 no-op，所以這條抓不到「有人把裝設副作用加回
+    /// `setPopoverPinned`」——那由下面 `pinningWithoutShownPanelInstallsNothing` 負責。
+    @Test("面板顯示就裝兩個 monitor；釘住狀態怎麼變都不影響它（生命週期是「顯示中」不是「改色中」）")
+    func controllerInstallsMonitorWhilePanelIsShown() {
         var installCount = 0, removeCount = 0
         let monitor = PanelDismissMonitor(
             installGlobal: { _ in installCount += 1; return "g" as AnyObject },
@@ -99,14 +118,48 @@ struct PanelDismissMonitorTests {
         defer { controller.removeFromStatusBar() }
         controller.attachPopover()
 
-        controller.setPopoverPinned(true)
-        #expect(installCount == 2, "釘住時應該裝好 global／local 兩個 monitor，實際 \(installCount) 次")
+        controller.startDismissMonitorIfNeeded()          // ＝「面板顯示了」
+        #expect(installCount == 2, "應該裝好 global／local 兩個 monitor，實際 \(installCount) 次")
 
         controller.setPopoverPinned(false)
-        #expect(removeCount == 2, "解除釘住應該各移除一次，實際 \(removeCount) 次")
+        #expect(removeCount == 0, """
+            解除釘住**不得**拆掉 monitor——面板還開著，點外面仍然要收得起來。
+            拆掉它正是使用者回報的那個 bug，實際移除了 \(removeCount) 次
+            """)
 
         controller.setPopoverPinned(true)
-        #expect(installCount == 4, "再釘住一次應該能重裝，實際 \(installCount) 次")
+        #expect(installCount == 2 && removeCount == 0, """
+            釘住狀態的變化不該裝也不該拆 monitor——它只換 `popover.behavior`。
+            實際 install \(installCount) 次／remove \(removeCount) 次
+            """)
+    }
+
+    /// altitude#3／efficiency#D 指出的實際風險路徑：`ColorPickerCoordinator` 的 `willClose`
+    /// observer → `onEnd` → `setPopoverPinned(false)`，而那時**面板早就關了**。
+    /// T37 到 altitude#3 之間，那條路徑會裝上一個沒有面板的全域滑鼠 monitor；它沒有真的
+    /// 洩漏出去，唯一原因是 `didClose` handler 裡 `onClose?()` 剛好排在
+    /// `dismissMonitor.stopIfNeeded()` 之前——**那兩行對調就會永久留下一個全域監看**
+    /// （每一次全系統點擊都喚醒這個常駐行程）。靠語句順序維持的正確性不該只存在於記憶裡。
+    ///
+    /// **mutation**：把 `startDismissMonitorIfNeeded()` 加回 `setPopoverPinned`，這條變紅。
+    @Test("面板沒顯示時改變釘住狀態，不得裝上任何 monitor（色板關閉走的正是這條路）")
+    func pinningWithoutShownPanelInstallsNothing() {
+        var installCount = 0
+        let monitor = PanelDismissMonitor(
+            installGlobal: { _ in installCount += 1; return "g" as AnyObject },
+            installLocal: { _ in installCount += 1; return "l" as AnyObject },
+            remove: { _ in })
+        let controller = StatusItemController(dismissMonitor: monitor)
+        defer { controller.removeFromStatusBar() }
+        controller.attachPopover()
+
+        controller.setPopoverPinned(true)
+        controller.setPopoverPinned(false)
+        #expect(installCount == 0, """
+            面板沒顯示，卻裝了 \(installCount) 個全域滑鼠 monitor。
+            `setPopoverPinned` 只該換 `popover.behavior`；裝拆 monitor 是
+            `presentPopover`／`didClose` 那一對的責任。
+            """)
     }
 
     @Test("popover 的 didClose 通知也會拆 monitor（不論是誰讓 popover 關的），不留下全域監看")
@@ -119,7 +172,9 @@ struct PanelDismissMonitorTests {
         defer { controller.removeFromStatusBar() }
         controller.attachPopover()
 
-        controller.setPopoverPinned(true)
+        // 前置：讓 monitor 處於「已裝」狀態。altitude#3 之後 `setPopoverPinned` 不再有這個
+        // 副作用，所以改用它真正的裝設點（原本借釘住來裝，是這條測試的手段不是它的主題）。
+        controller.startDismissMonitorIfNeeded()
         NotificationCenter.default.post(name: NSPopover.didCloseNotification, object: controller.popover)
         #expect(removeCount == 2, """
             popover 真的關掉時（不論是我們自己的 dismiss monitor 觸發 performClose，還是別的路徑），\

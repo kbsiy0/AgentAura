@@ -8,7 +8,11 @@ import AuraCore
 /// 動畫幀（`apply`）· 安裝狀態（`setInstallState`）· 語言（`setPanel` 帶著 `PanelModel` 來）。
 extension StatusItemController {
     /// T16：轉發到 `drawing`（自己管 `needsDisplay`，同 `update(_:phase:)` 的模式）。
-    func setIconPlate(_ shows: Bool) { drawing.setShowsPlate(shows) }
+    /// T32：順便快取進 `showsPlate`——`setIconShape` 換掉 `drawing` 時要用它延續偏好。
+    func setIconPlate(_ shows: Bool) {
+        showsPlate = shows
+        drawing.setShowsPlate(shows)
+    }
 
     func updateTooltip() {
         item.button?.toolTip = TooltipText.text(appearance: lastAppearance, install: installState,

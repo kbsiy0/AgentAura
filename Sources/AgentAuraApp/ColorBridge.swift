@@ -19,4 +19,17 @@ extension NSColor {
     convenience init(rgba: RGBA, alpha: Double? = nil) {
         self.init(srgbRed: rgba.r, green: rgba.g, blue: rgba.b, alpha: alpha ?? rgba.a)
     }
+
+    /// `IconDrawing` conformer 的 tint（`/simplify` icon-shapes 波次，reuse#3）。
+    ///
+    /// D-2：**顏色與 alpha 全部來自 `IconAppearance`**——App 層不自己 switch activity、
+    /// 不自己算曲線。`LEDStripView` 與 `SFSymbolIconView` 原本各寫一份
+    /// `c.a * AnimationCurve.alpha(...)`；`appLayerNeverSwitchesOnIconAnimation` 那條
+    /// 來源掃描守的是「App 層不得自己 switch 動畫種類」，抓不到「兩份公式其中一份被改」。
+    /// 每多一個造型 conformer 就多一份，所以收口在這裡。
+    ///
+    /// （該掃描比對原始碼字面且**不濾註解**，所以這段刻意不寫出它要抓的那個 case 字面。）
+    convenience init(appearance: IconAppearance, phase: Double) {
+        self.init(rgba: appearance.color, alpha: appearance.drawingAlpha(phase: phase))
+    }
 }

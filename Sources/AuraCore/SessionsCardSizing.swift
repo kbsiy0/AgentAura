@@ -30,13 +30,14 @@
 /// 抓到迴歸——與其塞一個測不到的機制，改用能被 gate 守住的推導常數。
 ///
 /// **實測分解**（`NSHostingView(rootView: PanelRowView(...)).fittingSize`）：
-/// 沒有 `footer` 副行的列＝33pt；有 `footer` 副行（如 `toolDurationMs` 非 nil）的列＝49pt；
+/// 沒有 `footer` 副行的列＝43pt；有 `footer` 副行（如 `toolDurationMs` 非 nil）的列＝59pt
+/// （基底 33／49pt 加上 `PanelRowView` 的 `.padding(.vertical, 5)` 上下共 10pt）；
 /// 分隔線（`Divider().padding(.leading, 40)`，1→5 列純無 footer 列連續量測）每條＋1pt。
 public enum SessionsCardSizing {
     /// 沒有 `footer` 副行的列高（見上方實測分解；`RowHeightDerivationTests` 守）。
-    public static let compactRowHeight: Double = 33
+    public static let compactRowHeight: Double = 43
     /// 有 `footer` 副行的列高（見上方實測分解；`RowHeightDerivationTests` 守）。
-    public static let tallRowHeight: Double = 49
+    public static let tallRowHeight: Double = 59
     /// 相鄰兩列之間 `Divider().padding(.leading, 40)` 的自然高度。
     public static let dividerHeight: Double = 1
     /// `PanelView.sessionsCard` 原本 `.frame(maxHeight: 420)` 的上限語意，維持不變。
