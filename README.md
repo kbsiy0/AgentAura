@@ -123,16 +123,26 @@ checks that claim item by item. Full details and troubleshooting in
 
 ## What it touches on your machine
 
-Worth knowing before you install anything that watches your work:
+Worth knowing before you install anything that watches your work. Each row below was
+checked against the source, not written from memory.
 
 | | |
 |---|---|
-| **Network** | The app opens no connections of its own — no telemetry, no update check, no crash reporting. There is no HTTP client in the codebase at all. The only two URLs in the source are the repository and *Report an issue*, which are handed to your browser when you click them. |
-| **Writes** | `~/.agentaura/sessions/<id>.json` (mode `0600`) and its own `UserDefaults` domain `io.agentaura.app`. That is all. |
-| **Reads** | Its own state files. It does not read your transcripts, your prompts, or your code. |
-| **The one symlink** | `~/.claude/skills/agentaura`. The installer is restricted to that path (and creating `~/.claude/skills/` if missing), verified by `realpath` after resolution. |
-| **Permissions** | None requested. No screen recording, no accessibility, no full disk access. "Launch at login" uses `SMAppService` and is opt-in. |
-| **Dependencies** | Zero third-party packages. Everything is Foundation / AppKit / SwiftUI. |
+| **Network** | The app opens no connections of its own — no telemetry, no update check, no crash reporting. There is no HTTP client in the codebase at all. The only two URLs in the source are the repository and *Report an issue*; clicking those hands a URL to your default browser. |
+| **Writes** | `~/.agentaura/sessions/` (the directory, `0700`) and `<session-id>.json` inside it (`0600`, re-tightened on every write) · the symlink `~/.claude/skills/agentaura`, creating `~/.claude/skills/` if that level is missing · a scratch directory `$TMPDIR/aura-verify-<uuid>/` during verification, deleted afterwards · `~/.agentaura-uninstall.log`, only if uninstall fails to reach the Trash. |
+| **Deletes** | Its own state files as sessions end. *Completely remove* additionally clears the `io.agentaura.app` preferences domain, deletes `~/.agentaura`, and moves the app itself **to the Trash** (recoverable, not an unlink). |
+| **Reads** | Its own state files, its own preferences, and the help page inside its own bundle. It also `lstat`s / `readlink`s its own mount point and `stat`s the two files under it. **It does not read your transcripts, your prompts, or your code.** |
+| **Runs** | One executable, ever: `~/.claude/skills/agentaura/bin/aura-hook`, to confirm the hook actually works — and it removes that file's `com.apple.quarantine` attribute first, because a quarantined binary is SIGKILLed rather than failing visibly. It runs with no arguments, not through a shell, with a self-generated JSON on stdin and output discarded. **If you point the mount somewhere by hand, that is the binary this will un-quarantine and run.** |
+| **`~/.claude/settings.json`** | Never written — not "cleaned up afterwards", not one byte, ever. A test asserts the file is byte-identical across connect, and that the only difference anywhere under `~/.claude` is `{skills, skills/agentaura}`. If `~/.claude` does not exist, connecting is **refused** rather than creating it. |
+| **Permissions** | No macOS privacy permissions (TCC) are requested — no screen recording, accessibility, automation, or full disk access; `Info.plist` contains zero usage descriptions. But be clear about the flip side: the app is **not sandboxed and ships no entitlements** (it has to write `~/.claude` and `~/.agentaura`), so it runs with your account's ordinary file access. "Launch at login" is off by default and uses `SMAppService`. |
+| **Signing** | Ad-hoc signed, **not notarized**. macOS 15 removed the right-click → Open bypass, so the first launch needs *System Settings → Privacy & Security → Open Anyway*. |
+| **Dependencies** | Zero third-party packages — `Package.swift` has no `.package(url:)` and there is no `Package.resolved`. `plugin/bin/aura-hook` is not in version control, so the binary you run is one you built from this source yourself. |
+
+**Trust boundary.** Installing the plugin means allowing Claude Code to execute
+`plugin/bin/aura-hook` on 19 hook events. Pressing **Connect** in the app always mounts the
+copy inside the app bundle. Running `ln -sfn` yourself to point the mount at someone else's
+directory is a different decision — that authorises their code, and the verification step
+above will clear its quarantine flag for them.
 
 What Claude Code sends to the hook is metadata — session id, project directory name, event
 type, tool name, timing. AgentAura keeps a reduced form of that on disk so the panel can be

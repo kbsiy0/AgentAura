@@ -115,16 +115,24 @@ open build/AgentAura.app
 
 ## 它會碰你機器上的什麼
 
-裝一個會看著你工作的東西之前，這些值得先知道：
+裝一個會看著你工作的東西之前，這些值得先知道。下面每一列都是對照原始碼查過的，不是憑印象寫的。
 
 | | |
 |---|---|
-| **網路** | App 自己不開任何連線——沒有遙測、沒有更新檢查、沒有當機回報，整個 codebase 裡沒有任何 HTTP client。原始碼裡只有兩個 URL：專案位址與「回報問題」，點下去時交給你的瀏覽器開。 |
-| **寫入** | `~/.agentaura/sessions/<id>.json`（權限 `0600`），以及自己的 `UserDefaults` domain `io.agentaura.app`。就這些。 |
-| **讀取** | 只讀自己的狀態檔。不讀你的 transcript、不讀你的 prompt、不讀你的程式碼。 |
-| **那一條 symlink** | `~/.claude/skills/agentaura`。安裝器被限制只能碰這個路徑（必要時加上建立 `~/.claude/skills/`），且一律以 `realpath` 解析後的位置判定。 |
-| **權限** | 一個都不要。不需要螢幕錄製、不需要輔助使用、不需要完整磁碟取用。「開機自動啟動」走 `SMAppService`，且預設關閉。 |
-| **相依** | 零第三方套件，全部是 Foundation／AppKit／SwiftUI。 |
+| **網路** | App 自己不開任何連線——沒有遙測、沒有更新檢查、沒有當機回報，整個 codebase 裡沒有任何 HTTP client。原始碼裡只有兩個 URL：專案位址與「回報問題」，點下去是把一個網址交給你的預設瀏覽器。 |
+| **寫入** | `~/.agentaura/sessions/` 這個目錄本身（`0700`）與底下的 `<session-id>.json`（`0600`，每次寫入重新收緊）· symlink `~/.claude/skills/agentaura`，若 `~/.claude/skills/` 這一層不存在會建立它 · 驗證期間的暫存目錄 `$TMPDIR/aura-verify-<uuid>/`，用完即刪 · `~/.agentaura-uninstall.log`，只在移除時丟不進垃圾桶才寫。 |
+| **刪除** | session 結束後刪自己的狀態檔。「完整移除」另外會清空 `io.agentaura.app` 偏好 domain、刪掉 `~/.agentaura`，並把 App 自己**移到垃圾桶**（可還原，不是直接 unlink）。 |
+| **讀取** | 自己的狀態檔、自己的偏好、自己 bundle 裡的說明頁。另外會對自己的掛載點做 `lstat`／`readlink`，以及 `stat` 它底下那兩個檔。**不讀你的 transcript、不讀你的 prompt、不讀你的程式碼。** |
+| **執行** | 從頭到尾只執行一個東西：`~/.claude/skills/agentaura/bin/aura-hook`，用來確認 hook 真的能動——而且**會先移除那個檔的 `com.apple.quarantine` 屬性**，因為帶隔離的執行檔會被 SIGKILL 而不是明確失敗。執行時不帶任何參數、不經 shell、stdin 餵自產的 JSON、輸出丟棄。**如果你自己把掛載指到別的地方，那就是它會去拆隔離並執行的那顆檔案。** |
+| **`~/.claude/settings.json`** | 從沒被寫過——不是「移除後清乾淨」，是一個位元組都沒動過。有測試斷言 connect 前後它位元組完全相同，且整個 `~/.claude` 底下的差異**恰為** `{skills, skills/agentaura}`。`~/.claude` 不存在時**拒絕接上**，不會去建立它。 |
+| **權限** | 不要求任何 macOS 隱私權限（TCC）——不要螢幕錄製、輔助使用、自動化或完整磁碟取用，`Info.plist` 裡零個用途說明。但反面也要講清楚：這個 App **沒有沙箱化、也沒有任何 entitlement**（它必須寫 `~/.claude` 與 `~/.agentaura`），所以它擁有你帳號層級的一般檔案存取能力。「開機自動啟動」預設關閉，走系統的 `SMAppService`。 |
+| **簽章** | ad-hoc 簽章，**未經 Apple 公證**。macOS 15 移除了右鍵→開啟的繞道，所以第一次開啟要到**系統設定 → 隱私權與安全性 → 強制打開**。 |
+| **相依** | 零第三方套件——`Package.swift` 沒有任何 `.package(url:)`，也沒有 `Package.resolved`。`plugin/bin/aura-hook` 不進版控，所以你跑的那顆執行檔一定是你自己從這份原始碼建出來的。 |
+
+**信任邊界。** 安裝這個 plugin 等於允許 Claude Code 在 19 個 hook 事件上執行
+`plugin/bin/aura-hook`。在 App 裡按**接上**，掛的永遠是 App bundle 內建的那一份。
+自己用 `ln -sfn` 把掛載指到別人給你的目錄，是另一個決定——那等於授權執行那份程式碼，
+而上面那個驗證步驟還會順手替它清掉隔離標記。
 
 Claude Code 送進 hook 的是中繼資料——session id、專案目錄名、事件類型、工具名稱、時間。
 AgentAura 把其中一份精簡版存到磁碟好讓面板能重畫，移除時一併刪掉。
