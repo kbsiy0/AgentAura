@@ -1,5 +1,11 @@
 # M4 A/B 決策報告（persona-tester）
 
+> **公開版註記（2026-09-16）**：`V1`／`V2`／`V3` 三個**原型**渲圖在 repo 轉為公開時移除——
+> 它們是在去識別化之前渲的，圖裡燒著真實專案名稱，而產生它們的變體程式碼在決策完成後
+> 就已經不在 codebase 裡，無法重渲。**決策結論與逐項評分不受影響**（都在本文），
+> 且 `V1-landed-*.png`（落地後的實際樣子）仍在且已重新渲過。
+
+
 **日期**：2026-09-09 20:39–21:0x · **branch** `change/m4-icon-form` · **Round** 1（persona A/B 首輪）
 **Mode**：Panel（3 persona 由 spec §4.4 指定，權重寫死）· **Tier** 1（`Sources/AgentAuraApp/**` + `AuraCore/IconAppearance.swift`）
 **Gate**：軟 gate（proposal `release_target: softlaunch`；非真錢、非對外系統）

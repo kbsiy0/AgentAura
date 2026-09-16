@@ -1,12 +1,15 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "agentaura",
-  "description": "AgentAura 的本地 marketplace —— 自用安裝用，不上架",
-  "owner": { "name": "AgentAura", "email": "" },
+  "description": "Local marketplace for AgentAura — used for local installs; not published to any public registry.",
+  "owner": {
+    "name": "kbsiy0",
+    "url": "https://github.com/kbsiy0"
+  },
   "plugins": [
     {
       "name": "agentaura",
-      "description": "把 Claude Code 的運行狀態顯示在 macOS menu bar",
+      "description": "Shows what your Claude Code sessions are doing in the macOS menu bar. Requires the AgentAura.app companion; macOS 13+.",
       "source": "./plugin",
       "category": "development"
     }

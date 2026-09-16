@@ -1,181 +1,233 @@
-# AgentAura
+<h1 align="center">AgentAura</h1>
 
-把 Claude Code 的運行狀態顯示在 macOS 選單列 —— 不用切視窗就看得出「有沒有 agent 在等你」。
+<p align="center">
+  <b>See what your Claude Code sessions are doing — from the menu bar.</b><br>
+  One light for all of them. Only the states that need you ever move.
+</p>
 
-## 這是什麼
+<p align="center">
+  English · <a href="README.zh-TW.md">繁體中文</a>
+</p>
 
-多個 Claude Code session 併行時（多 agent、整夜跑 pipeline），你無法從畫面上看出
-哪個 session 卡在權限請求、哪個掛了、哪個跑完了。AgentAura 用一顆選單列 icon
-**聚合**全部 session 的狀態，點開面板列出每個 session 的細節。
+<p align="center">
+  <img src="docs/readme/icon-states.gif" alt="The menu bar icon in all five states: idle and done sit still, waiting and error pulse" width="620">
+</p>
 
-核心視覺規則：**只有需要你行動的狀態才會動。**
+<p align="center">
+  <sub>Real frames, rendered from the production views. <code>idle</code>, <code>working</code> and <code>done</code> hold still. Only <code>waiting</code> and <code>error</code> move.</sub>
+</p>
 
-| 狀態 | 呈現 | 動畫 |
+---
+
+## The problem
+
+Run several Claude Code sessions at once — a few agents, an overnight pipeline — and your
+screen stops telling you anything. Which one is blocked on a permission prompt? Which one
+died twenty minutes ago? Which one finished while you were in another window?
+
+You find out by cycling through terminal tabs.
+
+AgentAura puts a single light in the menu bar that **aggregates every session**, and a panel
+that lists them individually. You glance up instead of hunting.
+
+## The one rule
+
+**Only states that need you are allowed to move.**
+
+A status indicator that animates constantly is just a second thing competing for your
+attention. So motion is rationed, and it is spent only where it buys something:
+
+| State | Look | Motion |
 |---|---|---|
-| `idle` | 極暗，近乎不可見 | 無 |
-| `working`（常態） | 低對比暗藍，4s 極慢呼吸 | 極微 |
-| `done` | 恆亮綠 | **無** |
-| `waiting`（需要你） | 橘色明顯呼吸 | 有 |
-| `error`（需要你） | 紅色 double blink | 有 |
+| `idle` | Nearly invisible | None |
+| `working` (the common case) | Dim, low contrast | A 4-second breath, barely there |
+| `done` | Steady green | **None** — you can look when you want |
+| `waiting` (needs you) | Amber | Visible 1.1s pulse |
+| `error` (needs you) | Red | Double blink |
 
-聚合優先序：`error > waiting > working > done > idle`，**與寫入順序無關**。
+The aggregate takes the highest-priority state across all sessions —
+`error > waiting > working > done > idle` — **regardless of which session wrote last**.
+A subagent finishing its tool call must never overwrite "the main agent is waiting for you".
 
-## 安裝
+## The panel
 
-需要 macOS 13+、Claude Code。
+Click the icon for the full list: one row per session, with the project name, what it is
+doing, and how long the current tool has been running.
 
-大部分使用者：拿到 `AgentAura.app`（目前還沒有現成下載版本，先用下方開發者步驟建一份）
-→ 拖進「應用程式」→ 打開 → 面板裡按「接上」→ **開一個新的 Claude Code session**。
-接上只會建一條指到 App 的捷徑，不動 Claude Code 既有設定；App 內建「說明」是一份
-離線白話文件。開機自動啟動、關於、一鍵移除掛載都在面板 Options 裡。
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/panel-dark.png">
+    <img src="docs/readme/panel-light.png" alt="The AgentAura panel listing four sessions with their states" width="380">
+  </picture>
+</p>
 
-開發者：
+The legend row at the bottom is permanent — and the four coloured dots are buttons. Click one
+to open the system colour picker and recolour that state; the menu bar icon and the legend
+update live as you drag. Colours persist.
+
+<details>
+<summary><b>Options menu</b> — everything else lives here (click to expand)</summary>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/panel-options-dark.png">
+    <img src="docs/readme/panel-options-light.png" alt="The Options menu expanded, showing launch at login, reduce motion, icon shape, language and removal entries" width="380">
+  </picture>
+</p>
+
+Launch at login · Reduce motion (OR-ed with the system setting) · Icon backdrop ·
+Menu bar icon shape · Reset colours · Language (English / 繁體中文) · Reconnect ·
+Remove mount · Completely remove AgentAura · About · Report an issue · Quit (⌘Q really works).
+
+Right-clicking the menu bar icon opens the same menu directly.
+</details>
+
+## Menu bar icon shapes
+
+Six shapes. The LED strip is the default; the other five are SF Symbols.
+
+<p align="center">
+  <img src="docs/readme/icon-shapes.png" alt="Six selectable menu bar icon shapes: LED strip, dot, ring, capsule, sparkle, half circle" width="620">
+</p>
+
+The picker shows a live thumbnail of each shape, animated at the current state — the
+thumbnails are drawn by **the same renderer that draws the real icon**, so they cannot drift
+away from what you will actually get.
+
+## Install
+
+Requires macOS 13+, Claude Code, and the Swift 6 toolchain (`xcode-select --install`).
 
 ```bash
 git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
-./scripts/build-plugin.sh                            # universal aura-hook（必要：binary 不進版控）
-claude plugin validate --strict ./plugin             # 官方 validator
-ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura     # 掛載
-./scripts/verify-install.sh                          # 驗證整條鏈路
 
-./scripts/build-app.sh                               # 組出 build/AgentAura.app（含 plugin/ bundle 化）
+./scripts/build-plugin.sh          # builds the universal aura-hook binary (not in version control)
+./scripts/build-app.sh             # produces build/AgentAura.app
 open build/AgentAura.app
 ```
 
-（這條路徑需要 Swift 6 工具鏈：`xcode-select --install`。）
+Then in the panel press **Connect**, and **start a new Claude Code session**.
 
-**下一個** Claude Code session 起生效（skills-dir 的 plugin 在 session 啟動時載入，
-已在執行中的 session 不會中途載入新 plugin，已實測——細節見 `docs/INSTALL.md`「什麼時候生效」）。
+> **The next session, not the current one.** Claude Code loads plugins when a session starts;
+> windows that are already open will not pick it up mid-flight. The app says so rather than
+> claiming it works immediately.
 
-移除：面板 Options 一鍵移除掛載，或手動 `rm ~/.claude/skills/agentaura`
-（狀態目錄 `rm -rf ~/.agentaura`）。細節與疑難排解見 [`docs/INSTALL.md`](docs/INSTALL.md)。
+Connecting creates exactly one symlink: `~/.claude/skills/agentaura` → the app.
+**`~/.claude/settings.json` is never written to** — not "cleaned up afterwards", never touched
+at all, so there is no way to leave behind a dead hook pointing at a deleted binary.
 
-> **`~/.claude/settings.json` 全程零改動。** 不是「移除後清乾淨」，是從頭到尾沒被寫過 ——
-> 所以不可能留下指向已刪除執行檔的死 hook。（`claude plugin marketplace add` 會寫
-> `extraKnownMarketplaces`，因此不走那條路；`verify-install.sh` 掃**整個**檔案驗證這件事。）
+**Removing it:** Options → *Remove mount* unhooks it; Options → *Completely remove AgentAura*
+returns the machine to the state it was in before installation. `./scripts/verify-uninstall.sh`
+checks that claim item by item. Full details and troubleshooting in
+[`docs/INSTALL.md`](docs/INSTALL.md).
 
-## 架構
+## What it touches on your machine
 
-```
-Claude Code plugin hooks（19 個事件，全部 async: true）
-        ↓
-aura-hook ──flock 下 read-merge-write──▶ ~/.agentaura/sessions/<id>.json（0600）
-                                              │ FSEvents
-                                              ▼
-                                      PipelineGraph（composition root）
-                                      ├─ NSStatusItem + 自繪動畫
-                                      └─ SwiftUI 面板
-```
+Worth knowing before you install anything that watches your work:
 
-四個 module：`AuraCore`（純邏輯，零 UI 依賴，由編譯器 gate 強制）、
-`AuraHookFile`（檔案 + FSEvents）、`aura-hook`（CLI）、`AgentAuraApp`（AppKit）。
-
-`aura-hook` **任何錯誤都靜默 `exit 0`、stdout/stderr 一律空** —— 觀測性程式絕不可干擾 agent。
-代價是 exit code 無法用來驗收，所以所有驗收都看產物而非回傳值。
-
-## 設計依據：實測，不是文件
-
-契約照 **141 個真實 hook payload** 寫（三輪捕獲，見 [`docs/evidence/hook-payloads/`](docs/evidence/hook-payloads/)）。
-實測推翻了多項文件層假設，並抓到三個讀文件讀不出來的 bug：
-
-1. **subagent 的 tool 事件共用父 session 的 `session_id`** —— 實測一個 session 內主／subagent
-   交錯 5 次、最密相鄰 20ms。單槽 last-write-wins 下，主 agent 的 `PermissionRequest`
-   會在 20ms 內被 subagent 的 `PostToolUse` 覆寫成 `working`。
-   **產品唯一最重要的訊號被靜默抹除。** 修法：主／副分槽、activity 取優先序 max。
-2. **使用者按 Deny 不產生任何 hook 事件** —— 序列是 `PermissionRequest` →（Deny）→ 什麼都沒有 →
-   `SessionEnd`。所以 `waiting` 絕不能進入「已結束但未確認」的尾巴，否則一個你早就回答過的
-   session 會讓 icon 一直亮橘燈說「有人在等你」。
-3. **`PostToolUseFailure` 的錯誤欄位叫 `error`，不是 `tool_error`** —— 最初寫進 spec 的結論是
-   「它沒有錯誤欄位」，那是因為透過一份自己寫的 key 過濾器去看 payload，
-   而那份過濾器不含真正的欄位名。**用自己的假設去觀察，只會看到自己的假設。**
-
-這個方法也會自我修正：第一輪的結論「任何 event 都不帶 `model`」被第二輪推翻
-（`SessionStart` 確實帶 `"model":"claude-opus-5[1m]"`），spec §2.1.1 保留了兩輪的紀錄與判準。
-
-## 文件
-
-| 文件 | 內容 |
+| | |
 |---|---|
-| [`docs/superpowers/specs/2026-09-08-agentaura-design.md`](docs/superpowers/specs/2026-09-08-agentaura-design.md) | **正典設計**（10 節）。與其他文件衝突時以它為準 |
-| [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | **建置審計報告** —— 八族「空轉的守衛」實證案例與修法 |
-| [`docs/INSTALL.md`](docs/INSTALL.md) | 安裝、移除、疑難排解、從舊版升級 |
-| [`CLAUDE.md`](CLAUDE.md) | 給 Claude Code 的專案指引（指令陷阱、invariants 與出處） |
-| `docs/01-approach-comparison.html` · `02-design.html` · `03-measured-corrections.html` · `04-attention-budget.html` | **設計階段**的記錄（含拓撲圖、動畫原型）。內容停在設計當時，實作後的修正以 spec 為準 |
+| **Network** | The app opens no connections of its own — no telemetry, no update check, no crash reporting. There is no HTTP client in the codebase at all. The only two URLs in the source are the repository and *Report an issue*, which are handed to your browser when you click them. |
+| **Writes** | `~/.agentaura/sessions/<id>.json` (mode `0600`) and its own `UserDefaults` domain `io.agentaura.app`. That is all. |
+| **Reads** | Its own state files. It does not read your transcripts, your prompts, or your code. |
+| **The one symlink** | `~/.claude/skills/agentaura`. The installer is restricted to that path (and creating `~/.claude/skills/` if missing), verified by `realpath` after resolution. |
+| **Permissions** | None requested. No screen recording, no accessibility, no full disk access. "Launch at login" uses `SMAppService` and is opt-in. |
+| **Dependencies** | Zero third-party packages. Everything is Foundation / AppKit / SwiftUI. |
 
-HTML 用瀏覽器直接開（`file://`），不綁任何帳號。
+What Claude Code sends to the hook is metadata — session id, project directory name, event
+type, tool name, timing. AgentAura keeps a reduced form of that on disk so the panel can be
+redrawn, and deletes it on uninstall.
 
-## 開發
+## How it works
+
+```
+Claude Code plugin hooks (19 events, all async: true)
+        │
+        ▼
+aura-hook ──read-merge-write under flock──▶ ~/.agentaura/sessions/<id>.json (0600)
+                                                  │ FSEvents
+                                                  ▼
+                                          PipelineGraph (composition root)
+                                          ├─ NSStatusItem + custom-drawn animation
+                                          └─ SwiftUI panel
+```
+
+Four modules: `AuraCore` (pure logic, zero UI imports — enforced by a compiler-driven test),
+`AuraHookFile` (files + FSEvents), `aura-hook` (the CLI), `AgentAuraApp` (AppKit).
+
+`aura-hook` **always exits 0, with empty stdout and stderr, whatever happens.** Observability
+must never interfere with the thing it observes. The cost is that exit codes are useless for
+verification, so every check looks at the artefact instead of the return value.
+
+## Built from measurement, not documentation
+
+The event contract was written against **141 real hook payloads** captured over three rounds,
+not from the documentation. Measurement overturned several documented assumptions and caught
+three bugs that reading could not have:
+
+1. **Subagent tool events share the parent's `session_id`.** Measured: main and subagent
+   events interleaved five times in one session, 20 ms apart at the closest. Under
+   last-write-wins, a subagent's `PostToolUse` overwrites the main agent's `PermissionRequest`
+   within 20 ms — *silently erasing the single most important signal the product has.*
+   Fixed by giving main and subagent separate slots and taking the priority max.
+
+2. **Denying a permission prompt produces no hook event at all.** The sequence is
+   `PermissionRequest` → (you press Deny) → nothing → `SessionEnd`. So `waiting` must never
+   survive into the "ended but unacknowledged" tail, or a session you already answered keeps
+   the icon amber forever.
+
+3. **`PostToolUseFailure`'s error field is called `error`, not `tool_error`.** The first
+   conclusion written into the spec was "it has no error field" — because the payloads were
+   being inspected through a hand-written key filter that did not contain the real field name.
+   *Looking at data through your own assumptions only ever shows you your assumptions.*
+
+> The payload fixtures in `Tests/AuraCoreTests/Fixtures/` are **de-identified**: paths, prompts,
+> assistant messages and file contents were replaced before this repository was made public.
+> The event structure — which is what the contract and its tests actually depend on — is
+> untouched, and the raw captures are not published.
+
+The method corrects itself, too: round one concluded "no event carries `model`", and round two
+disproved it. Both rounds are kept in the spec, with the reasoning for the reversal.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/superpowers/specs/2026-09-08-agentaura-design.md`](docs/superpowers/specs/2026-09-08-agentaura-design.md) | **The canonical design.** Where documents conflict, this one wins |
+| [`docs/INSTALL.md`](docs/INSTALL.md) | Install, uninstall, troubleshooting, upgrading |
+| [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | Build audit — eight families of *tests that guard nothing*, with the fixes |
+| [`docs/2026-09-11-subagent-state-priority-audit.html`](docs/2026-09-11-subagent-state-priority-audit.html) | How background subagents made the light lie, and the measured timeline |
+| [`CLAUDE.md`](CLAUDE.md) | Project instructions for Claude Code: invariants with their provenance, and the traps |
+
+HTML documents open straight from disk (`file://`). Nothing is account-gated.
+
+## Development
 
 ```bash
-swift test                          # 全量
-swift test --filter <測試函式名>     # 單一測試
+swift test                         # full suite
+swift test --filter <test name>    # one test (the function name, not the file)
 ```
 
-跨層 gate 的設計原則、指令陷阱（`swiftpm-testing-helper` 殭屍鎖、macOS 沒有 `timeout`…）
-與所有 invariants 的出處寫在 [`CLAUDE.md`](CLAUDE.md)。
+760 tests across 144 suites. Swift 6 with strict concurrency; tests use
+[swift-testing](https://github.com/swiftlang/swift-testing) (`@Test` / `#expect`), not XCTest.
 
-## 狀態
+A clean clone needs `./scripts/build-plugin.sh` first — `plugin/bin/aura-hook` is a build
+product and is not in version control, and three install-layout tests are red without it.
 
-M0–M5 完成，[PR #2](https://github.com/kbsiy0/AgentAura/pull/2) 已 merge。**M4 icon 形態決策已完成**：
-persona-tester 對兩個原型（8 顆 LED 燈條 A2、光環點 B2）打分，選定 **A2**（8 顆 LED ＋ 不透明底板）
-——spec 的 R5「形態由證據決定而非預設」已滿足，決策細節見
-[`docs/2026-09-09-m4-ab-decision.md`](docs/2026-09-09-m4-ab-decision.md)。
-**Change 2 `panel-legend-palette` 已 merge 並通過實機驗收**：面板底部常駐圖例列（錯誤·等你·執行中·已完成）、點色點以系統色板改色、四色持久化。
-實機驗收同時證實一個既有 bug（S1-3）：已結束的 session 在面板畫出來之前就被 acknowledge 掉，使用者永遠看不到「哪個專案完成了」——
-已修正為**關面板才 acknowledge**（點開看到已結束的列，關掉面板燈才熄）。
+The testing philosophy — ask the platform rather than approximating it, derive every number
+from types or disk rather than freezing it as a constant, and require a mutation record for
+every gate — is written up in [`CLAUDE.md`](CLAUDE.md), along with the failures that produced
+each rule.
 
-**Change 3 `app-shell`（操作層）＋ phase 2（UI/UX 完整化）完成，persona GO 7.55**：在此之前面板只有裸狀態列表，沒有「離開」、
-「開機自動啟動」、「接不上時怎麼辦」這類一般 App 都有的外殼——非工程師開起來看到八顆暗燈，
-分不出「沒 session 在跑」／「Claude Code 沒開」／「hook 根本沒裝」。這個 change 補上
-一鍵接上（含真的跑一次的 exec 驗證，不是自洽檢查）、健康狀態常駐、開機自動啟動、關於、
-設定入口、一鍵移除掛載、去工程師化文案，並把 `docs/INSTALL.md`、本檔與離線 `help.html`
-一併改成「下載 app → 拖進應用程式 → 按接上」的一般使用者路徑。
-phase 2 再補上兩個成熟選單列 app 該有而我們缺的：右鍵開 Options、回報問題、
-**`⌘Q` 真的接線**（之前那個字樣是假的）、關於的實際內容、「減少動態」開關，
-以及一輪 UX 修正（填色 CTA、tooltip 不再說謊、banner 生命週期、分組分隔線…）。
-Tier 1 → persona-tester 兩輪：6.30 NO-GO → **7.55 GO**。
-量測與逐條 gate／mutation 見 [`docs/superpowers/plans/2026-09-10-app-shell-dod.md`](docs/superpowers/plans/2026-09-10-app-shell-dod.md)。
+The README's images are generated, not screenshotted:
 
-## 改顏色
-
-點選單列燈條開面板，底部圖例列的四個色點就是四種狀態的顏色。**點色點**會開系統色板，拖色時選單列的燈（若當前狀態就是那一態）
-與面板圖例即時變；色板開著時面板不會自動關。顏色存在 `UserDefaults`（`io.agentaura.app` 的 `AgentAuraColor.*` 四個 key）。
-「重設顏色」在 **Options** 裡（不再佔著圖例列的位置）。idle 的極暗灰不可改。
-
-## 面板長什麼樣
-
-```
-沒有活著的 session                          ← 標題＝狀態，不會與內文重複
-  Claude Code 開起來、開始跑之後，這裡會列出每個 session。
-● 錯誤  ● 等你  ● 執行中  ● 已完成          ← 常駐圖例，點色點改色
-八顆燈一起代表全部 session · 點色點改顏色
-● 已接上 · v0.1.0                Options ⌄  ← 健康狀態 ＋ 版本 ＋ 設定入口
+```bash
+AURA_RENDER_README=1 swift test --filter ReadmeAssetRenderer
 ```
 
-按下 **Options ⌄**（或**右鍵**點選單列圖示）展開，分五群：
+They render the real production views offscreen, which keeps them reproducible and keeps real
+project names and paths out of a public repository.
 
-```
-說明與快速上手…
-──────────────
-開機自動啟動          開      ← 開／關字樣，不只依賴系統控制項的外觀
-減少動態              關      ← 與系統的「減少動態」取 OR；系統已開時此列鎖住並說明
-重設顏色
-──────────────
-重新接上 Claude Code
-再檢查一次                    ← 只在「已接上但未驗證」時出現
-移除掛載…
-──────────────
-關於 AgentAura
-回報問題…
-──────────────
-離開 AgentAura   ⌘Q           ← ⌘Q 真的能用（面板開著時裝 key monitor，關閉時移除）
-```
+## License
 
-**沒接上時**面板會換成一張說明畫面（標題、說明、填色的［接上］按鈕、［這是什麼？］），
-第一次啟動且從未成功接上過時會自動打開一次。接上成功的提示是
-「已接上 · **下一個 Claude Code session 起生效**（現在開著的視窗不受影響）」——
-新的 plugin 掛載要新 session 才載入，這點已實測，不會騙你說立即生效。
-
-## 授權
-
-尚未決定（開源時確定）。
+[MIT](LICENSE).

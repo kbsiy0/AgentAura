@@ -1,9 +1,18 @@
 {
   "name": "agentaura",
   "version": "0.1.0",
-  "description": "Shows Claude Code's running status in the macOS menu bar",
+  "description": "Shows what your Claude Code sessions are doing in the macOS menu bar. One aggregated light for all sessions; only the states that need you move.",
   "author": {
-    "name": "AgentAura",
-    "email": ""
-  }
+    "name": "kbsiy0",
+    "url": "https://github.com/kbsiy0"
+  },
+  "homepage": "https://github.com/kbsiy0/AgentAura",
+  "license": "MIT",
+  "keywords": [
+    "menu-bar",
+    "macos",
+    "status",
+    "observability",
+    "sessions"
+  ]
 }
