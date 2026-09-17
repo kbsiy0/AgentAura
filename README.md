@@ -253,6 +253,8 @@ disproved it. Both rounds stay in the spec, along with the reasoning for the rev
 | [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | Eight families of tests that guarded nothing, and their fixes |
 | [`docs/2026-09-11-subagent-state-priority-audit.html`](docs/2026-09-11-subagent-state-priority-audit.html) | How background subagents made the light lie, with the measured timeline |
 | [`CLAUDE.md`](CLAUDE.md) | Project instructions for Claude Code: each rule with the failure that produced it |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to get set up, and the conventions that will surprise you |
+| [`SECURITY.md`](SECURITY.md) | What the tool can do on your machine, what's enforced by tests, and the known weaknesses |
 
 The HTML files open straight from disk. Nothing needs an account.
 
@@ -282,6 +284,15 @@ The testing approach is written up in [`CLAUDE.md`](CLAUDE.md), together with th
 that produced each rule. Three ideas run through it. Ask the platform instead of
 approximating it. Derive every number from types or from disk, never freeze it as a constant.
 And prove that each test can actually fail.
+
+## Contributing
+
+Bug reports and small fixes are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the setup
+and the conventions worth knowing first — the file size limits, the fact that tests use
+swift-testing rather than XCTest, and why a test nobody has watched fail doesn't count.
+
+For anything security-related, please use the private route in [`SECURITY.md`](SECURITY.md)
+rather than a public issue.
 
 ## License
 

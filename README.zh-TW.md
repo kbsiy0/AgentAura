@@ -232,6 +232,8 @@ aura-hook ──flock 下 read-merge-write──▶ ~/.agentaura/sessions/<id>.j
 | [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | 八族「空轉的守衛」實證案例與修法 |
 | [`docs/2026-09-11-subagent-state-priority-audit.html`](docs/2026-09-11-subagent-state-priority-audit.html) | 背景 subagent 怎麼讓燈號說謊，以及實測的時間線 |
 | [`CLAUDE.md`](CLAUDE.md) | 給 Claude Code 的專案指引：每條規則，以及催生它的那次失敗 |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 怎麼把環境弄起來，以及會讓你意外的那些慣例（英文） |
+| [`SECURITY.md`](SECURITY.md) | 這個工具在你機器上能做什麼、哪些邊界有測試守著、已知的弱點（英文） |
 
 HTML 用瀏覽器直接開，不綁任何帳號。
 
@@ -259,6 +261,14 @@ AURA_RENDER_README=1 swift test --filter ReadmeAssetRenderer
 測試方法寫在 [`CLAUDE.md`](CLAUDE.md) 裡，連同催生每一條規則的那次失誤。貫穿它的有三件事：
 問平台，不要在它外面包一層自己的近似；每個數字都從型別或磁碟推導，不要凍成常數；
 每個守衛都要證明它真的會紅。
+
+## 參與
+
+歡迎回報問題與小修。[`CONTRIBUTING.md`](CONTRIBUTING.md) 寫了環境怎麼弄起來，
+以及最值得先知道的幾條慣例：單檔行數上限、測試用的是 swift-testing 不是 XCTest、
+以及為什麼「沒有人看它紅過的測試」不算數。
+
+資安相關的問題請走 [`SECURITY.md`](SECURITY.md) 裡的私下回報管道，不要開公開 issue。
 
 ## 授權
 

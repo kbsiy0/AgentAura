@@ -103,6 +103,12 @@ struct IconShapeMenuReduceMotionWiringTests {
         let (delegate, _, onAction, presented) = try await makeWaitingDelegate()
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
+        // **釘住系統那一半**：生產邏輯是「系統 OR 使用者」，而 `AnimationDriver` 在 init 時
+        // 讀真的 `NSWorkspace` 系統設定。這條測試的主題是使用者偏好那一半，系統值只是前提。
+        // CI runner（macOS 15）上系統「減少動態」是開的，於是這條在那裡必紅、在本機必綠——
+        // 測試的結論不該取決於跑它的那台機器。
+        delegate.driver.setSystemReduceMotion(false)
+
         onAction(.pickIconShape(.ledStrip))
 
         let appearance = try #require(presented().last, "presentIconShapeMenu 沒有被呼叫")

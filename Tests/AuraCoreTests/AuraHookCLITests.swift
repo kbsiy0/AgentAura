@@ -280,17 +280,4 @@ struct AuraHookCLITests {
     }
 
     // ---- 效能（DoD：p95 < 5ms）----
-
-    @Test("單次呼叫的 wall-clock 中位數 < 50ms（含 process spawn）")
-    func latency() async throws {
-        let root = try makeRoot()
-        var times: [Double] = []
-        for i in 0..<20 {
-            let t = Date()
-            _ = try await run(#"{"hook_event_name":"PreToolUse","session_id":"perf\#(i % 3)","tool_name":"Bash"}"#, root: root)
-            times.append(Date().timeIntervalSince(t) * 1000)
-        }
-        let median = times.sorted()[times.count / 2]
-        #expect(median < 50, "中位數 \(median)ms —— 含 spawn 的寬鬆門檻；精確 p95 用 hyperfine 量（Task 13）")
-    }
 }

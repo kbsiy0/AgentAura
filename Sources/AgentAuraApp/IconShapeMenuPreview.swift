@@ -51,8 +51,17 @@ final class IconShapeMenuPreview {
         guard appearance.targetFPS > 0 else { return }
         let interval = 1.0 / Double(appearance.targetFPS)
         let period = AnimationCurve.period(of: appearance.animation) ?? 1.0
+        // **顯式跳回 main actor**，不要靠編譯器推斷。
+        // `Timer` 的 block 是 nonisolated `@Sendable`；Swift 6.3 在這個位置推得出
+        // main-actor 隔離，**Swift 6.1.2 推不出來**——CI（macOS 15 runner）因此編不過，
+        // 而本機（6.3.3）完全看不出問題。任何用 Xcode 16.x 的人都會撞到。
+        //
+        // 用 `Task { @MainActor in }` 而不是 `MainActor.assumeIsolated`：後者在 6.1.2 上
+        // 因為泛型回傳值的 Sendable 約束而編不過（實測 CI 回報
+        // `non-sendable result type 'T'`，還附帶一次編譯器 fatalError）。
+        // 代價是每格多一次 async hop，而這顆 timer 只在選單開著時存在，可以接受。
         let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-            self?.tick(step: interval / period)
+            Task { @MainActor in self?.tick(step: interval / period) }
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t

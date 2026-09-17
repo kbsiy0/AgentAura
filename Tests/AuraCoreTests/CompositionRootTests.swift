@@ -66,6 +66,13 @@ struct CompositionRootTests {
         #expect(g.iconState.activity == .done)
 
         g.acknowledgeAll()
+        // 這條原本直接斷言，2026-09-17 全量時紅過（量到 `.done`）——就是追了一整天的那個
+        // flake。根因是 `start()` 排出去的 FSEvents 回呼可能在 `acknowledgeAll()` **之後**
+        // 才送達，用刪檔前的內容把 iconState 蓋回 `.done`。燈號的契約本來就是最終一致
+        // （FSEvents 驅動），所以改成有界輪詢：**斷言一字未改**，只是不再假設它同步完成。
+        // 真的壞掉時仍然會紅，只是要等滿 2 秒。
+        let deadline = Date().addingTimeInterval(2)
+        while g.iconState.activity != .idle && Date() < deadline { usleep(5_000) }
         #expect(g.iconState.activity == .idle, "確認後尾巴清空，燈回正常")
         #expect(SnapshotIO.allSessionIDs(root: root).isEmpty, "已結束且已確認 → 檔案刪除")
     }

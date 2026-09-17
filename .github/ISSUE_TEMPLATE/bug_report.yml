@@ -1,0 +1,58 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: the troubleshooting section of
+        [docs/INSTALL.md](https://github.com/kbsiy0/AgentAura/blob/main/docs/INSTALL.md#troubleshooting)
+        answers most setup problems, and the commands there produce exactly what's asked for below.
+
+        **`aura-hook` always exits 0 and prints nothing, by design.** So "no error message"
+        doesn't mean it worked. What matters is whether `~/.agentaura/sessions/` has files in it.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste the output of these. They're the same commands as in the troubleshooting section.
+      value: |
+        ```
+        sw_vers
+        pgrep -fl AgentAura.app
+        ls -la ~/.agentaura/sessions/
+        ls -la ~/.claude/skills/agentaura
+        claude plugin list | grep -A3 -i agentaura
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install it?
+      options:
+        - Built from source and dragged into Applications
+        - Built from source, running from build/
+        - Mounted the repository directly with ln -sfn (developer setup)
+        - A zip someone gave me
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: new-session
+    attributes:
+      label: Did you start a new Claude Code session after connecting?
+      description: Plugins load when a session starts. Windows already open won't pick one up.
+      options:
+        - label: Yes, I started a new session after clicking Connect
