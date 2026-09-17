@@ -67,11 +67,20 @@ because a security page that only lists strengths isn't useful.
 
 | | |
 |---|---|
-| **Verification doesn't check mount identity** | The startup check un-quarantines and runs whatever the mount points at, without first confirming it is this app's own copy. It runs automatically with no confirmation. Only reachable if you mounted someone else's directory by hand — at which point Claude Code was already going to run it. |
-| **`AGENTAURA_ROOT` is unvalidated** | The environment variable is used as-is, and the directory it names gets `chmod 0700` without asking. Requires the ability to set environment variables for your own Claude Code process. |
-| **State file writes don't use `O_NOFOLLOW`** | If a state file were replaced with a symlink, the write would follow it. The directory is `0700`, so this needs your own account or root. |
 | **Ad-hoc signed, not notarized** | The app has no verifiable publisher identity. You are trusting the source you built it from. |
 | **Development scripts are not hardened** | `scripts/verify-install.sh` interpolates a filename into a Python string, and `scripts/demo-sessions.sh` uses a predictable temp path. They ship with the repository, not with the app. |
+| **Some state fields have no length cap** | Only the last assistant message is truncated. A very large tool error would be carried on disk and re-read on every change. Not a vulnerability; a waste. |
+| **`codesign --deep` is deprecated, and hardened runtime is off** | Ad-hoc signing has no verifiable identity anyway, so this matters mainly as a prerequisite for notarization later. |
+
+### Fixed before release
+
+| | |
+|---|---|
+| **Verification ran whatever the mount pointed at** | The startup check un-quarantined and executed the mount target without first confirming it was this app's own copy, automatically and with no confirmation. Now it compares `(dev, ino)` against the app's own bundled plugin and refuses otherwise. Verifying an external mount is left to *Replace mount*, which asks you first. |
+| **`AGENTAURA_ROOT` was tightened without validation** | The directory named by the environment variable was `chmod 0700`ed unconditionally, so pointing it at your home directory would silently change its permissions. Now only a path whose last component is `sessions` is touched. |
+| **State file writes followed symlinks** | `open()` now uses `O_NOFOLLOW`, so a state file replaced with a symlink makes the write fail rather than follow it. `delete` uses `lstat` for the same reason. |
+
+Each of those three has a test, and each test was verified to fail when the fix is removed.
 
 ## Supported versions
 

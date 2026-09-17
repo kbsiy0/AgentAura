@@ -70,8 +70,9 @@ struct CompositionRootTests {
         // flake。根因是 `start()` 排出去的 FSEvents 回呼可能在 `acknowledgeAll()` **之後**
         // 才送達，用刪檔前的內容把 iconState 蓋回 `.done`。燈號的契約本來就是最終一致
         // （FSEvents 驅動），所以改成有界輪詢：**斷言一字未改**，只是不再假設它同步完成。
-        // 真的壞掉時仍然會紅，只是要等滿 2 秒。
-        let deadline = Date().addingTimeInterval(2)
+        // 真的壞掉時仍然會紅，只是要等滿 10 秒。2 秒在全量並行下不夠（2026-09-17 又紅一次，
+        // 剛好卡在 2.006 秒）——FSEvents 的送達延遲本來就受機器負載影響。
+        let deadline = Date().addingTimeInterval(10)
         while g.iconState.activity != .idle && Date() < deadline { usleep(5_000) }
         #expect(g.iconState.activity == .idle, "確認後尾巴清空，燈回正常")
         #expect(SnapshotIO.allSessionIDs(root: root).isEmpty, "已結束且已確認 → 檔案刪除")

@@ -18,6 +18,21 @@ extension Installer {
         guard let stamp = obs.hookBinaryStamp else {
             throw InstallerFailure.verificationFailed
         }
+        // **只驗自己的掛載。**（公開前稽核，攻擊面 #1）
+        //
+        // 這條路徑會 `removexattr` 拆掉目標的 quarantine 再 exec 它，而且由
+        // `AppDelegate.launchVerificationIfNeeded` 在**啟動時自動跑、零確認**。
+        // 原本只檢查「有東西在那裡」，不檢查那是不是這個 app 自己 bundle 裡的那一份——
+        // 於是使用者若手動 `ln -sfn` 把掛載指到別人給的目錄，我們會主動替那份程式碼
+        // 拆掉 Gatekeeper 的保護再執行它。
+        //
+        // 不是遠端可利用（掛過去之後 Claude Code 每個 hook 事件本來就會執行它），
+        // 但「自動、無聲、替不是自己的二進位拆保護」這件事不該由背景驗證來做。
+        // 外部掛載要驗，走使用者明確按下、且有確認框的 `replaceExternalMount`。
+        guard let target = obs.targetIdentity, let mine = obs.thisAppPluginIdentity,
+              target == mine else {
+            throw InstallerFailure.verificationFailed
+        }
         return (obs, try verifyByExecuting(stamp: stamp))
     }
 

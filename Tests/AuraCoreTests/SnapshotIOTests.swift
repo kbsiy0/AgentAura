@@ -249,4 +249,52 @@ struct SnapshotIOTests {
         let dirMode = try #require(fm.attributesOfItem(atPath: root.path)[.posixPermissions] as? NSNumber)
         #expect(dirMode.int16Value == 0o700, "狀態目錄權限是 \(String(dirMode.int16Value, radix: 8))")
     }
+
+    /// 公開前稽核（攻擊面 #3）：狀態檔被換成 symlink 時，寫入**不得跟出去**。
+    ///
+    /// 目錄是 0700，所以植入這個 symlink 需要同一個帳號或 root——不跨權限邊界。但這個專案
+    /// 對「會 follow 的 API」一向不信任（`Installer.disconnect`／`StateDirectoryEraser`
+    /// 都只認 `lstat`），`O_NOFOLLOW` 是零成本的同一個立場。
+    ///
+    /// **mutation**：拿掉 `O_NOFOLLOW`，這條會紅——外面那個檔會被寫進 JSON。
+    @Test("狀態檔是 symlink 時，寫入拒絕跟出去（O_NOFOLLOW）")
+    func writeRefusesToFollowSymlink() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aura-nofollow-\(UUID().uuidString)/sessions")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let outside = root.deletingLastPathComponent().appendingPathComponent("outside.txt")
+        try "original".write(to: outside, atomically: true, encoding: .utf8)
+
+        // 把 <root>/sneak.json 做成指到 outside.txt 的 symlink
+        let link = root.appendingPathComponent("sneak.json")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
+
+        #expect(throws: (any Error).self) {
+            try SnapshotIO.update(sessionID: "sneak", root: root) { _ in
+                SessionSnapshot(sessionID: "sneak")
+            }
+        }
+        #expect(try String(contentsOf: outside, encoding: .utf8) == "original", """
+            symlink 指向的檔案被改寫了——`O_NOFOLLOW` 沒有生效，寫入跟著連結出去了。
+            """)
+    }
+
+    /// 公開前稽核（攻擊面 #2）：`root` 可被環境變數覆寫，而收緊權限那一行原本是無條件的
+    /// ——指向家目錄就會把它靜默改成 0700。現在只收緊末段是 `sessions` 的路徑。
+    ///
+    /// **mutation**：拿掉那個 `if`，這條會紅（權限被改成 0700）。
+    @Test("root 末段不是 sessions 時，不得改動該目錄的權限")
+    func doesNotTightenPermissionsOfArbitraryDirectory() throws {
+        let odd = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aura-notsessions-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: odd, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o755])
+        try SnapshotIO.update(sessionID: "x", root: odd) { _ in SessionSnapshot(sessionID: "x") }
+
+        let mode = try #require((try FileManager.default.attributesOfItem(atPath: odd.path)[.posixPermissions]) as? NSNumber)
+        #expect(mode.int16Value == 0o755, """
+            這個目錄的權限被改成 \(String(mode.int16Value, radix: 8))——它的末段不是 `sessions`，
+            不該被當成狀態目錄收緊——把 root 覆寫成家目錄時走的就是這條路徑。
+            """)
+    }
 }
