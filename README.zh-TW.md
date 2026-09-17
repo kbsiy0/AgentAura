@@ -94,20 +94,53 @@ AgentAura 在選單列放一顆燈，代表你全部的 session。點開它會�
 
 ## 安裝
 
-需要 macOS 13 以上、Claude Code，以及 Swift 6 工具鏈（`xcode-select --install`）。
-目前還沒有現成的下載版本。
+一行指令，大約五秒。它會下載已發布的建置、比對公布的 checksum、裝進「應用程式」並打開。
 
 ```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
+curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
+```
+
+把腳本接進 shell 等於執行你沒讀過的程式碼。它大約 170 行，可以[先讀](scripts/install.sh)。
+裡面有兩件事值得先知道，腳本自己的輸出也會講：
+
+- 它會**清掉下載回來的 App 的隔離標記**。這正是它只需要一步、而不必跑一趟系統設定的原因
+  ——同時也是一個真實的取捨：你選擇相信 checksum 與這支腳本，而不是 Gatekeeper。
+- 如果沒有已發布的建置、或下載失敗，它會**改成從原始碼建**（約 30 秒，需要 Swift 工具鏈）。
+  加 `--from-source` 可以強制走這條。
+
+需要 **macOS 13 以上**與 **Claude Code**。工具鏈只有在從原始碼建時才需要。
+
+<details>
+<summary>想先 clone 再跑？</summary>
+
+```bash
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
+```
+
+同一支腳本、同樣結果，只是讓「讀過再跑」比較難被跳過。
+
+</details>
+
+然後在 App 裡做兩件事：
+
+1. 按**接上**。
+2. 開一個**新的** Claude Code session。
+
+> **是下一個 session，不是你現在開著的那個。** Claude Code 在 session 啟動時載入 plugin，
+> 已經在跑的視窗不會中途載入。App 會照實這樣說，不會假裝立刻生效。
+
+<details>
+<summary>想自己一步一步做？</summary>
+
+```bash
 ./scripts/build-plugin.sh      # 建置 aura-hook 執行檔
 ./scripts/build-app.sh         # 產出 build/AgentAura.app
 ```
 
-然後把 `build/AgentAura.app` 拖進「應用程式」、打開它、按**接上**，
-再**開一個新的 Claude Code session**。
+然後把 `build/AgentAura.app` 拖進「應用程式」再打開。不要留在 `build/` 或「下載項目」——
+那些位置的 App 隨時會被搬走或清掉，掛載就斷了。
 
-> **是下一個 session，不是你現在開著的那個。** Claude Code 在 session 啟動時載入 plugin，
-> 已經在跑的視窗不會中途載入。App 會照實這樣說，不會假裝立刻生效。
+</details>
 
 要移除：Options →「移除掛載」解除掛載，或 Options →「完整移除 AgentAura」讓機器回到
 安裝前的狀態。`./scripts/verify-uninstall.sh` 會逐項驗證後面那個宣稱。
@@ -232,6 +265,8 @@ aura-hook ──flock 下 read-merge-write──▶ ~/.agentaura/sessions/<id>.j
 | [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | 八族「空轉的守衛」實證案例與修法 |
 | [`docs/2026-09-11-subagent-state-priority-audit.html`](docs/2026-09-11-subagent-state-priority-audit.html) | 背景 subagent 怎麼讓燈號說謊，以及實測的時間線 |
 | [`CLAUDE.md`](CLAUDE.md) | 給 Claude Code 的專案指引：每條規則，以及催生它的那次失敗 |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 怎麼把環境弄起來，以及會讓你意外的那些慣例（英文） |
+| [`SECURITY.md`](SECURITY.md) | 這個工具在你機器上能做什麼、哪些邊界有測試守著、已知的弱點（英文） |
 
 HTML 用瀏覽器直接開，不綁任何帳號。
 
@@ -259,6 +294,14 @@ AURA_RENDER_README=1 swift test --filter ReadmeAssetRenderer
 測試方法寫在 [`CLAUDE.md`](CLAUDE.md) 裡，連同催生每一條規則的那次失誤。貫穿它的有三件事：
 問平台，不要在它外面包一層自己的近似；每個數字都從型別或磁碟推導，不要凍成常數；
 每個守衛都要證明它真的會紅。
+
+## 參與
+
+歡迎回報問題與小修。[`CONTRIBUTING.md`](CONTRIBUTING.md) 寫了環境怎麼弄起來，
+以及最值得先知道的幾條慣例：單檔行數上限、測試用的是 swift-testing 不是 XCTest、
+以及為什麼「沒有人看它紅過的測試」不算數。
+
+資安相關的問題請走 [`SECURITY.md`](SECURITY.md) 裡的私下回報管道，不要開公開 issue。
 
 ## 授權
 

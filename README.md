@@ -99,21 +99,56 @@ what you'll actually get.
 
 ## Install
 
-You need macOS 13 or later, Claude Code, and the Swift 6 toolchain
-(`xcode-select --install`). There is no prebuilt download yet.
+One command, about five seconds. It downloads the published build, checks it against its
+published checksum, installs it into Applications and opens it.
 
 ```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
-./scripts/build-plugin.sh      # builds the aura-hook binary
-./scripts/build-app.sh         # produces build/AgentAura.app
+curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
 ```
 
-Then drag `build/AgentAura.app` into Applications, open it, click **Connect**, and **start a
-new Claude Code session**.
+Piping a script into your shell means running code you haven't read. It's about 170 lines and
+you can [read it first](scripts/install.sh). Two things in it are worth knowing before you
+run it, and they're stated in its own output too:
+
+- It **clears the quarantine flag** on the downloaded app. That's what makes this one step
+  instead of a trip through System Settings — and it's a real trade. You're trusting the
+  checksum and this script rather than Gatekeeper.
+- If there's no published build, or the download fails, it **builds from source instead**
+  (about 30 seconds, needs the Swift toolchain). `--from-source` forces that path.
+
+You need **macOS 13 or later** and **Claude Code**. The toolchain is only needed if you
+build from source.
+
+<details>
+<summary>Prefer to clone first?</summary>
+
+```bash
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
+```
+
+Same script, same result. The reading step is just harder to skip.
+</details>
+
+Then two things, both in the app:
+
+1. Click **Connect**.
+2. Start a **new** Claude Code session.
 
 > **The next session, not the one you have open.** Claude Code loads plugins when a session
 > starts. A window that is already running won't pick one up part-way through. The app says so
 > rather than pretending it works right away.
+
+<details>
+<summary>Prefer to do it by hand?</summary>
+
+```bash
+./scripts/build-plugin.sh      # builds the aura-hook binary
+./scripts/build-app.sh         # produces build/AgentAura.app
+```
+
+Then drag `build/AgentAura.app` into Applications and open it. Don't leave it in `build/` or
+Downloads — apps in those places get moved or cleaned up, and the mount breaks.
+</details>
 
 To uninstall, use Options → *Remove mount* to unhook it, or Options → *Completely remove
 AgentAura* to put the machine back how it was. `./scripts/verify-uninstall.sh` checks that
@@ -253,6 +288,8 @@ disproved it. Both rounds stay in the spec, along with the reasoning for the rev
 | [`docs/2026-09-09-agentaura-audit.html`](docs/2026-09-09-agentaura-audit.html) | Eight families of tests that guarded nothing, and their fixes |
 | [`docs/2026-09-11-subagent-state-priority-audit.html`](docs/2026-09-11-subagent-state-priority-audit.html) | How background subagents made the light lie, with the measured timeline |
 | [`CLAUDE.md`](CLAUDE.md) | Project instructions for Claude Code: each rule with the failure that produced it |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to get set up, and the conventions that will surprise you |
+| [`SECURITY.md`](SECURITY.md) | What the tool can do on your machine, what's enforced by tests, and the known weaknesses |
 
 The HTML files open straight from disk. Nothing needs an account.
 
@@ -282,6 +319,15 @@ The testing approach is written up in [`CLAUDE.md`](CLAUDE.md), together with th
 that produced each rule. Three ideas run through it. Ask the platform instead of
 approximating it. Derive every number from types or from disk, never freeze it as a constant.
 And prove that each test can actually fail.
+
+## Contributing
+
+Bug reports and small fixes are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the setup
+and the conventions worth knowing first — the file size limits, the fact that tests use
+swift-testing rather than XCTest, and why a test nobody has watched fail doesn't count.
+
+For anything security-related, please use the private route in [`SECURITY.md`](SECURITY.md)
+rather than a public issue.
 
 ## License
 

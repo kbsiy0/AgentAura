@@ -163,7 +163,22 @@ struct PluginWiringTests {
     /// CLI 改個措辭、加個色碼、做在地化，這條檢查就會悄悄失真而測試不知情。
     /// 官方提供了 `--strict`（"Treat warnings as errors (exit 1)"），那是穩定契約。
     /// `--json` 只是為了讓失敗訊息能指名是哪個檔、哪一條。
-    @Test("claude plugin validate --strict 對 plugin 與 marketplace 都通過")
+    /// `claude` 這個 CLI 不在機器上時**跳過而不是紅**——它不是這個 repo 的建置相依，
+    /// CI runner 上也沒有。跳過會出現在測試輸出裡（不是靜默通過），而只要機器上有
+    /// `claude`（開發者本機、以及任何裝了 Claude Code 的人）就照跑。
+    static let claudeCLIAvailable: Bool = {
+        let t = Process()
+        t.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        t.arguments = ["which", "claude"]
+        t.standardOutput = FileHandle.nullDevice
+        t.standardError = FileHandle.nullDevice
+        do { try t.run() } catch { return false }
+        t.waitUntilExit()
+        return t.terminationStatus == 0
+    }()
+
+    @Test("claude plugin validate --strict 對 plugin 與 marketplace 都通過",
+          .enabled(if: claudeCLIAvailable, "機器上沒有 claude CLI —— 跳過，不是通過"))
     func officialValidatorIsClean() throws {
         for target in ["plugin", "."] {
             let task = Process()

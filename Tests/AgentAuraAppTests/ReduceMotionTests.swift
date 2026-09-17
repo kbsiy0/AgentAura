@@ -19,6 +19,12 @@ struct ReduceMotionTests {
     func userPreferenceSuppressesAnimation() throws {
         var frames: [IconAppearance] = []
         let driver = AnimationDriver { appearance, _ in frames.append(appearance) }
+        // **釘住系統那一半**：`AnimationDriver` 在 init 時從 `NSWorkspace` 讀真的系統設定，
+        // 而生產邏輯是「系統 OR 使用者」。這條測試的主題是**使用者偏好**那一半，
+        // 系統值是它的前提而不是它的受測對象——繼承機器狀態等於讓測試的結論取決於
+        // 跑它的那台機器。CI runner（macOS 15）上系統「減少動態」是開的，
+        // 於是前提斷言 `needsAnimation == true` 直接紅，而本機永遠看不到。
+        driver.setSystemReduceMotion(false)
         driver.setIcon(Self.waitingIcon)
         let before = try #require(frames.last)
         #expect(before.needsAnimation == true, "前提：waiting 在使用者沒開減少動態時應該會動")
@@ -33,6 +39,12 @@ struct ReduceMotionTests {
     func togglingBackOffRestoresAnimation() throws {
         var frames: [IconAppearance] = []
         let driver = AnimationDriver { appearance, _ in frames.append(appearance) }
+        // **釘住系統那一半**：`AnimationDriver` 在 init 時從 `NSWorkspace` 讀真的系統設定，
+        // 而生產邏輯是「系統 OR 使用者」。這條測試的主題是**使用者偏好**那一半，
+        // 系統值是它的前提而不是它的受測對象——繼承機器狀態等於讓測試的結論取決於
+        // 跑它的那台機器。CI runner（macOS 15）上系統「減少動態」是開的，
+        // 於是前提斷言 `needsAnimation == true` 直接紅，而本機永遠看不到。
+        driver.setSystemReduceMotion(false)
         driver.setIcon(Self.waitingIcon)
         driver.setUserReduceMotion(true)
         #expect(try #require(frames.last).needsAnimation == false, "前提：開啟後應該是靜態")
@@ -90,6 +102,7 @@ struct ReduceMotionTests {
 
         var frames: [IconAppearance] = []
         delegate.driver = AnimationDriver { appearance, _ in frames.append(appearance) }
+        delegate.driver.setSystemReduceMotion(false)   // 釘住系統那一半，理由同上
         delegate.driver.setIcon(Self.waitingIcon)
         #expect(frames.last?.needsAnimation == true, "前提：waiting 預設會動")
 

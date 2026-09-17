@@ -35,7 +35,12 @@ final class SpawnGate {
     }
 
     /// 序列化任意一段（可能內含 `await` 的）工作——同一時間全套件只有一個 body 在跑。
-    func run<T>(_ body: () async throws -> T) async rethrows -> T {
+    ///
+    /// `T: Sendable`：`run` 是 actor 方法，回傳值要跨 actor 邊界送回呼叫端。
+    /// **Swift 6.1.2 要求它是 Sendable，6.3 的 region-based isolation 推得出來所以不要求**
+    /// ——本機（6.3.3）編得過，CI runner（6.1.2）編不過。所有呼叫點回傳的都是 `Void`
+    /// 或簡單值，加上這個約束不影響任何一處，卻讓程式碼在兩個版本上都成立。
+    func run<T: Sendable>(_ body: () async throws -> T) async rethrows -> T {
         await acquire()
         defer { release() }
         return try await body()

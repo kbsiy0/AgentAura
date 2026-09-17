@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          sw_vers
+
+      # Must run before `swift test`. `plugin/bin/aura-hook` is a build product and is not in
+      # version control; three install-layout tests fail without it, and the failure does not
+      # say "you forgot to build". Same trap a new contributor hits — see CONTRIBUTING.md.
+      - name: Build the hook binary
+        run: ./scripts/build-plugin.sh
+
+      - name: Test
+        run: swift test
+
+      - name: Build the app
+        run: ./scripts/build-app.sh
+
+      # The app must stay ad-hoc signed and structurally valid. `build-app.sh` already runs
+      # `codesign --verify`; this repeats it as an explicit, separately-failing step so a
+      # signing regression is not buried in build output.
+      - name: Verify the app bundle
+        run: codesign --verify --verbose --strict --deep build/AgentAura.app
+
+  hygiene:
+    name: Repository hygiene
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Without this, checkout is shallow and the scan only sees the tip — which makes a
+          # "history scan" nearly meaningless. Measured on the first run: 9.2 MB shallow
+          # versus 20.6 MB for the real history.
+          fetch-depth: 0
+
+      # This repository was made public after removing real captured payloads that contained
+      # another project's source and real conversations. These strings must never come back.
+      # Scans every blob in the checked-out history, not just the working tree.
+      - name: Scan history for identifying strings
+        run: |
+          set -euo pipefail
+          git rev-list --objects --all | awk '{print $1}' \
+            | git cat-file --batch-check='%(objecttype) %(objectname)' \
+            | awk '$1=="blob"{print $2}' \
+            | git cat-file --batch > /tmp/blobs.dump
+
+          # Reverse check first: if this scan reads nothing, every result below is a false
+          # negative. A scan that silently reads zero bytes looks exactly like a clean one.
+          canary=$(grep -c "AgentAura" /tmp/blobs.dump || true)
+          if [ "$canary" -eq 0 ]; then
+            echo "::error::history scan read nothing — results are not trustworthy"
+            exit 1
+          fi
+          echo "scanned $(wc -c < /tmp/blobs.dump) bytes, canary $canary hits"
+
+          # The patterns are split in half and re-joined at runtime so that **this file does
+          # not contain them literally**. The first CI run failed with exactly one hit each:
+          # the scanner was matching its own source. A scanner that reports itself is worse
+          # than no scanner, because the noise trains you to ignore it.
+          fail=0
+          for pat in '/Users/''si' 'Breeze''Key' 'io.breeze''key'; do
+            n=$(grep -c "$pat" /tmp/blobs.dump || true)
+            echo "  $pat: $n"
+            [ "$n" -eq 0 ] || fail=1
+          done
+          [ "$fail" -eq 0 ] || { echo "::error::identifying strings found in history"; exit 1; }

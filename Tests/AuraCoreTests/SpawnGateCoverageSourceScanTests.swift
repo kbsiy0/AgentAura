@@ -47,9 +47,17 @@ struct SpawnGateCoverageSourceScanTests {
         let files = e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
         var violations: [URL] = []
         for url in files {
-            let text = try String(contentsOf: url, encoding: .utf8)   // 讀不到 → 大聲紅，不是乾淨
-            guard triggers.contains(where: { text.contains($0) }) else { continue }
-            if !text.contains(requiredMarker) { violations.append(url) }
+            let raw = try String(contentsOf: url, encoding: .utf8)   // 讀不到 → 大聲紅，不是乾淨
+            // **註解不算觸發。** 2026-09-17：`SnapshotIOTests` 的一段 doc comment 解釋
+            // 「`AGENTAURA_ROOT=$HOME` 會把家目錄靜默改成 0700」，這份掃描就把它判成違規——
+            // 但一行註解 spawn 不了任何東西。對「提到」開火的掃描器只會產生噪音，
+            // 而噪音會訓練人忽略它。既有的 `RightClickSendActionGuardTests` 早就這樣濾了。
+            // `requiredMarker` 仍然掃全文：SpawnGate 寫在註解裡也代表作者知道這件事。
+            let code = raw.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+            guard triggers.contains(where: { code.contains($0) }) else { continue }
+            if !raw.contains(requiredMarker) { violations.append(url) }
         }
         return (files.count, violations)
     }

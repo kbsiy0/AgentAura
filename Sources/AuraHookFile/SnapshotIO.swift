@@ -68,10 +68,21 @@ public enum SnapshotIO {
         try FileManager.default.createDirectory(
             at: root, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
-        try? FileManager.default.setAttributes([.posixPermissions: 0o700],
-                                               ofItemAtPath: root.path)
+        // **只收緊真的是狀態目錄的路徑。** `root` 可被 `AGENTAURA_ROOT` 覆寫，而這一行
+        // 原本是無條件的——`AGENTAURA_ROOT=$HOME` 會把家目錄靜默改成 0700（契約是靜默，
+        // 所以連訊息都不會有）。只有使用者自己設得了那個環境變數，所以不是外部可利用，
+        // 但「觀測工具靜默改別人目錄的權限位元」本身就不該發生。
+        // 用末段是不是 `sessions` 當閘門：預設路徑與所有正當覆寫都符合，`$HOME` 不符合。
+        if root.lastPathComponent == "sessions" {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700],
+                                                   ofItemAtPath: root.path)
+        }
 
-        let fd = open(url.path, O_RDWR | O_CREAT, 0o600)
+        // `O_NOFOLLOW`：狀態檔若被換成 symlink，寫入**拒絕跟出去**（失敗成 ELOOP），
+        // 而不是把 JSON 寫進別人指定的位置。目錄是 0700，所以要植入 symlink 得先是同一個
+        // 帳號或 root——不跨權限邊界，但零成本，而且與這個 codebase「只信 lstat、
+        // 不信會 follow 的 API」的既有哲學一致（`Installer.disconnect`／`StateDirectoryEraser`）。
+        let fd = open(url.path, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)
         // `O_CREAT` 的 mode 只在**建立時**套用 —— 舊版建出來的 0644 檔案
         // 就算被重寫一百次也還是 0644。所以每次都無條件收緊一次。
         // 失敗不該讓 hook 失敗（契約是「絕不干擾 agent」），故不檢查回傳值。
@@ -94,7 +105,11 @@ public enum SnapshotIO {
 
     public static func delete(sessionID: String, root: URL = defaultRoot) throws {
         let url = try url(for: sessionID, root: root)
-        if FileManager.default.fileExists(atPath: url.path) {
+        // `lstat` 而非 `fileExists`：後者會 follow symlink，所以懸空的 symlink 會被判定成
+        // 「不存在」而留在原地。這裡要刪的是那個路徑本身（`removeItem` 對 symlink 是刪連結、
+        // 不會跟出去），所以用只看路徑本身的 `lstat` 判斷。
+        var st = stat()
+        if lstat(url.path, &st) == 0 {
             try FileManager.default.removeItem(at: url)
         }
     }

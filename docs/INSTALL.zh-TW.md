@@ -11,22 +11,57 @@
 
 ## 安裝
 
-大部分使用者不需要碰終端機：
+一行指令。它會從原始碼建置、裝進 `/Applications`，然後把 App 打開。
 
-1. 準備好 `AgentAura.app`（目前還沒有現成的下載版本，請先照下方「開發者路徑」建置一份；
-   之後有 release 版本會直接提供下載）。
-2. 把 `AgentAura.app` 拖進「應用程式」資料夾。**不要**留在「下載項目」或專案的
-   `build/` 底下——那些位置的 App 隨時可能被搬走、或被系統當暫存清掉，接上之後
-   容易莫名其妙又斷掉。
-3. 打開 `AgentAura.app`。
-4. 面板裡按「接上」。這一步只會建立一個指到這個 App 的掛載
-   （`~/.claude/skills/agentaura`），**不會更動 Claude Code 既有的任何設定**。
-5. **開一個新的 Claude Code session**（已經開著的視窗不會自動生效，見下一節）。
+```bash
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
+```
+
+或者不先 clone——把腳本接進 shell 之前，請先[讀它](../scripts/install.sh)：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
+```
+
+安裝腳本會先檢查 macOS 版本與工具鏈，缺什麼就停下來並給出具體的補法。
+它**不碰 `~/.claude`**——接上是你在 App 裡按的按鈕，這是刻意的。
+
+然後在 App 裡：
+
+1. **按「接上」。**
+2. **開一個新的 Claude Code session。**
+
+第 2 步很重要，見下一節「什麼時候生效」。
 
 要開機自動啟動：在面板的 Options 裡打開「登入時啟動」。
 
 不熟悉這些名詞的話，App 裡按「說明」會開一份離線的白話文件（`help.html`），
 涵蓋燈號意思、hook 是什麼、常見問題。
+
+### 自己一步一步做
+
+```bash
+./scripts/build-plugin.sh      # 建置 aura-hook 執行檔
+./scripts/build-app.sh         # 產出 build/AgentAura.app
+```
+
+然後把 `build/AgentAura.app` 拖進「應用程式」再打開。**不要**留在「下載項目」或專案的
+`build/` 底下——那些位置的 App 隨時可能被搬走、或被系統當暫存清掉，接上之後容易莫名其妙又斷掉。
+
+## 什麼時候生效
+
+按「接上」之後，**要從下一個新開的 Claude Code session 起才會生效**——skills-dir
+的 plugin 在 session 啟動時載入，已在執行中的 session 不會中途載入新 plugin。
+
+這裡有兩件容易混淆的事，分開講清楚：
+
+- **新增一個 plugin 掛載**（第一次接上，或掛載被移除後重新接上）：
+  **需要新 session 才會生效，已實測確認**。
+- **已載入的 plugin 的 `hooks.json` 內容之後又被改動**（例如開發時改了 hook
+  邏輯、重新跑 `build-plugin.sh`）：對已經在跑的 session 可能立即生效，
+  但**這件事本身未經量測**，不要當作保證。
+
+接上完成不會、也不需要叫你重開 `AgentAura.app` 這個 App 本身。
 
 ## 找不到選單列圖示？
 

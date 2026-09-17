@@ -12,26 +12,44 @@ There is no prebuilt download yet. You build it once, then use it like any other
 
 ## Install
 
+One command. It builds from source, installs into `/Applications`, and opens the app.
+
 ```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
-./scripts/build-plugin.sh      # builds the aura-hook binary
-./scripts/build-app.sh         # produces build/AgentAura.app
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
 ```
 
-Then:
+Or without cloning first — read [the script](../scripts/install.sh) before you pipe it into
+your shell:
 
-1. **Drag `build/AgentAura.app` into your Applications folder.** Don't leave it in Downloads
-   or in `build/`. Apps in those places get moved or cleaned up, and the link breaks.
-2. **Open it.**
-3. **Click Connect** in the panel.
-4. **Start a new Claude Code session.**
+```bash
+curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
+```
 
-That's it. Step 4 matters — see [When it takes effect](#when-it-takes-effect).
+The installer checks your macOS version and toolchain first and stops with a specific fix if
+something's missing. It doesn't touch `~/.claude` — connecting is a button you press in the
+app, deliberately.
+
+Then, in the app:
+
+1. **Click Connect.**
+2. **Start a new Claude Code session.**
+
+Step 2 matters — see [When it takes effect](#when-it-takes-effect).
 
 To start it automatically at login, turn on *Launch at login* in the Options menu.
 
 If any of the terms are unfamiliar, click **Help** in the app. It opens an offline page that
 explains what the lights mean, what a hook is, and what to do when something looks wrong.
+
+### Doing it by hand
+
+```bash
+./scripts/build-plugin.sh      # builds the aura-hook binary
+./scripts/build-app.sh         # produces build/AgentAura.app
+```
+
+Then drag `build/AgentAura.app` into your Applications folder and open it. Don't leave it in
+Downloads or in `build/` — apps in those places get moved or cleaned up, and the mount breaks.
 
 ## When it takes effect
 

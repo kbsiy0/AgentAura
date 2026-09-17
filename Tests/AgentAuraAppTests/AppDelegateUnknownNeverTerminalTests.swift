@@ -51,9 +51,15 @@ struct AppDelegateUnknownNeverTerminalTests {
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         // T10b：觸發＋輪詢整段一起經過 SpawnGate，理由同 AppDelegateVerificationLifecycleTests。
+        //
+        // 等待上限 60 秒（原本 10）：這是「願意等多久」的界限，不是斷言本身——斷言仍然是
+        // 「最終必須是 hookUnconfirmed，不得停在 unknown」，一個字都沒改。10 秒在本機夠，
+        // 在 CI runner 上不夠（2026-09-17 實測紅在 `connected(verified: .unknown)`，
+        // 也就是背景驗證根本還沒跑完）。把一個負載相依的界限放寬，不等於放過壞掉的行為：
+        // 真的卡住時這條仍然會紅，只是要多等 50 秒。
         await SpawnGate.shared.run {
             delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
-            await wait(upTo: 10) {
+            await wait(upTo: 60) {
                 if case .broken(.hookUnconfirmed, _) = delegate.installState { return true }
                 return false
             }
@@ -85,7 +91,7 @@ struct AppDelegateUnknownNeverTerminalTests {
 
         await SpawnGate.shared.run {
             delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
-            await wait(upTo: 10) {
+            await wait(upTo: 60) {
                 if case .broken(.hookUnconfirmed, _) = delegate.installState { return true }
                 return false
             }

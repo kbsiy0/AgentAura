@@ -1,0 +1,15 @@
+* text=auto eol=lf
+
+*.png  binary
+*.gif  binary
+
+# Generated from the production views by ReadmeAssetRenderer / the evidence renderers.
+# Marked so diffs stay readable and GitHub's language stats reflect the actual code.
+docs/readme/**    linguist-generated
+docs/evidence/**  linguist-generated
+
+# Captured hook payloads used as read-only test evidence. De-identified before this
+# repository was made public; see the note in README.md.
+*.ndjson  linguist-generated
+
+docs/**.html  linguist-documentation
