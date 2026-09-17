@@ -99,21 +99,50 @@ what you'll actually get.
 
 ## Install
 
-You need macOS 13 or later, Claude Code, and the Swift 6 toolchain
-(`xcode-select --install`). There is no prebuilt download yet.
+One command. It builds from source, installs into Applications, and opens the app.
 
 ```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
-./scripts/build-plugin.sh      # builds the aura-hook binary
-./scripts/build-app.sh         # produces build/AgentAura.app
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
 ```
 
-Then drag `build/AgentAura.app` into Applications, open it, click **Connect**, and **start a
-new Claude Code session**.
+<details>
+<summary>Or as a single line, without cloning first</summary>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
+```
+
+Piping a script into your shell means running code you haven't read. The script is about a
+hundred lines and you can read it
+[here](scripts/install.sh) first — it does exactly what the command above does, plus cloning
+into a temporary directory. The clone-first form is the same thing with the reading step made
+harder to skip.
+</details>
+
+You need **macOS 13 or later**, **Claude Code**, and the **Swift toolchain**. If you don't
+have the toolchain, `xcode-select --install` fetches it (about 1 GB, one time). Building
+AgentAura itself takes around 30 seconds.
+
+Then two things, both in the app:
+
+1. Click **Connect**.
+2. Start a **new** Claude Code session.
 
 > **The next session, not the one you have open.** Claude Code loads plugins when a session
 > starts. A window that is already running won't pick one up part-way through. The app says so
 > rather than pretending it works right away.
+
+<details>
+<summary>Prefer to do it by hand?</summary>
+
+```bash
+./scripts/build-plugin.sh      # builds the aura-hook binary
+./scripts/build-app.sh         # produces build/AgentAura.app
+```
+
+Then drag `build/AgentAura.app` into Applications and open it. Don't leave it in `build/` or
+Downloads — apps in those places get moved or cleaned up, and the mount breaks.
+</details>
 
 To uninstall, use Options → *Remove mount* to unhook it, or Options → *Completely remove
 AgentAura* to put the machine back how it was. `./scripts/verify-uninstall.sh` checks that

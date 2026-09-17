@@ -94,20 +94,48 @@ AgentAura 在選單列放一顆燈，代表你全部的 session。點開它會�
 
 ## 安裝
 
-需要 macOS 13 以上、Claude Code，以及 Swift 6 工具鏈（`xcode-select --install`）。
-目前還沒有現成的下載版本。
+一行指令。它會從原始碼建置、裝進「應用程式」，然後把 App 打開。
 
 ```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
+```
+
+<details>
+<summary>或者不先 clone，直接一行</summary>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
+```
+
+把腳本接進 shell 等於執行你沒讀過的程式碼。那個腳本大約一百行，
+你可以[先讀它](scripts/install.sh)——它做的事跟上面那行完全一樣，只是多一步 clone 到暫存目錄。
+先 clone 的寫法是同一件事，只是讓「讀過再跑」這一步比較難被跳過。
+
+</details>
+
+需要 **macOS 13 以上**、**Claude Code**，以及 **Swift 工具鏈**。沒有工具鏈的話
+`xcode-select --install` 會裝（約 1 GB，只需一次）。AgentAura 本身建置大約 30 秒。
+
+然後在 App 裡做兩件事：
+
+1. 按**接上**。
+2. 開一個**新的** Claude Code session。
+
+> **是下一個 session，不是你現在開著的那個。** Claude Code 在 session 啟動時載入 plugin，
+> 已經在跑的視窗不會中途載入。App 會照實這樣說，不會假裝立刻生效。
+
+<details>
+<summary>想自己一步一步做？</summary>
+
+```bash
 ./scripts/build-plugin.sh      # 建置 aura-hook 執行檔
 ./scripts/build-app.sh         # 產出 build/AgentAura.app
 ```
 
-然後把 `build/AgentAura.app` 拖進「應用程式」、打開它、按**接上**，
-再**開一個新的 Claude Code session**。
+然後把 `build/AgentAura.app` 拖進「應用程式」再打開。不要留在 `build/` 或「下載項目」——
+那些位置的 App 隨時會被搬走或清掉，掛載就斷了。
 
-> **是下一個 session，不是你現在開著的那個。** Claude Code 在 session 啟動時載入 plugin，
-> 已經在跑的視窗不會中途載入。App 會照實這樣說，不會假裝立刻生效。
+</details>
 
 要移除：Options →「移除掛載」解除掛載，或 Options →「完整移除 AgentAura」讓機器回到
 安裝前的狀態。`./scripts/verify-uninstall.sh` 會逐項驗證後面那個宣稱。
