@@ -35,6 +35,14 @@ binary you built. Running `ln -sfn` yourself to point the mount at some other di
 different decision: it authorises that code, and the verification step will clear its
 quarantine flag too. Only mount directories you would be willing to run.
 
+**2b. The one-command installer clears the quarantine flag for you.** If you install with
+`scripts/install.sh` and it finds a published build, it downloads the zip, verifies it against
+the published SHA-256, and then removes `com.apple.quarantine` before installing. That is what
+makes it a single step rather than a detour through System Settings, and it means you are
+relying on the checksum and on this repository rather than on Gatekeeper. A checksum mismatch
+aborts the install rather than falling back to anything. `--from-source` skips the download
+entirely and builds from the code you just cloned.
+
 **3. State files contain fragments of your work.** `~/.agentaura/sessions/<id>.json` holds the
 working directory, the current tool name, and the first part of the assistant's last message.
 Files are `0600` inside a `0700` directory, re-tightened on every write. They are deleted when

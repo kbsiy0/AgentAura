@@ -34,6 +34,10 @@ mkdir -p dist
 rm -f "$OUT"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT"
 
+# 一起產出 checksum：`install.sh` 下載 release 之後會驗它。沒有 checksum 的下載
+# 等於「相信中間所有環節」，而這個專案的 SECURITY.md 花了整整一節在講信任邊界。
+( cd dist && shasum -a 256 "$(basename "$OUT")" > "$(basename "$OUT").sha256" )
+
 SIZE=$(ls -lh "$OUT" | awk '{print $5}')
 SHA=$(shasum -a 256 "$OUT" | awk '{print $1}')
 

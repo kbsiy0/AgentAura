@@ -94,27 +94,32 @@ AgentAura 在選單列放一顆燈，代表你全部的 session。點開它會�
 
 ## 安裝
 
-一行指令。它會從原始碼建置、裝進「應用程式」，然後把 App 打開。
-
-```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
-```
-
-<details>
-<summary>或者不先 clone，直接一行</summary>
+一行指令，大約五秒。它會下載已發布的建置、比對公布的 checksum、裝進「應用程式」並打開。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
 ```
 
-把腳本接進 shell 等於執行你沒讀過的程式碼。那個腳本大約一百行，
-你可以[先讀它](scripts/install.sh)——它做的事跟上面那行完全一樣，只是多一步 clone 到暫存目錄。
-先 clone 的寫法是同一件事，只是讓「讀過再跑」這一步比較難被跳過。
+把腳本接進 shell 等於執行你沒讀過的程式碼。它大約 170 行，可以[先讀](scripts/install.sh)。
+裡面有兩件事值得先知道，腳本自己的輸出也會講：
+
+- 它會**清掉下載回來的 App 的隔離標記**。這正是它只需要一步、而不必跑一趟系統設定的原因
+  ——同時也是一個真實的取捨：你選擇相信 checksum 與這支腳本，而不是 Gatekeeper。
+- 如果沒有已發布的建置、或下載失敗，它會**改成從原始碼建**（約 30 秒，需要 Swift 工具鏈）。
+  加 `--from-source` 可以強制走這條。
+
+需要 **macOS 13 以上**與 **Claude Code**。工具鏈只有在從原始碼建時才需要。
+
+<details>
+<summary>想先 clone 再跑？</summary>
+
+```bash
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
+```
+
+同一支腳本、同樣結果，只是讓「讀過再跑」比較難被跳過。
 
 </details>
-
-需要 **macOS 13 以上**、**Claude Code**，以及 **Swift 工具鏈**。沒有工具鏈的話
-`xcode-select --install` 會裝（約 1 GB，只需一次）。AgentAura 本身建置大約 30 秒。
 
 然後在 App 裡做兩件事：
 

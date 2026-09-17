@@ -99,29 +99,35 @@ what you'll actually get.
 
 ## Install
 
-One command. It builds from source, installs into Applications, and opens the app.
-
-```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
-```
-
-<details>
-<summary>Or as a single line, without cloning first</summary>
+One command, about five seconds. It downloads the published build, checks it against its
+published checksum, installs it into Applications and opens it.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
 ```
 
-Piping a script into your shell means running code you haven't read. The script is about a
-hundred lines and you can read it
-[here](scripts/install.sh) first — it does exactly what the command above does, plus cloning
-into a temporary directory. The clone-first form is the same thing with the reading step made
-harder to skip.
-</details>
+Piping a script into your shell means running code you haven't read. It's about 170 lines and
+you can [read it first](scripts/install.sh). Two things in it are worth knowing before you
+run it, and they're stated in its own output too:
 
-You need **macOS 13 or later**, **Claude Code**, and the **Swift toolchain**. If you don't
-have the toolchain, `xcode-select --install` fetches it (about 1 GB, one time). Building
-AgentAura itself takes around 30 seconds.
+- It **clears the quarantine flag** on the downloaded app. That's what makes this one step
+  instead of a trip through System Settings — and it's a real trade. You're trusting the
+  checksum and this script rather than Gatekeeper.
+- If there's no published build, or the download fails, it **builds from source instead**
+  (about 30 seconds, needs the Swift toolchain). `--from-source` forces that path.
+
+You need **macOS 13 or later** and **Claude Code**. The toolchain is only needed if you
+build from source.
+
+<details>
+<summary>Prefer to clone first?</summary>
+
+```bash
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
+```
+
+Same script, same result. The reading step is just harder to skip.
+</details>
 
 Then two things, both in the app:
 
