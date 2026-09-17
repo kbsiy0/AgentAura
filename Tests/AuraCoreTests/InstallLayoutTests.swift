@@ -89,8 +89,45 @@ struct InstallLayoutTests {
             "安裝用的二進位必須真的能寫狀態檔，不只是存在")
     }
 
-    @Test("INSTALL.md 存在且含移除步驟（R6：一步安裝、一步移除）")
+    /// 掃描對象**從磁碟推導**（`docs/INSTALL*.md`），不寫死單一檔名。
+    ///
+    /// 2026-09-16：安裝文件拆成中英兩份（`INSTALL.md` 英文、`INSTALL.zh-TW.md` 中文）。
+    /// 原本這條只讀 `docs/INSTALL.md` 且斷言中文標題「## 完整移除」——拆檔之後，
+    /// **英文那份少寫一半指令也不會有人紅**，而中文那份根本不在掃描範圍裡。
+    /// 改成逐一掃每一份安裝文件，並且只斷言**真正的指令**：語言會變，指令不會。
+    /// （同一份 doc comment 底下原本就寫過這個道理：代理字串會 drift，指令不會。）
+    @Test("每一份 INSTALL 文件都要有真正的安裝與移除指令（R6：一步安裝、一步移除）")
     func installDocHasUninstall() throws {
+        let docsDir = Self.repoRoot().appendingPathComponent("docs")
+        let installDocs = try FileManager.default.contentsOfDirectory(atPath: docsDir.path)
+            .filter { $0.hasPrefix("INSTALL") && $0.hasSuffix(".md") }
+            .sorted()
+        #expect(installDocs.count >= 2, """
+            只找到 \(installDocs.count) 份安裝文件（\(installDocs.joined(separator: "、")))——
+            中英雙語各要有一份；少一份代表某個語言的讀者沒有文件可看。
+            """)
+
+        for name in installDocs {
+            let doc = try String(contentsOf: docsDir.appendingPathComponent(name), encoding: .utf8)
+            #expect(doc.contains("rm ~/.claude/skills/agentaura"), """
+                \(name) 沒寫明真正的移除指令（skills-dir 掛載就是刪那個 symlink）
+                """)
+            // 斷言**完整的指令列**，不是 `ln -sfn` 這個片段。
+            // mutation 實測：只比對片段時，把真正的指令整行刪掉仍然全綠——因為文件裡
+            // 另有一句「想凍結版本就用 cp -R 取代 ln -sfn」只是**提到**它。
+            // 那正是本檔上面那段註解警告過的代理字串，只是這次換了一個位置復發。
+            #expect(doc.contains("""
+                ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura
+                """), """
+                \(name) 沒有完整的掛載指令 `ln -sfn "$PWD/plugin" ~/.claude/skills/agentaura`，
+                或與實際機制不一致
+                """)
+        }
+    }
+
+    /// 保留舊的單檔斷言形狀給英文主文件，內容改為語言中性的錨點。
+    @Test("英文 INSTALL.md 仍是主文件（README 連向它）")
+    func englishInstallDocIsPrimary() throws {
         let doc = try String(contentsOf: Self.repoRoot().appendingPathComponent("docs/INSTALL.md"),
                              encoding: .utf8)
         // 斷言**真正的移除指令**，不是一個代理字串。
@@ -99,7 +136,7 @@ struct InstallLayoutTests {
         // 掛載之後，那個字串只剩在一句「**沒有** `claude plugin uninstall` 這一步」
         // 的說明裡 —— 斷言靠一段**語意相反**的文字通過，等於什麼都沒驗。
         // 代理字串會 drift，指令不會。
-        #expect(doc.contains("## 完整移除"), "必須有完整移除的段落")
+        #expect(doc.contains("## Uninstalling"), "英文主文件必須有移除段落")
         #expect(doc.contains("rm ~/.claude/skills/agentaura"),
                 "必須寫明真正的移除指令（skills-dir 掛載就是刪那個 symlink）")
         #expect(doc.contains("ln -sfn") && doc.contains("~/.claude/skills/agentaura"),
