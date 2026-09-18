@@ -1,10 +1,10 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r7**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r8**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 r7 的 spec。
-> **gate 編號**：本 change 新增的一律 `CX<n>`（共 **44** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
+> 節號引用一律指 r8 的 spec。
+> **gate 編號**：本 change 新增的一律 `CX<n>`（共 **45** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
 
 ## 0. 給每個 implementer 的共同規則
 
@@ -22,6 +22,11 @@
 - **swift-testing**（`import Testing` / `@Test` / `#expect`），不是 XCTest。
 - **禁止**：`--amend` 已 push 的 commit、`--no-verify`、`git reset --hard|checkout .|clean -f`、
   `fatalError`、在測試裡碰真的 `~/.codex`／`~/.claude`、**在任何地方跑 `codex exec`**（F12）。
+- **gate 不得拿生產常數跟自己比**（T04 review M1／M2，**同一個陷阱已經出現兩次**：`timeout` 與 `agentFlag`）：
+  `#expect(產生器輸出 == "...\(CodexHooksJSON.agentFlag)")` 這種寫法，常數被改壞時兩邊一起變、**斷言恆真**
+  ——實測把 `agentFlag` 改成 `"--agent codexx"`，全量 808 條測試**零新紅**。**期望值一律寫字面**；
+  要證明「產生的東西真的能被消費」就加**跨 module round-trip**（把產物餵進真的消費者），
+  不要讓生產者自己當自己的裁判。
 - **寫 RED 測試時先把 import 寫齊**（T02 review m5）：`cannot find type 'X' in scope` 這一句，
   **既是** TDD 想要的 RED（型別還沒寫），**也是** harness 壞掉的 RED（漏了 import）。
   動手前先確認「除了本 task 要產出的符號以外，其他東西都解析得到」；報告引用編譯錯誤時，
@@ -269,10 +274,14 @@ translocated 優先；乾淨路徑 nil）。
 - 在既有演算法**之前**加 Codex 家族分支；**既有六條規則一行不動**；判不出來落回「原樣回傳」。
 - **Codex 分支的四步規則見 §4.9**（`[...]` 尾綴先處理 → `o` 系列原樣 → `gpt-` 去前綴、第一段以
   **連字號**接上 → 其餘段首字大寫、以空白連接）。四步是為了讓下表每一列都可推導，不是各列各寫一套。
-- 期望值**寫死在表裡**（§4.9 的九列）：`gpt-5.5` → `GPT-5.5`（**唯一實測值**）、
+- 期望值**寫死在表裡**（§4.9 的**十列**）：`gpt-5.5` → `GPT-5.5`（**唯一實測值**）、
   `gpt-5.5-codex` → `GPT-5.5 Codex`、`gpt-4o` → `GPT-4o`、**`gpt-5` → `GPT-5`**、
   **`gpt-4.1-mini` → `GPT-4.1 Mini`**、**`gpt-5.5[high]` → `GPT-5.5 (HIGH)`**、
-  `o3` → `o3`、`o4-mini` → `o4-mini`（**`o` 系列維持小寫**）、既有九列輸出**完全不變**。
+  `o3` → `o3`、`o4-mini` → `o4-mini`（**`o` 系列維持小寫**）、**`o3[high]` → `o3[high]`**、
+  既有九列輸出**完全不變**。
+- **`o3[high]` 那一列釘的是兩個家族對 `[...]` 尾綴的刻意不對稱**（T05 review m3）：`gpt-5.5[high]` 走規則 1
+  重組成 `GPT-5.5 (HIGH)`，`o` 系列走規則 2「整串原樣回傳」、**不套用已剝除的 bracket 重組**。
+  沒有這一列，那個不對稱只活在註解裡。
 - **`gpt-5` 那一列是重點**（r4 M1）：它是唯一一個**現行行為不是原樣回傳**的輸入——
   `["gpt","5"]` 的 `5` 是純數字，既有演算法**成功**並回傳 **`Gpt 5`**。新分支排在既有演算法之前，
   所以它會從 `Gpt 5` 變成 `GPT-5`：**一個使用者看得到的字串靜默改變**，而它不在任何 fixture
@@ -560,7 +569,7 @@ Claude 的鍵、或新程式碼順手 `removePersistentDomain`——**全是 r4 
 有這條就不靠人記得。**mutation**：在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` → CX44 必須紅。
 
 跑 DoD 帳本全表：`swift test` 全綠（含**修好** `everyFixtureModelIsMapped`）且連跑 3 次 0 flake、
-gate mutation 帳（**44 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增（**逐檔列「估／實」兩欄**，
+gate mutation 帳（**45 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增（**逐檔列「估／實」兩欄**，
 不是只看總數——T02 review m4：`Agent.swift` 估 60／實 80（+33%，多出來的是 review 要求的
 doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要看得見）、單檔行數、執行檔增量、
 `reprobeCodex()` 成本、啟動時間增幅、`claude plugin validate --strict`、`verify-install.sh`、

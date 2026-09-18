@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r7（2026-09-18，折入 T02／T03 實作 review；不送審）
+revision: r8（2026-09-18，折入 T04／T05 實作 review；不送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -11,7 +11,7 @@ revision: r7（2026-09-18，折入 T02／T03 實作 review；不送審）
 > 正典 `2026-09-08-agentaura-design.md` 為權威；本 change 對正典的修訂在 §8.2。
 > 證據層是 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 > **任何關於 Codex 行為的斷言都標了 F 編號；沒有 F 編號的一律寫成「待驗」，不得當事實用。**
-> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **44** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫
+> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **45** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫
 > 測試函式名（例如 `installerTouchesOnlyAllowedPaths`），**不寫 `G<n>`**。
 
 ## 0. 背景與裁決
@@ -178,7 +178,7 @@ public enum CodexHookPathCheck {
         public var kind: RejectionKind                           // 窮盡 switch，不得有 default
         public static func samples(_ k: RejectionKind) -> [Rejection]   // 同上
     }
-    public static let unsupportedCharacters: Set<Character>      // " " ' " $ ` \
+    public static let unsupportedCharacters: Set<Character>      // 八個：空白 ' " $ ` \ \n \t（見 §4.4）
     public static func rejection(translocated: Bool, inDownloads: Bool,
                                  hookBinaryPath: String) -> Rejection?
 }
@@ -290,8 +290,19 @@ public enum CodexStateKind: String, Sendable, CaseIterable {
 `CodexHookPathCheck.rejection(...)`：① `translocated || inDownloads` → `.mustMoveToApplications`
 （`RunningBundle` 的 doc comment 實測記載：Gatekeeper 把「從下載的 zip／DMG 直接雙擊」的 app
 跑在**唯讀、隨機命名的臨時掛載點，那個路徑下次啟動就消失**；本 repo 上一個 change 才剛做了
-雙擊安裝的 `.dmg`）；② 否則掃路徑，**第一個**命中 `unsupportedCharacters`（空白、`'`、`"`、`$`、`` ` ``、`\`）
-的字元 → `.unsupportedCharacter(那個字元)`；③ 否則 nil。
+雙擊安裝的 `.dmg`）；② 否則掃路徑，**第一個**命中 `unsupportedCharacters` 的字元 →
+`.unsupportedCharacter(那個字元)`；③ 否則 nil。
+
+**`unsupportedCharacters` 目前是八個**：空白、`'`、`"`、`$`、`` ` ``、`\`、**換行、tab**（T04 review M3）。
+**這是啟發式，不是完備集合**——它的定位是「**已知最可能出問題、且不會過度拒絕的最小集合**」，
+不是「所有會出問題的字元」。刻意**未擋**的包括 `(`／`)`（「AgentAura (beta)」「Projects (2026)」
+這類資料夾名很常見）、`;`／`&`／`|`／`>`／`<`／`*`／`?`。理由：擋它們的前提是「Codex 把 `command`
+交給 shell」，而**我們並不知道它是不是**（§10-10：`command` 的解析方式未測，R-7 已把量測移到互動探針）；
+在不知道的情況下擴到二十幾個字元會過度拒絕。換行與 tab 是例外——**兩種解析假設下都危險**
+（就算只是「用空白切分參數」也會裂開），零過度拒絕風險，所以納入。
+完整集合**待互動探針量到 Codex 的實際解析方式再決定**。
+下一個人看到 `(` 沒擋時，要知道那是**已知的取捨**，不是漏寫。
+**CX33 的逐字元格從這個生產常數推導**，所以集合改大改小，gate 的定義域自動跟上（現在是 8 格）。
 
 **注意**：既有 `Installer.connect` 的 `mustMoveToApplications` 擋的**只有** translocated 與
 `~/Downloads`，**沒有**「必須在 `/Applications`」。所以 `~/Applications/`、`~/My Apps/` 這類
@@ -478,6 +489,7 @@ mutation（`--agent` 一律回 `.claude`）打的也是那兩半。gate 的 doc 
 | **`gpt-5.5[high]`** | **`GPT-5.5 (HIGH)`** | 預期；用來釘住規則 1（Codex 分支**先**處理 `[...]` 尾綴，與既有規則同形，不是各寫一套） |
 | `o3` | `o3` | 預期；規則 2 |
 | `o4-mini` | `o4-mini` | 同上 |
+| **`o3[high]`** | **`o3[high]`** | 預期；**兩個家族對 `[...]` 尾綴刻意不對稱**——`gpt-5.5[high]` 走規則 1 重組成 `GPT-5.5 (HIGH)`，`o` 系列則是規則 2「整串原樣回傳」，**不套用已剝除的 bracket 重組**，所以中括號原樣留著。`o` 系列有沒有 bracket 尾綴完全沒有證據，這個不對稱是刻意的；補這一列是為了讓它**被釘住**而不是只活在註解裡（T05 review m3） |
 | `claude-fable-5-1` 等既有九列 | 與現在**完全相同** | 既有 `JargonTests` 釘死 |
 
 **test-edit scrutiny（必須逐條寫進報告）**：既有 `JargonTests.modelTwoNonNumericSegmentsPassesThrough`
@@ -550,7 +562,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
   `environment["HOME"]`）；`codexConnectChainIsWired`（五段，CX24）；
   `codexRowsReachTheView`（`.unavailable` 時 `preferredContentSize` 與零 Codex 狀態完全相同）。
 
-### 6.3 Gate 表（新增一律 `CX<n>`，共 **44** 條；CX37 拆成 a／b；既有 gate 寫測試函式名）
+### 6.3 Gate 表（新增一律 `CX<n>`，共 **45** 條；CX37 拆成 a／b；既有 gate 寫測試函式名）
 
 | Gate | 層 | 守什麼 | Mutation（→ 指名測試 ≤60s 變紅） |
 |---|---|---|---|
@@ -559,10 +571,10 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | CX3 `codexSharedEventsReuseClaudeMapping` | AuraCore | `codexEvents − codexOnlyEvents ⊆ handledEvents`，每個 `effect` 非 `.noChange` | 從 `handledEvents` 拿掉 `PreCompact` |
 | **CX4 `codexOnlyEventsMapToIdle`** | AuraCore | 定義域**從 `codexOnlyEvents` 推導**；`Interrupt → idle` 的唯一守衛 | 刪掉 `case "Interrupt"` 整行 |
 | CX5 `claudeHooksJSONHasNoInterrupt` | AuraCore | `plugin/hooks/hooks.json` 不含 `Interrupt`（獨立於既有雙向等式）；**加定義域非空守衛**——`hooks` 物件若解析成**空字典**，`try #require` 會通過、`registered` 為空集合、交集為空而靜默全綠（T03 review m1；CX1／CX3／CX4 三條姊妹 gate 都有這個守衛，只有它沒有） | 在 Claude hooks.json 加 `Interrupt` |
-| **CX6 `codexHooksJSONMatchesF14Verbatim`** | AuraCore | ① 鍵集合 == `codexEvents`；② **12 個 entry 逐一逐字等於 F14**（`matcher: ""`、無 `async`），唯一數值偏離 `timeout` 5→3，失敗訊息帶 F13 引文；③ 乾淨路徑 round-trip | ① 寫死 11 個 ② 拿掉 `matcher` ③ 加 `async: true` ④ 漏 `--agent codex` ⑤ **`timeout` 改回 5** |
+| **CX6 `codexHooksJSONMatchesF14Verbatim`** | AuraCore | ① 鍵集合 == `codexEvents`；② **12 個 entry 逐一逐字等於 F14**（`matcher: ""`、無 `async`），唯一數值偏離 `timeout` 5→3，失敗訊息帶 F13 引文。**`command` 與 `agentFlag` 的期望值一律寫死字面**（`== "<path> --agent codex"`），**不得引用 `CodexHooksJSON.agentFlag`**——拿產生器的輸出跟產生器自己的常數比，常數被改壞時兩邊一起變、斷言恆真（T04 review M1 實測：把 `agentFlag` 改成 `"--agent codexx"`，全量 808 條測試**零新紅**）；③ **對抗式路徑 round-trip**：含**空白／`"`／`\`** 的路徑產出仍是合法 JSON 且 `command` 解析回原路徑（不是理論情境——D-s／R-10 明訂 `.unsupportedCharacter` **仍要給 snippet**，所以生產必然會用含這些字元的路徑呼叫 `snippet(...)`；跳脫壞了，使用者複製到的是壞掉的 JSON，而他正是只剩手動貼上這條路的人）；④ **跨 module round-trip `generatedFlagIsUnderstoodByTheParser`**：把產生出來的旗標拆成 argv 餵進**真的** `AgentArgument.agent(from:)`，斷言回 `.codex`——這是 T02↔T04 的接縫（`CodexHooksJSON` 寫出去的字面與 `Agent.codex.rawValue` 是兩份各自維護的字串），**兩個方向都擋**（改壞產生器、或改壞解析規則） | ① 寫死 11 個 ② 拿掉 `matcher` ③ 加 `async: true` ④ 漏 `--agent codex` ⑤ **`timeout` 改回 5** ⑥ **`agentFlag` 改成 `"--agent codexx"` → ②與④必須紅** |
 | CX7 `agentArgumentParsing` | AuraCore | §6.1(2) 的 **8 格**表逐格；**開頭加定義域非空守衛**（`cases.count == 8`，本 repo 既有慣例是把非空守衛寫進 gate 自己，否則 `--filter` 單獨跑時表變空會靜默全綠） | ① 未知值改成回 `.codex` ② **改成「第一個*有效*者勝」（未知值不回傳、繼續往後掃）→ 第 8 格必須紅** |
 | CX8 `auraHookStaysSilentForEveryAgentArgument` | E2E（真 spawn） | 同一張 **8 格**表，`SpawnGate` 內序列跑：exit 0、stdout 空、stderr 空 | 解析失敗時寫 stderr |
-| CX9 `claudeStateFileHasNoAgentKey` | AuraCore | round1／1b／2／3 跑 merge，序列化後**不含** `agent` 鍵 | `.claude` 也寫 `"claude"` |
+| CX9 `claudeStateFileHasNoAgentKey` | AuraCore ＋ **E2E** | **兩層，缺一不可**（T05 review M1）：① **純函式層**——round1／1b／2／3 跑 merge，用**生產的 `SnapshotIO.encoder`**（不是測試自建的 `JSONEncoder`：gate 哲學第 1 條，不要在生產機制外面再包一層自己的近似）序列化後**不含** `agent` 鍵，涵蓋四份 fixture 的每一筆；② **生產層**——**不帶 `--agent` 真 spawn 一次**，讀**原始檔案文字**斷言 `!raw.contains("\"agent\"")`（CX10 那條位元組斷言的鏡像，走完整 `main.swift` → `SnapshotIO.encoder` → 檔案）。理由：**`agent == nil` 與「檔案裡沒有這個鍵」不是同一件事**——哪天有人寫自訂 `encode(to:)`，檔案可能出現 `"agent":null`，解碼回來仍是 nil、上游 gate 全綠，而 DoD #5 宣稱的「位元組完全相同」已經破了。兩條的 doc comment 互相點名（一條驗鍵不存在、跑得快；一條驗真檔案位元組、只跑一次） | ① `.claude` 也寫 `"claude"` ② **`agent` 改成非 Optional 帶預設 `""`（或加一個會寫 null 的自訂 encode）→ 生產層那半必須紅** |
 | CX10 `codexStateFileCarriesAgent` | E2E（真 spawn） | `--agent codex` 真跑 → 檔案含 `"agent":"codex"` | `main.swift` 忘了傳 agent |
 | CX11 `legacySnapshotWithoutAgentDecodes` | AuraCore | 無 `agent` 鍵的舊 JSON 解得開且 `.claude` | `agent` 改成非 Optional |
 | CX12 `unknownAgentFallsBackWithoutFailingDecode` | AuraCore | `"agent":"gemini"` → 整包解得開、`.claude`、無標籤 | `agent` 改成 `Agent?`（enum） |
@@ -598,6 +610,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX41 `jargonModelCoversCodexNaming`** | AuraCore | §4.9 的**釘死輸入→輸出表九列**（含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]` 與 `o` 系列維持小寫）；既有九列反例輸出**完全不變** | ① Codex 分支回傳 raw ② 把 `o3` 改成 `O3` ③ **把 Codex 分支從既有演算法之前移到之後 → `gpt-5` 那列必須紅**（那是唯一能區分前置／後置的輸入） |
 | **CX42 `bothSidesNeverDisturbEachOthersCredentials`** | App | R-8 不變式 1（憑證半，r4 M3）：定義域 `{performConnect, performDisconnect, performConnectCodex, performDisconnectCodex}` 的**全部長度 ≤ 2 序列＝20 條**（程式推導，不手列）；fake installer／fake store ＋ 注入的 `UserDefaults` suite，全記憶體、**零 spawn**。每步之後斷言**另一側的鍵位元組完全不變**（Claude 側三個 `AgentAuraHook*` vs Codex 側 `AgentAuraCodexHookContents`），且該 suite **沒有其他鍵被新增或刪除**（用鍵集合的**差集**斷言，不逐鍵列舉——鍵清單會 drift） | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` |
 | **CX44 `noPendingFlagRemains`** | 全 repo 掃描 | `Tests/` 不得殘留 `AURA_CODEX_PENDING`（T01 用 `#if AURA_CODEX_PENDING_T05`／`_T10` 讓兩條 gate 骨架在依賴型別落地前仍可編譯；`Package.swift` 沒有任何 `-D`，所以那些分支**永不編譯、不做型別檢查**）。**＋暫存目錄正向對照**證明掃描沒壞（比照 CX30 的形狀） | 在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` |
+| **CX45 `sessionStateProductionConstructionSitesPassAgent`** | AuraCore（來源掃描） | `Sources/` 底下 `SessionState(` 的出現次數**恰為 1**，且那一處包含 `agent:`。失敗訊息寫明「新增生產建構點時必須明傳 `agent`，**預設值只服務測試**」。（T05 review m1：預設值本身是對齊既有慣例、不是 tested≠wired——生產建構點恰一個且明傳，刪掉明傳會讓既有 gate 立刻紅；殘餘缺口只有「未來新增第二個生產建構點」這個方向，本 repo 已有同型 gate 可抄：`L10nProductionCallSitesPassLanguageTests`、`HookVerificationStoreSourceScanTests`） | 在 `Sources/` 加第二個 `SessionState(` 建構點且不傳 `agent:` |
 | 既有全部 gate | — | 繼續綠（尤其 `registeredEventsMatchHandledEvents`、`installerTouchesOnlyAllowedPaths`、`everyFixtureModelIsMapped`（**目前紅，本 change 必須修好**）、`fileLengthLimit`、`nonUITargetsLoadNoUIModules`、`noStrayLiteralOutsideAllowlist`、`panelModelMakeHasNoDefaults`、`RowHeightDerivationTests`、`FooterPositionStabilityTests`） | — |
 
 ### 6.4 test-edit scrutiny 預告（Lessons #3）
@@ -606,7 +619,15 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 2. `PanelModel.make` 新增無預設值參數 → **61 個呼叫點（26 個檔）**。
 3. `MergeRules.merge` 新增 `agent:` → **7 個呼叫點**。
 4. `OptionsMenuModel.rows` 新增 `codex:` → **26 個呼叫點（10 個檔）**。
-5. 上面 2／3／4 合計 94 個呼叫點：**`#expect(` 淨數量不得下降**（基準 **1649**，量法見 DoD #2 的更正）。
+4b. **`SessionState.init` 的 20 個測試建構點（19 個檔）——第四條 fan-out**（T05 review m4）。
+   **本條以預設值 `.claude` 吸收**，不是 94 個呼叫點那種逐點改：`SessionState.init` 本來就有
+   `toolDescription`／`notificationMessage` 兩個預設值，不是為了這次方便而發明的慣例；
+   **生產建構點恰好一個**（`SessionReducer`）且明傳 `agent:`。理由與守衛見 `SessionState.agent`
+   的 doc comment 與 **CX45**（來源掃描，防的是「未來新增第二個生產建構點時忘了傳」）。
+   **這條要記在帳上**——T08 做 `PanelModel.make` 那 61 處時，帳上三條與實際四條對不起來，
+   而「有幾條 fan-out」正是 test-edit scrutiny 用來判斷「這批機械改動有沒有夾帶弱化」的基準。
+5. 上面 2／3／4 合計 94 個呼叫點（**4b 不計入**，它以預設值吸收）：**`#expect(` 淨數量不得下降**
+   （基準 **1649**，量法見 DoD #2 的更正）。
 6. `HelpDocOptionsRowCoverageTests.allRows` 改成對 `CodexStateKind.allCases` 取聯集。
 7. `ClaudeHomeTreeSnapshot` 抽成共用 `DirectoryTreeSnapshot`（CX14／CX32／CX37a／CX37b 共用）——**純重構**，
    既有 `installerTouchesOnlyAllowedPaths` 全綠且 **mutation 當場重跑**確認仍精準紅。

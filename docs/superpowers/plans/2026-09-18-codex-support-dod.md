@@ -1,6 +1,6 @@
 # DoD 帳本 · `change/codex-support`（T12）
 
-spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r7**）§7 為門檻來源；
+spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r8**）§7 為門檻來源；
 證據層 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 基準取自 `change/codex-support` 分支點（`c131c30`，＝ `main` ＋ 探針文件），量測時用
 `git worktree add <temp> <基準> --detach` 取乾淨副本，**不動共享工作目錄**。
@@ -9,7 +9,7 @@ spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r7**）§7 
 門檻不得在量完之後往下調——miss 就記 known gap（本專案已有兩次前例：+292 KB、+746 KB，
 都是如實記錄不調門檻）。
 
-**gate 編號**：本 change 新增的一律 `CX<n>`（**44 條**；CX37 拆成 a／b）；既有 gate 一律寫測試函式名。
+**gate 編號**：本 change 新增的一律 `CX<n>`（**45 條**；CX37 拆成 a／b）；既有 gate 一律寫測試函式名。
 
 **起點不是全綠**：`FixtureCodeAnchorTests.everyFixtureModelIsMapped` **目前是紅的**——
 round4 fixture 進 repo 之後，`Jargon.model("gpt-5.5")` 原字回傳（實測輸出：
@@ -36,10 +36,10 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | # | 項目 | 門檻 | 量法 | 實測 | 判定 |
 |---|---|---|---|---|---|
 | 1 | 測試全綠 | 連跑 **3 次** 0 flake，**含修好 `everyFixtureModelIsMapped`**、**且 `AURA_CODEX_PENDING_T05`／`_T10` 兩個旗標都已解除**（T05／T10 各自的驗收要附解除前／後的 `#expect` 與測試函式數，**只准上升**）；每次存全量 log | `swift test` ×3 ＋ CX44 | | |
-| 2 | 新增測試數 | `#expect(` 淨增 **≥ 180**（基準 **1649**，量法見上方更正）；新增測試函式 **≥ 65**。r4 是 170／62，**r5 增量＝CX42 約 +5、Jargon 三列 +3、CX37 拆 a／b +2**（`grep -c '#expect'` 數的是**原始碼出現次數**，迴圈只算一次——20／780 條序列不會讓這個數字暴增） | 前後 **`grep -rho '#expect(' Tests \| wc -l`**；`swift test` 的 tests 計數 | | |
-| 3 | gate mutation 帳 | **44 條**（CX1–CX44，CX37 拆 a／b）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**） | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | | |
+| 2 | 新增測試數 | `#expect(` 淨增 **≥ 180**（基準 **1649**）；新增測試函式 **≥ 65**。**量法一次定案**（T04 review m3）：指令固定 `grep -rho '#expect(' Tests \| wc -l`，**每個 task 的報告附該 commit 的絕對值**（不只增量）——只報增量時，兩個端點各差 3 也看不出來。r4 是 170／62，**r5 增量＝CX42 約 +5、Jargon 三列 +3、CX37 拆 a／b +2**（`grep -c '#expect'` 數的是**原始碼出現次數**，迴圈只算一次——20／780 條序列不會讓這個數字暴增） | 前後 **`grep -rho '#expect(' Tests \| wc -l`**；`swift test` 的 tests 計數 | | |
+| 3 | gate mutation 帳 | **45 條**（CX1–CX45，CX37 拆 a／b）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**） | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | | |
 | 4 | **Claude 側零回歸**（紅線） | `git diff <基準>..HEAD -- plugin/hooks/hooks.json` **完全為空**；`handledEvents` 的 19 個名字一字未動 | `git diff` ＋ 逐行看 `EventMapping.swift` 的 diff | | |
-| 5 | **Claude 狀態檔位元組不變** | round1／1b／2／3 跑 merge，序列化後**不含 `agent` 鍵** | CX9 | | |
+| 5 | **Claude 狀態檔位元組不變** | round1／1b／2／3 跑 merge（用**生產的** `SnapshotIO.encoder`）序列化後**不含 `agent` 鍵**；**且**不帶 `--agent` 真 spawn 一次後，**原始檔案文字**不含 `"agent"` | CX9 **兩層**；**這一格的證據以生產層那半為準**（`agent == nil` ≠「檔案裡沒有這個鍵」——自訂 encode 可能寫出 `"agent":null`，解碼回來仍是 nil 而上游全綠） | | |
 | 6a | **`config.toml` 零變動（自動化側）** | `swift test` ×3 全程位元組完全不變 | 開工前存副本，跑完 `diff` | | |
 | 6b | **`config.toml` 受控變動（實機側）** | 實機 ①–⑧ 跑完：**不得新增任何 `[hooks*]` 段**，diff **僅限** `[projects.*] trust_level`（F12） | `diff <副本> ~/.codex/config.toml` 逐行判讀 | | |
 | 7 | `Sources/` 淨增 | **≤ 1150 行**（基準 7846 → ≤ 8996）；逐檔估算 ≈ 1060（spec §8.1），留 8% 餘裕。r3 是 975／門檻 1050；**r4 增量＝Jargon +30、RejectionKind +20、stale/snippet 兩種文案與分支 +35**。**若 R-5／R-6 日後被砍，門檻要跟著降回 900／啟動 +2 ms**，否則就變成「先加需求再放寬門檻」的通道。**超過就先砍 instrumentation 與非必要碼，不調門檻** | `find Sources -name '*.swift' \| xargs cat \| wc -l` | | |
@@ -70,7 +70,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | P3 | 不懂「信任」提示的 vibe coding 使用者 | 按下接上之後，知道「還要在 Codex 裡按一次同意」才會生效 | **≥ 5** |
 | P4 | 兩個都用的人 | 同專案同時跑時兩列分得出來；**兩側都接上時兩邊的燈都真的會動**（R-8） | **≥ 5** |
 
-## Gate mutation 帳（44 條；T12 彙整，✓現場 = 抽驗重跑）
+## Gate mutation 帳（45 條；T12 彙整，✓現場 = 抽驗重跑）
 
 | Gate | 位置 | Mutation | 指名測試 | 秒數 | 來源 task |
 |---|---|---|---|---|---|
@@ -79,10 +79,10 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | CX3 | `CodexEventSeamTests` | **從 `handledEvents`** 拿掉 `PreCompact`（子集檢查落空；**從 `codexEvents` 拿只會紅 CX1**，別把「CX3 沒紅」誤讀成 gate 失效——T03 review 實測兩種拿法打到不同 gate） | `codexSharedEventsReuseClaudeMapping` | | T03 |
 | **CX4** | `CodexEventSeamTests` | 刪掉 `case "Interrupt"` 整行 | `codexOnlyEventsMapToIdle`（**同時記「加這條 gate 之前同一個 mutation 全綠」**） | | T03 · **抽驗必做** |
 | CX5 | `CodexEventSeamTests` | Claude hooks.json 加 `Interrupt`（**三個獨立觀測點都會紅**：CX5、既有 `registeredEventsMatchHandledEvents`、`claude plugin validate --strict`） | `claudeHooksJSONHasNoInterrupt`（**含定義域非空守衛**） | | T03 |
-| CX6 | `CodexHooksJSONTests` | ① 寫死 11 個 ② 拿掉 `matcher` ③ 加 `async: true` ④ 漏 `--agent codex` ⑤ **`timeout` 改回 5** | `codexHooksJSONMatchesF14Verbatim`（12 個 entry 逐格） | | T04 |
+| CX6 | `CodexHooksJSONTests` | ① 寫死 11 個 ② 拿掉 `matcher` ③ 加 `async: true` ④ 漏 `--agent codex` ⑤ **`timeout` 改回 5** ⑥ **`agentFlag` 改成 `"--agent codexx"`**（T04 review M1：字面釘死之前這個 mutation **全量零新紅**） | `codexHooksJSONMatchesF14Verbatim`（12 個 entry 逐格 ＋ 對抗式路徑 round-trip ＋ 跨 module `generatedFlagIsUnderstoodByTheParser`） | | T04 |
 | CX7 | `AgentArgumentTests` | ① 未知值改成回 `.codex` ② **改成「第一個*有效*者勝」→ 第 8 格必須紅** | `agentArgumentParsing`（**8 格**共用表 ＋ 定義域非空守衛） | | T02／T01b |
 | CX8 | `AuraHookCLITests`（E2E） | 解析失敗時寫 stderr | `auraHookStaysSilentForEveryAgentArgument`（**同一張 8 格表**） | | T05 |
-| CX9 | `AgentSnapshotCodableTests` | `storedRawValue` 對 `.claude` 回 `"claude"` | `claudeStateFileHasNoAgentKey` | | T05 |
+| CX9 | `AgentThreadingTests` ＋ `EndToEndWiredGateTests` | ① `storedRawValue` 對 `.claude` 回 `"claude"` ② **`agent` 改成非 Optional 帶預設 `""`（或自訂 encode 寫出 null）→ 生產層那半必須紅** | `claudeStateFileHasNoAgentKey`（**兩層**：純函式層用生產的 `SnapshotIO.encoder` 驗鍵不存在；生產層真 spawn 讀原始檔案驗位元組） | | T05 |
 | CX10 | `EndToEndWiredGateTests` | `main.swift` 忘了傳 agent | `codexStateFileCarriesAgent` | | T05 |
 | CX11 | `AgentSnapshotCodableTests` | `agent` 改成非 Optional | `legacySnapshotWithoutAgentDecodes` | | T05 |
 | CX12 | `AgentSnapshotCodableTests` | `agent` 改成 `Agent?`（enum） | `unknownAgentFallsBackWithoutFailingDecode` | | T05 |
@@ -118,6 +118,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | **CX41** | `JargonCodexModelTests` | ① Codex 分支回傳 raw（**既有 `everyFixtureModelIsMapped` 也必須紅**，兩條都記） ② 把 `o3` 改成 `O3` ③ **把 Codex 分支移到既有演算法之後 → `gpt-5` 那列必須紅** | `jargonModelCoversCodexNaming`（釘死的輸入→輸出表**九列**，含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]`；既有九列輸出完全不變） | | T05 |
 | **CX42** | `CodexCredentialSequenceTests` | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` | `bothSidesNeverDisturbEachOthersCredentials`（**20 條**長度 ≤ 2 序列，fake ＋ 注入 suite、零 spawn；另一側鍵位元組不變 ＋ 鍵集合**差集**斷言） | | T10 |
 | **CX44** | 全 repo 掃描 | 在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` | `noPendingFlagRemains`（`Tests/` 不得殘留 `AURA_CODEX_PENDING`；**含暫存目錄正向對照**） | | T12 |
+| **CX45** | `SessionState` 來源掃描 | 在 `Sources/` 加第二個 `SessionState(` 建構點且不傳 `agent:` | `sessionStateProductionConstructionSitesPassAgent`（`Sources/` 的 `SessionState(` 恰 1 處且含 `agent:`） | | T05d |
 
 **額外必記的三筆（不是新 gate，是回歸證人）**
 1. T01 的 `DirectoryTreeSnapshot` 抽取之後，**當場重跑既有 `installerTouchesOnlyAllowedPaths`
@@ -127,6 +128,21 @@ DoD #1 的「全綠」以「修好它之後」為準。
 3. **`JargonTests.modelTwoNonNumericSegmentsPassesThrough` 的輸入從 `gpt-4o` 換成非 Codex 家族的
    例子**（性質保住）＋**新增**一列釘死 `gpt-4o` 的新期望值——報告要把「改前／改後／測的還是不是
    同一件事」三欄擺在一起。直接刪掉那條測試＝弱化，要退回。
+
+## 里程碑量測（T12 之前的實測紀錄，逐 task 累積）
+
+DoD #2 要求**每個 task 的報告附該 commit 的絕對值**，這裡是彙總；T12 直接引用，不必回頭翻報告。
+
+| 里程碑 | commit | `grep -rho '#expect(' Tests \| wc -l` | 全量 `swift test` |
+|---|---|---|---|
+| 基準 | `be136d6` | **1649** | — |
+| T04 交付 | `6da2ea6` | **1758** | — |
+| **T05 交付（T01–T05 已 merge）** | `ad174e7` | **1792** | **828 tests / 1 issue** |
+
+**T01–T05 merge 後只剩 1 個紅**：`codexConnectChainIsWired`（pending T10）。
+T01 時的三條紅已經關掉兩條——`round4FixtureParsesAndMatchesProbeTable`（T05 解除 pending）、
+`everyFixtureModelIsMapped`（T05b 的 `Jargon` Codex 命名修好，那是 fixture 進 repo 暴露的既有缺口）。
+**T06 及之後的 implementer 開工前看到這 1 條是正常的**，其餘任何紅都不是基準。
 
 ## 使用者實機清單（自動化做不到的八件事；T12 交付）
 
