@@ -127,4 +127,14 @@ struct JargonTests {
 
     @Test("model（Codex）：o4-mini → o4-mini（o 系列整串原樣回傳）")
     func modelCodexO4Mini() { #expect(Jargon.model("o4-mini") == "o4-mini") }
+
+    /// **刻意不對稱**（T05d review m3）：`gpt-5.5[high]` → `GPT-5.5 (HIGH)`（與既有
+    /// Claude 規則 1 同形，`[...]` 尾綴被剝除、重組成 ` (HIGH)`），但 `o` 系列一旦
+    /// 判定命中就**整串原樣回傳原始 `raw`**，不套用已經剝除的 bracket 重組——所以
+    /// `o3[high]` 保留中括號原樣，不是 `o3 (HIGH)`。這件事原本只活在
+    /// `codexModelName` 的 doc comment 裡，沒有一列釘死表覆蓋到；`o` 系列有沒有
+    /// bracket 尾綴目前沒有任何實測證據，這裡不是新增行為，只是把已經寫在註解裡的
+    /// 刻意決定變成被釘住的契約。
+    @Test("model（Codex）：o3[high] → o3[high]（o 系列不重組 bracket，刻意不對稱，見上方註解）")
+    func modelCodexO3WithBracketSuffix() { #expect(Jargon.model("o3[high]") == "o3[high]") }
 }

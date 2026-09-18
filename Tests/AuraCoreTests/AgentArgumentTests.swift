@@ -3,7 +3,7 @@ import AuraCore
 
 /// codex-support T02：`Agent`／`AgentArgument`（spec §3／§4.1／D-b／D-c／D-d）。
 ///
-/// CX7 的定義域是 `AgentArgvFixtures.cases`（T01 已備妥，7 格，期望值寫死），
+/// CX7 的定義域是 `AgentArgvFixtures.cases`（T01／T02 review 備妥，8 格，期望值寫死），
 /// 兩邊測試共用同一張表，不另寫一份（見該檔 doc comment）。
 /// CX9（`claudeStateFileHasNoAgentKey`）要到 T05 的 `MergeRules.merge(agent:)` 落地後
 /// 才能觀測完整的狀態檔位元組；這裡先直接對 `storedRawValue` 打先行測試，
@@ -17,7 +17,7 @@ struct AgentArgumentTests {
 
     /// CX7：`AgentArgument.agent(from:)` 逐格符合 `AgentArgvFixtures` 的期望 rawValue。
     /// 由左至右第一個匹配者勝、大小寫敏感、未知一律 `.claude`（D-b／D-d）。
-    @Test("argv 七格表逐格斷言（CX7）")
+    @Test("argv 八格表逐格斷言（CX7）")
     func agentArgumentParsing() {
         #expect(!AgentArgvFixtures.cases.isEmpty, "CX7 的定義域不能空跑")
         for testCase in AgentArgvFixtures.cases {

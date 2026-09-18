@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import AuraCore
+@testable import AuraHookFile
 
 /// codex-support T05a：`agent` 貫穿 payload → 檔案 → state → UI 四段
 /// （spec §4.1／§3；`SessionState.model` 與 `toolDescription` 都曾經只走完
@@ -8,23 +9,31 @@ import Foundation
 @Suite("agent 貫穿四段（CX9／CX11／CX12）")
 struct AgentThreadingTests {
 
-    /// CX9：Claude 側（`.claude`）序列化後的狀態檔位元組**不含** `agent` 鍵——
-    /// 用 round1／round1b／round2／round3 四份既有 fixture 逐筆 merge，涵蓋既有
-    /// 契約沒有因為新欄位而多寫任何東西。`agent.storedRawValue` 對 `.claude` 回
-    /// `nil`，`SessionSnapshot.agent` 是 Optional，synthesized `Encodable` 對 nil
-    /// 用 `encodeIfPresent`，鍵直接消失——跟 `outstandingSubagents` 是同一個機制。
-    @Test("Claude 側狀態檔序列化後不含 agent 鍵（CX9）")
+    /// CX9（純函式層，T05d review M1 修正）：Claude 側（`.claude`）序列化後的狀態檔
+    /// **不含** `agent` 鍵——用 round1／round1b／round2／round3 四份既有 fixture
+    /// 逐筆 merge，涵蓋既有契約沒有因為新欄位而多寫任何東西。`agent.storedRawValue`
+    /// 對 `.claude` 回 `nil`，`SessionSnapshot.agent` 是 Optional，synthesized
+    /// `Encodable` 對 nil 用 `encodeIfPresent`，鍵直接消失——跟 `outstandingSubagents`
+    /// 是同一個機制。
+    ///
+    /// **改用生產的 `SnapshotIO.encoder`**（原本自建一個 `JSONEncoder`）：這條驗的是
+    /// 「鍵不存在」，跑得快、涵蓋四份 fixture 的每一筆，是純函式層；但序列化器若跟
+    /// 生產路徑不同，這條就只是在驗自己的近似，不是驗真正會寫到磁碟的東西。跟
+    /// `EndToEndWiredGateTests.claudeStateFileHasNoAgentKeyOnDisk`
+    /// （生產層，真 spawn、驗真檔案位元組，只跑一次）互相點名，缺一不可：
+    /// 這條保證「四份 fixture 的每一筆都不多寫鍵」，那條保證「真的走過
+    /// `main.swift` → `SnapshotIO.encoder` → 檔案這條生產路徑」。
+    @Test("Claude 側狀態檔序列化後不含 agent 鍵（CX9，純函式層）")
     func claudeStateFileHasNoAgentKey() throws {
         let names = ["round1", "round1b", "round2", "round3-named-subagent"]
         var checked = 0
-        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
         for name in names {
             for json in try Fixtures.rawEvents(named: name) {
                 guard let data = try? Fixtures.jsonData(json),
                       let payload = HookPayload(data: data) else { continue }
                 let snapshot = MergeRules.merge(payload, into: nil, pid: 4242, pidStartedAt: 111,
                                                 agent: .claude, now: Date())
-                let encoded = try enc.encode(snapshot)
+                let encoded = try SnapshotIO.encoder.encode(snapshot)
                 let obj = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
                 #expect(!obj.keys.contains("agent"),
                         "\(name) 的 \(payload.hookEventName) 序列化後含 agent 鍵，實際 \(String(describing: obj["agent"]))")
