@@ -1,5 +1,5 @@
 import Testing
-@testable import AuraCore
+import AuraCore
 
 /// codex-support T02：`Agent`／`AgentArgument`（spec §3／§4.1／D-b／D-c／D-d）。
 ///
@@ -8,6 +8,10 @@ import Testing
 /// CX9（`claudeStateFileHasNoAgentKey`）要到 T05 的 `MergeRules.merge(agent:)` 落地後
 /// 才能觀測完整的狀態檔位元組；這裡先直接對 `storedRawValue` 打先行測試，
 /// 把「.claude 不寫欄位、.codex 寫 `"codex"`」的單一機制釘住。
+///
+/// 刻意不用 `@testable import`：`Agent`／`AgentArgument` 是跨 module 契約
+/// （`aura-hook`、`AgentAuraApp` 都消費），測試要從 `public` 面看它們，否則
+/// `public` 退化成 `internal` 時測試照綠、生產端編不過。
 @Suite("Agent 與 --agent 參數解析")
 struct AgentArgumentTests {
 
@@ -15,6 +19,7 @@ struct AgentArgumentTests {
     /// 由左至右第一個匹配者勝、大小寫敏感、未知一律 `.claude`（D-b／D-d）。
     @Test("argv 七格表逐格斷言（CX7）")
     func agentArgumentParsing() {
+        #expect(!AgentArgvFixtures.cases.isEmpty, "CX7 的定義域不能空跑")
         for testCase in AgentArgvFixtures.cases {
             let result = AgentArgument.agent(from: testCase.argv)
             #expect(result.rawValue == testCase.expectedRawValue,
