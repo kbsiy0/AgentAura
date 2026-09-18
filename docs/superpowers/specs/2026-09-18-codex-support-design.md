@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r6（2026-09-18，折入 T01 實作 review；不送審）
+revision: r7（2026-09-18，折入 T02／T03 實作 review；不送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -242,15 +242,25 @@ public enum CodexStateKind: String, Sendable, CaseIterable {
 
 ### 4.2 事件集合與 `Interrupt` 接縫（本 change 最容易踩的地方）
 
-- Claude Code 對 hooks.json 是**全有全無**解析；`registeredEventsMatchHandledEvents` 是雙向等式。
-  **`Interrupt` 一旦進 `handledEvents`**，那條 gate 會要求 Claude 的 hooks.json 也註冊它 →
-  Claude 側整份 hooks 靜默失效。**一個「把對照表補齊」的善意動作，後果是產品對 Claude 使用者完全停止運作。**
+- **Claude Code 對 hooks.json 是全有全無解析——這是跨機器實測，不是本機驗證器說的**（T03 review M1）：
+  2026-09-15 在**同事的機器**上，一個平台不認得的 `PostModelSwitch` 讓**整個 plugin 不運作**，
+  其餘合法 event 一起陪葬（專案記憶 `distribution-and-hook-compat`）。
+  **本機 `claude plugin validate --strict` 對未知 event 只給 warning「entry ignored at runtime」**，
+  看起來像是只有那一條被忽略——**本機通過不構成反證**，這與 Claude Code 的版本有關。
+  沒有這句限定語，下一個維護者讀到「整份拒載」、順手跑一次本機 validator 看到只是 warning，
+  最合理的推論就是「這段誇大了」，然後把 CX2／CX5 當成過度防禦而放寬。
+  `registeredEventsMatchHandledEvents` 是雙向等式，所以 **`Interrupt` 一旦進 `handledEvents`**，
+  那條 gate 會要求 Claude 的 hooks.json 也註冊它 → Claude 側整份 hooks 失效。
+  **一個「把對照表補齊」的善意動作，後果是產品對 Claude 使用者完全停止運作。**
 - `codexEvents`（12 個）獨立常數，`codexOnlyEvents = ["Interrupt"]`；`Interrupt` 只進 `effect` 的 switch。
   **前提**：F2 沒有回答「Claude Code 自己認不認得 `Interrupt`」；我們據以行動的是既有事實
   （`handledEvents` 19 個名字裡沒有它、Claude 側 hooks.json 從未註冊過它）。CX5 守的是「沒有註冊」。
 - **`Interrupt` 事件 ≠ `is_interrupt` 欄位**：後者是 `HookPayload.isInterrupt`（使用者 Ctrl+C
   中斷了一個 **tool**，刻意不計入 `tool_failures`）。兩者 doc comment 互相點名。
-- 四條 gate（CX2／CX3／CX4／CX5）。**CX4 是必要的**：`round4-codex.ndjson` **零筆 `Interrupt`**
+- 四條 gate（CX2／CX3／CX4／CX5）**加上第四道平台自己的防線**：**`claude plugin validate --strict`**
+  （DoD #16 要求零 warning）對註冊 `Interrupt` 會**直接失敗**（reviewer 實測：`unknown hook event;
+  entry ignored at runtime` ＋ `--strict` 視 warning 為 error）。**它是唯一一道不依賴我們自己寫的斷言的防線**
+  ——問的是平台，不是我們對平台的理解（gate 哲學第 1 條）。**CX4 是必要的**：`round4-codex.ndjson` **零筆 `Interrupt`**
   （`SessionStart` 4／`UserPromptSubmit` 4／`Stop` 4／`SessionEnd` 4／`PreToolUse` 1／`PostToolUse` 1），
   沒有它，刪掉 `case "Interrupt"` 整行全部 gate 維持綠。
 - **後果**：Codex 沒有 `PostToolUseFailure` 也沒有 `StopFailure`（F2），`tool_response` 只是字串（F4）
@@ -517,9 +527,13 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 ### 6.1 對抗式 double（Lessons #1；T01 必含）
 1. **payload**：缺 `permission_mode`／缺 `model`／`tool_response` 是 200 KB 字串／
    `hook_event_name: "Interrupt"` **帶** `agent_id`／`session_id` 是 UUIDv7。
-2. **argv（7 格表）**：`[]`、`["--agent"]`、`["--agent","gemini"]`、`["--agent","CODEX"]`、
-   `["--agent=codex"]`、`["--agent","codex","--agent","claude"]`、`["--agent","codex","--agent"]`。
-   **CX7 與 CX8 共用的唯一來源**。
+2. **argv（8 格表）**：`[]`、`["--agent"]`、`["--agent","gemini"]`、`["--agent","CODEX"]`、
+   `["--agent=codex"]`、`["--agent","codex","--agent","claude"]`、`["--agent","codex","--agent"]`、
+   **`["--agent","gemini","--agent","codex"] → `claude`**（T02 review M1）。
+   **第 8 格釘住的是「第一個*出現*者勝」而不是「第一個*有效*者勝」**——前七格兩種語意給的答案完全相同，
+   reviewer 用一個「未知值不回傳、繼續往後掃」的替代實作實跑，七格**全綠**。而「第一個有效者勝」等於
+   **讓使用者手寫錯的第一個旗標被後面的悄悄蓋過去**，正是 D-d 那段理由要防的事。
+   **CX7 與 CX8 共用的唯一來源**——盲點會原封不動傳給另一條（Lessons #1 的形狀）。
 3. **檔案系統**：`hooks.json` 是目錄／symlink 指向 `config.toml`／斷鏈 symlink／別人的合法 JSON／
    5 MB 垃圾（> 64 KiB，驗 D-q）；`~/.codex` 自己是外部 symlink／是普通檔／不存在。
 4. **路徑**：`translocated: true`／`inDownloads: true`／六個不支援字元各一／**同時 translocated
@@ -541,13 +555,13 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | Gate | 層 | 守什麼 | Mutation（→ 指名測試 ≤60s 變紅） |
 |---|---|---|---|
 | CX1 `codexEventSetIsPinnedToProbe` | AuraCore | `codexEvents` 恰等於 F2 的 12 個字面名；doc comment **分標兩種證據強度**（六個有真實 payload／六個只有二進位字串列舉） | 加一個／少一個 |
-| **CX2 `interruptNeverEntersHandledEvents`** | AuraCore | `handledEvents.isDisjoint(with: codexOnlyEvents)`；失敗訊息逐字寫「Claude 全有全無」 | 把 `Interrupt` 加進 `handledEvents` |
+| **CX2 `interruptNeverEntersHandledEvents`** | AuraCore | `handledEvents.isDisjoint(with: codexOnlyEvents)`；**失敗訊息必須寫出後果**（Claude 側整份 hooks 失效、產品對 Claude 使用者完全停止運作），**並帶 §4.2 的 runtime 限定語**（本機 validator 只給 warning，整份拒載是跨機器實測）。**不要求逐字某四個字**——寫得更完整的訊息不該被改回更短的（T03 review m3） | 把 `Interrupt` 加進 `handledEvents` |
 | CX3 `codexSharedEventsReuseClaudeMapping` | AuraCore | `codexEvents − codexOnlyEvents ⊆ handledEvents`，每個 `effect` 非 `.noChange` | 從 `handledEvents` 拿掉 `PreCompact` |
 | **CX4 `codexOnlyEventsMapToIdle`** | AuraCore | 定義域**從 `codexOnlyEvents` 推導**；`Interrupt → idle` 的唯一守衛 | 刪掉 `case "Interrupt"` 整行 |
-| CX5 `claudeHooksJSONHasNoInterrupt` | AuraCore | `plugin/hooks/hooks.json` 不含 `Interrupt`（獨立於既有雙向等式） | 在 Claude hooks.json 加 `Interrupt` |
+| CX5 `claudeHooksJSONHasNoInterrupt` | AuraCore | `plugin/hooks/hooks.json` 不含 `Interrupt`（獨立於既有雙向等式）；**加定義域非空守衛**——`hooks` 物件若解析成**空字典**，`try #require` 會通過、`registered` 為空集合、交集為空而靜默全綠（T03 review m1；CX1／CX3／CX4 三條姊妹 gate 都有這個守衛，只有它沒有） | 在 Claude hooks.json 加 `Interrupt` |
 | **CX6 `codexHooksJSONMatchesF14Verbatim`** | AuraCore | ① 鍵集合 == `codexEvents`；② **12 個 entry 逐一逐字等於 F14**（`matcher: ""`、無 `async`），唯一數值偏離 `timeout` 5→3，失敗訊息帶 F13 引文；③ 乾淨路徑 round-trip | ① 寫死 11 個 ② 拿掉 `matcher` ③ 加 `async: true` ④ 漏 `--agent codex` ⑤ **`timeout` 改回 5** |
-| CX7 `agentArgumentParsing` | AuraCore | §6.1(2) 的 7 格表逐格 | 未知值改成回 `.codex` |
-| CX8 `auraHookStaysSilentForEveryAgentArgument` | E2E（真 spawn） | 同一張 7 格表，`SpawnGate` 內序列跑：exit 0、stdout 空、stderr 空 | 解析失敗時寫 stderr |
+| CX7 `agentArgumentParsing` | AuraCore | §6.1(2) 的 **8 格**表逐格；**開頭加定義域非空守衛**（`cases.count == 8`，本 repo 既有慣例是把非空守衛寫進 gate 自己，否則 `--filter` 單獨跑時表變空會靜默全綠） | ① 未知值改成回 `.codex` ② **改成「第一個*有效*者勝」（未知值不回傳、繼續往後掃）→ 第 8 格必須紅** |
+| CX8 `auraHookStaysSilentForEveryAgentArgument` | E2E（真 spawn） | 同一張 **8 格**表，`SpawnGate` 內序列跑：exit 0、stdout 空、stderr 空 | 解析失敗時寫 stderr |
 | CX9 `claudeStateFileHasNoAgentKey` | AuraCore | round1／1b／2／3 跑 merge，序列化後**不含** `agent` 鍵 | `.claude` 也寫 `"claude"` |
 | CX10 `codexStateFileCarriesAgent` | E2E（真 spawn） | `--agent codex` 真跑 → 檔案含 `"agent":"codex"` | `main.swift` 忘了傳 agent |
 | CX11 `legacySnapshotWithoutAgentDecodes` | AuraCore | 無 `agent` 鍵的舊 JSON 解得開且 `.claude` | `agent` 改成非 Optional |
@@ -592,7 +606,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 2. `PanelModel.make` 新增無預設值參數 → **61 個呼叫點（26 個檔）**。
 3. `MergeRules.merge` 新增 `agent:` → **7 個呼叫點**。
 4. `OptionsMenuModel.rows` 新增 `codex:` → **26 個呼叫點（10 個檔）**。
-5. 上面 2／3／4 合計 94 個呼叫點：**`#expect` 淨數量不得下降**（基準 1652）。
+5. 上面 2／3／4 合計 94 個呼叫點：**`#expect(` 淨數量不得下降**（基準 **1649**，量法見 DoD #2 的更正）。
 6. `HelpDocOptionsRowCoverageTests.allRows` 改成對 `CodexStateKind.allCases` 取聯集。
 7. `ClaudeHomeTreeSnapshot` 抽成共用 `DirectoryTreeSnapshot`（CX14／CX32／CX37a／CX37b 共用）——**純重構**，
    既有 `installerTouchesOnlyAllowedPaths` 全綠且 **mutation 當場重跑**確認仍精準紅。

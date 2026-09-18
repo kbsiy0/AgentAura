@@ -1,9 +1,9 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r6**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r7**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 r6 的 spec。
+> 節號引用一律指 r7 的 spec。
 > **gate 編號**：本 change 新增的一律 `CX<n>`（共 **44** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
 
 ## 0. 給每個 implementer 的共同規則
@@ -22,7 +22,12 @@
 - **swift-testing**（`import Testing` / `@Test` / `#expect`），不是 XCTest。
 - **禁止**：`--amend` 已 push 的 commit、`--no-verify`、`git reset --hard|checkout .|clean -f`、
   `fatalError`、在測試裡碰真的 `~/.codex`／`~/.claude`、**在任何地方跑 `codex exec`**（F12）。
-- **既有測試不得弱化**：`#expect` 淨數量不得下降（基準 1652）；改寫既有斷言要逐條列
+- **寫 RED 測試時先把 import 寫齊**（T02 review m5）：`cannot find type 'X' in scope` 這一句，
+  **既是** TDD 想要的 RED（型別還沒寫），**也是** harness 壞掉的 RED（漏了 import）。
+  動手前先確認「除了本 task 要產出的符號以外，其他東西都解析得到」；報告引用編譯錯誤時，
+  要能指出**缺的恰好只有本 task 的符號**。這條擋的是「RED 理由不正確」這整族，
+  而那一族的終點是「為了讓它綠而改錯東西」。
+- **既有測試不得弱化**：`#expect(` 淨數量不得下降（基準 **1649**，見 DoD #2 的量法更正）；改寫既有斷言要逐條列
   「改前／改後／測的還是不是同一件事」（spec §6.4 已預告九處）。
 - **Claude 側零回歸是紅線**：`plugin/hooks/hooks.json` 的 git diff 必須為空；
   `EventMapping.handledEvents` 一個字都不准動。
@@ -128,9 +133,13 @@ wave 9: T12
    沒有任何資料表達它。
 5. **對抗式 payload fixture**（程式合成）：缺 `permission_mode`／缺 `model`／`tool_response`
    是 200 KB 字串／`hook_event_name: "Interrupt"` **帶** `agent_id`／`session_id` 是 UUIDv7。
-6. **argv 對抗式表（7 格）**：`[]`、`["--agent"]`、`["--agent","gemini"]`、`["--agent","CODEX"]`、
-   `["--agent=codex"]`、`["--agent","codex","--agent","claude"]`、`["--agent","codex","--agent"]`。
+6. **argv 對抗式表（8 格）**：`[]`、`["--agent"]`、`["--agent","gemini"]`、`["--agent","CODEX"]`、
+   `["--agent=codex"]`、`["--agent","codex","--agent","claude"]`、`["--agent","codex","--agent"]`、
+   **`["--agent","gemini","--agent","codex"] → `claude`**。
    期望值寫死在表裡，**不是從實作反推**；**這張表是 CX7 與 CX8 共用的唯一來源**，放共用 helper。
+   **第 8 格是 T02 review M1 補的**：前七格分辨不出「第一個*出現*者勝」與「第一個*有效*者勝」——
+   reviewer 用後者的替代實作實跑，七格**全綠**；而後者等於**讓使用者手寫錯的第一個旗標被後面的
+   悄悄蓋過去**，正是 D-d 要防的事。自我測試的格數斷言（`count == 8`）與測試名要一起改。
 7. **`FakeCodexInstaller`**：① `connect()` 成功但 `probe()` 仍回 `.notConnected`；
    ② `disconnect()` 宣稱成功但檔案還在；③ `probe()` 丟錯；
    ④ **記錄 `connect`／`disconnect`／`probe` 的呼叫順序與次數**（CX24⑤、CX35、CX39 都要用）；
@@ -175,7 +184,7 @@ RED 沒有意義）。兩類各自逐條說明。
 - `AgentArgument.agent(from:)` 支援兩種寫法；由左至右取**第一個**匹配；大小寫敏感；不匹配一律 `.claude`。
 - `label` 對 `.codex` 回 `"Codex"`——**產品名不進 L10n**，doc comment 寫明是刻意的。
 
-**gates**：CX7（定義域＝T01 的 7 格共用表）。
+**gates**：CX7（定義域＝T01 的 **8 格**共用表 ＋ 非空守衛）。
 **mutation**：① 未知值改成回 `.codex` → CX7 紅；② `storedRawValue` 對 `.claude` 回 `"claude"` →
 CX9 紅（T05 之後才觀測得到，本 task 先記）。
 
@@ -193,8 +202,9 @@ CX9 紅（T05 之後才觀測得到，本 task 先記）。
   的 doc comment 也加一句反向指回。
 - **`handledEvents` 一個字都不准動**。
 
-**gates**：CX1、**CX2**（失敗訊息逐字寫「Claude 全有全無」）、CX3、**CX4**（定義域從
-`codexOnlyEvents` 推導）、CX5。
+**gates**：CX1、**CX2**（失敗訊息**寫出後果** ＋ §4.2 的 runtime 限定語，不要求逐字某四個字）、
+CX3、**CX4**（定義域從 `codexOnlyEvents` 推導）、**CX5（要加定義域非空守衛**——`hooks` 物件解析成
+空字典時 `try #require` 會通過、交集為空而靜默全綠；CX1／CX3／CX4 都有這個守衛，只有它沒有）。
 **mutation**：① `Interrupt` 加進 `handledEvents` → CX2 紅（**且**既有
 `registeredEventsMatchHandledEvents` 也紅，兩條都記）；② 拿掉 `PreCompact` → CX3 紅；
 ③ **刪掉 `case "Interrupt"` 整行 → CX4 紅**（報告要記「加 CX4 之前同一個 mutation 全綠」）；
@@ -288,7 +298,7 @@ translocated 優先；乾淨路徑 nil）。
 - 真 spawn **必須經 `SpawnGate`**。`EndToEndWiredGateTests` 目前 149 行，餘裕充足；
   超過 300 就拆 `EndToEndDualAgentTests.swift`。
 
-**gates**：CX8（7 格共用表真 spawn）、CX9、CX10、CX11、CX12、CX13、**CX38**、**CX41**。
+**gates**：CX8（**8 格**共用表真 spawn）、CX9、CX10、CX11、CX12、CX13、**CX38**、**CX41**。
 
 **驗收必含：解除 `#if AURA_CODEX_PENDING_T05`**（T01 review m1）。T01 用這個旗標讓 gate 骨架在
 依賴的型別落地前仍可編譯，而 `Package.swift` 沒有任何 `-D`（DoD #9 要求它的 diff 為空），
@@ -408,7 +418,7 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
   `CodexRowLabelPixelTests`（不要刪既有註解騰空間）。
 
 **gates**：既有 `panelModelMakeHasNoDefaults` 繼續綠；CX22 的 model 半。
-**test-edit scrutiny**：`#expect` 淨數量**不得下降**；報告附改前／改後總數（基準 1652）。
+**test-edit scrutiny**：`#expect(` 淨數量**不得下降**；報告附改前／改後總數（基準 **1649**，量法見 DoD #2）。
 **mutation**：① `make` 忽略 `codex` → 由 T09／T10 的 gate 抓（本 task 先記）；
 ② `agentLabel` 對 `.claude` 也給值 → CX22 紅。
 
@@ -550,7 +560,9 @@ Claude 的鍵、或新程式碼順手 `removePersistentDomain`——**全是 r4 
 有這條就不靠人記得。**mutation**：在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` → CX44 必須紅。
 
 跑 DoD 帳本全表：`swift test` 全綠（含**修好** `everyFixtureModelIsMapped`）且連跑 3 次 0 flake、
-gate mutation 帳（**44 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增、單檔行數、執行檔增量、
+gate mutation 帳（**44 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增（**逐檔列「估／實」兩欄**，
+不是只看總數——T02 review m4：`Agent.swift` 估 60／實 80（+33%，多出來的是 review 要求的
+doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要看得見）、單檔行數、執行檔增量、
 `reprobeCodex()` 成本、啟動時間增幅、`claude plugin validate --strict`、`verify-install.sh`、
 `verify-uninstall.sh`、**`plugin/hooks/hooks.json` 的 git diff 必須為空**、
 `~/.codex/config.toml` 自動化側位元組不變。產出實機清單 ①–⑧。Tier 1 → integrator 綠後派 persona-tester。
