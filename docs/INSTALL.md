@@ -12,44 +12,58 @@ There is no prebuilt download yet. You build it once, then use it like any other
 
 ## Install
 
-One command. It builds from source, installs into `/Applications`, and opens the app.
+### The simple way: download the installer
 
-```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
-```
+[**Download AgentAura.dmg**](https://github.com/kbsiy0/AgentAura/releases/latest/download/AgentAura.dmg) · 1.4 MB · no terminal, no toolchain
 
-Or without cloning first — read [the script](../scripts/install.sh) before you pipe it into
-your shell:
+1. Open the file you downloaded.
+2. Drag **AgentAura** onto the **Applications** folder.
+3. Open it from Applications. See [the first launch](#the-first-launch) below — macOS blocks
+   it once, and the button you want is not the obvious one.
+4. In the app: click **Connect**, then start a **new** Claude Code session.
+
+### From the terminal
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
 ```
 
-The installer checks your macOS version and toolchain first and stops with a specific fix if
-something's missing. It doesn't touch `~/.claude` — connecting is a button you press in the
-app, deliberately.
+About five seconds, and no security prompt: the script verifies the download against its
+published SHA-256 and clears the quarantine flag itself. Read [the script](../scripts/install.sh)
+before you pipe it into your shell. If the download fails it builds from source instead
+(needs the Swift toolchain); `--from-source` forces that.
 
-Then, in the app:
+The installer doesn't touch `~/.claude` — connecting is a button you press in the app,
+deliberately.
 
-1. **Click Connect.**
-2. **Start a new Claude Code session.**
+### The first launch
 
-Step 2 matters — see [When it takes effect](#when-it-takes-effect).
+The app is ad-hoc signed and **not notarized by Apple**, so the first launch is blocked. This
+is expected, and it happens once.
 
-To start it automatically at login, turn on *Launch at login* in the Options menu.
+1. Double-click the app. You'll get **"Apple could not verify AgentAura.app is free of
+   malware."**
+2. **Click Done. Do not click Move to Trash** — that's the prominent button, and it's the
+   wrong one.
+3. Open **System Settings ▸ Privacy & Security**, scroll to **Security**, and click
+   **Open Anyway**. Authenticate.
+4. Open the app again. It won't ask again.
 
-If any of the terms are unfamiliar, click **Help** in the app. It opens an offline page that
-explains what the lights mean, what a hook is, and what to do when something looks wrong.
+> ### ⚠️ The right-click → Open trick no longer exists
+>
+> macOS 15 Sequoia removed it. Older articles still recommend it. On current macOS the dialog
+> has only two buttons — **Move to Trash** and **Done** — and the prominent one is *Move to
+> Trash*. Following the old instructions gets you stuck, or throws the app away.
+> (Confirmed on macOS 26.6.2.)
 
-### Doing it by hand
+Notarization would remove this step entirely. It needs the Apple Developer Program
+($99/year), so it isn't done yet.
 
-```bash
-./scripts/build-plugin.sh      # builds the aura-hook binary
-./scripts/build-app.sh         # produces build/AgentAura.app
-```
+### Building it yourself
 
-Then drag `build/AgentAura.app` into your Applications folder and open it. Don't leave it in
-Downloads or in `build/` — apps in those places get moved or cleaned up, and the mount breaks.
+An app you built on your own machine isn't blocked by Gatekeeper at all. See
+[Developer setup](#developer-setup) — it covers both building the app and mounting the
+repository directly so rebuilds take effect without reinstalling.
 
 ## When it takes effect
 
@@ -103,29 +117,11 @@ machine's runtime rejected the entire file. Keep that difference in mind when ad
 event.
 </details>
 
-## Installing from a zip someone gave you
+## Someone handed you a zip
 
-The app is ad-hoc signed and not notarized, so **the first launch is always blocked by
-Gatekeeper.** That is expected, not a broken download.
-
-1. Unzip and drag `AgentAura.app` into Applications.
-2. Double-click it. You'll get **"Apple could not verify AgentAura.app is free of malware."**
-   **Click Done. Do not click Move to Trash.**
-3. Open **System Settings → Privacy & Security**. Scroll to **Security**. You'll see
-   "AgentAura.app was blocked to protect your Mac" and an **Open Anyway** button. Click it and
-   authenticate.
-4. Open the app again.
-5. Click **Connect**, then start a new Claude Code session.
-
-> ### ⚠️ The right-click → Open trick no longer exists
->
-> macOS 15 Sequoia removed it. Older articles still recommend it. On current macOS the dialog
-> has only two buttons — **Move to Trash** and **Done** — and the prominent one is *Move to
-> Trash*. Following the old instructions gets you stuck at step 2, or throws the app away.
-> (Confirmed on macOS 26.6.2, 2026-09-15.)
-
-**Why this happens:** proper Developer ID signing and notarization require the Apple Developer
-Program ($99/year). Without it, every Mac treats the app as unverified on first launch.
+Same as the download: unzip it, drag the app into Applications, and follow
+[the first launch](#the-first-launch). The zip has no installer window, so nothing warns you
+about the dialog — that's the only difference, and it's the part that matters.
 
 <details>
 <summary>Does the hook still work after you allow the app? Yes.</summary>
