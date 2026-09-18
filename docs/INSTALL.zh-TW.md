@@ -11,70 +11,53 @@
 
 ## 安裝
 
-一行指令。它會從原始碼建置、裝進 `/Applications`，然後把 App 打開。
+### 最簡單：下載安裝檔
 
-```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
-```
+[**下載 AgentAura.dmg**](https://github.com/kbsiy0/AgentAura/releases/latest/download/AgentAura.dmg) · 1.4 MB · 不用終端機、不用工具鏈
 
-或者不先 clone——把腳本接進 shell 之前，請先[讀它](../scripts/install.sh)：
+1. 打開下載回來的檔案。
+2. 把 **AgentAura** 拖到 **應用程式** 資料夾。
+3. 從「應用程式」裡打開它。請看下面的「第一次開啟」——macOS 會擋一次，
+   而你要按的不是最顯眼的那個按鈕。
+4. 在 App 裡按**接上**，然後開一個**新的** Claude Code session。
+
+### 用終端機
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
 ```
 
-安裝腳本會先檢查 macOS 版本與工具鏈，缺什麼就停下來並給出具體的補法。
-它**不碰 `~/.claude`**——接上是你在 App 裡按的按鈕，這是刻意的。
+大約五秒，而且不會跳安全性提示：腳本會比對公布的 SHA-256，然後自己清掉隔離標記。
+把它接進 shell 之前請先[讀它](../scripts/install.sh)。下載失敗時會改成從原始碼建
+（需要 Swift 工具鏈）；`--from-source` 可強制。
 
-然後在 App 裡：
+安裝腳本**不碰 `~/.claude`**——接上是你在 App 裡按的按鈕，這是刻意的。
 
-1. **按「接上」。**
-2. **開一個新的 Claude Code session。**
+### 第一次開啟
 
-第 2 步很重要，見下一節「什麼時候生效」。
+這個 App 是 ad-hoc 簽章、**沒有經過 Apple 公證**，所以第一次開啟會被擋。這是預期行為，
+而且只會發生一次。
+
+1. 雙擊 App，會跳出 **「Apple 無法驗證『AgentAura.app』沒有惡意軟體」**。
+2. **按「完成」，不要按「移到垃圾桶」**——後者才是最顯眼的按鈕，而它是錯的。
+3. 打開**系統設定 ▸ 隱私權與安全性**，往下捲到**安全性**，按**「強制打開」**並驗證身分。
+4. 再開一次 App。之後不會再問。
+
+> **⚠️ macOS 15 起，「右鍵 →打開」這個做法已經沒有了。** 舊文章教的那招在新系統上不存在
+> ——新版對話框只有「移到垃圾桶」與「完成」兩個按鈕，而且**最顯眼的是「移到垃圾桶」**。
+> 照舊行為寫的說明會讓人卡死，甚至直接把 App 丟掉。（macOS 26.6.2 實機確認。）
+
+做 Apple 公證可以完全免掉這一步，但那需要 Apple Developer Program（年費 99 美元），
+目前沒有做。
+
+### 自己建
+
+在自己機器上建出來的 App 完全不會被擋。完整流程見下方「開發者路徑」——
+那裡也包含「把 repo 直接掛上去，改完重建立刻生效」的做法。
 
 要開機自動啟動：在面板的 Options 裡打開「登入時啟動」。
 
-不熟悉這些名詞的話，App 裡按「說明」會開一份離線的白話文件（`help.html`），
-涵蓋燈號意思、hook 是什麼、常見問題。
-
-### 自己一步一步做
-
-```bash
-./scripts/build-plugin.sh      # 建置 aura-hook 執行檔
-./scripts/build-app.sh         # 產出 build/AgentAura.app
-```
-
-然後把 `build/AgentAura.app` 拖進「應用程式」再打開。**不要**留在「下載項目」或專案的
-`build/` 底下——那些位置的 App 隨時可能被搬走、或被系統當暫存清掉，接上之後容易莫名其妙又斷掉。
-
-## 什麼時候生效
-
-按「接上」之後，**要從下一個新開的 Claude Code session 起才會生效**——skills-dir
-的 plugin 在 session 啟動時載入，已在執行中的 session 不會中途載入新 plugin。
-
-這裡有兩件容易混淆的事，分開講清楚：
-
-- **新增一個 plugin 掛載**（第一次接上，或掛載被移除後重新接上）：
-  **需要新 session 才會生效，已實測確認**。
-- **已載入的 plugin 的 `hooks.json` 內容之後又被改動**（例如開發時改了 hook
-  邏輯、重新跑 `build-plugin.sh`）：對已經在跑的 session 可能立即生效，
-  但**這件事本身未經量測**，不要當作保證。
-
-接上完成不會、也不需要叫你重開 `AgentAura.app` 這個 App 本身。
-
-## 找不到選單列圖示？
-
-AgentAura 的圖示是一顆小小的 LED 燈點，不是有圖案的 icon。裝好之後如果選單列上看不到：
-
-1. **先確認它真的在跑**：`pgrep -fl AgentAura.app`。有輸出就代表 App 正常，只是圖示看不見。
-2. **按住 Command 鍵拖曳**選單列上的其他圖示，把空間挪出來，圖示就會出現。
-3. 有瀏海的 MacBook（14"／16" Pro）特別容易遇到——選單列項目一多，新加入的圖示會被排到
-   瀏海後面，完全看不到也點不到。
-
-**已知情況（2026-09-14 實測）**：跑過「完整移除」之後再重裝，圖示的位置偏好
-（`NSStatusItem Preferred Position`）也會一併被清掉——那是刻意的，完整移除就該不留東西——
-所以 macOS 會重新決定位置，有可能就放到瀏海後面。這時照上面第 2 步拖一下即可。
+不熟悉這些名詞的話，App 裡按「說明」會開一份離線的白話文件，涵蓋燈號意思、hook 是什麼、常見問題。
 
 ## 什麼時候生效
 
@@ -110,34 +93,23 @@ AgentAura 的圖示是一顆小小的 LED 燈點，不是有圖案的 icon。裝
 > 對未知 event 只給 warning 說「entry ignored at runtime」，但**別人的 runtime 是直接
 > 拒絕整份檔案**。新增 hook event 時，這個寬容度差異要納入考量。
 
-## 從別人給的 zip 安裝（ad-hoc 簽章）
+## 別人直接給你一個 zip
 
-目前沒有正式簽章與公證的版本，所以第一次開啟**一定**會被 Gatekeeper 擋。那是預期行為，
-不是檔案壞掉。
+跟下載安裝檔一樣：解壓、把 App 拖進「應用程式」，再照上面「第一次開啟」那四步走。
+差別只有一個：**zip 沒有安裝視窗，所以沒有任何東西會事先警告你那個對話框**——
+而那正是最關鍵的部分。
 
-1. 解壓後把 `AgentAura.app` 拖進「應用程式」。
-2. 雙擊，會跳出 **「Apple 無法驗證『AgentAura.app』沒有惡意軟體」**。
-   **按「完成」，不要按「移到垃圾桶」。**
-3. 打開 **系統設定 → 隱私權與安全性**，往下捲到 **安全性** 區塊，
-   會看到「已封鎖 AgentAura.app 以保護你的 Mac」與 **「強制打開」** 按鈕。
-   按它，用 Touch ID 或密碼驗證。
-4. 回去再開一次 app。
-5. 面板裡按「接上」，然後**開一個新的 Claude Code session**。
+<details>
+<summary>授權之後 hook 能正常跑嗎？能。</summary>
 
-> **⚠️ macOS 15 Sequoia 起，「右鍵 →打開」這個做法已經沒有了。**
-> 舊文章教的那招在新系統上不存在——新版對話框只有「移到垃圾桶」與「完成」兩個按鈕，
-> 而且**最顯眼的粉紅色按鈕是「移到垃圾桶」**。2026-09-15 在 macOS 26.6.2 上實機踩到：
-> 照舊行為寫的說明會讓人卡死在第一步，甚至直接把 app 丟掉。
+2026-09-15 實測：解壓後那顆 `aura-hook` 執行檔會繼承 quarantine 屬性，此時直接執行會被
+**SIGKILL（exit 137）**、產不出狀態檔，而 `access(X_OK)` 照樣回報「可執行」——
+所以驗收一律看產物、不看權限位元。
 
-**為什麼會這樣**：這份 app 只有 ad-hoc 簽章，沒有 Apple Developer ID、沒有公證。
-要讓使用者「下載解壓就能開、完全不跳警告」，需要 Apple Developer Program（年費 99 美元）
-做 Developer ID 簽章與公證。
-
-**授權之後 hook 能正常跑嗎？能。** 2026-09-15 實測：解壓後那顆 `aura-hook` 執行檔會繼承
-quarantine 屬性，此時直接執行會被 **SIGKILL（exit 137）**、產不出狀態檔，
-而 `access(X_OK)` 照樣回報「可執行」——所以驗收一律看產物、不看權限位元。
 使用者授權 app 之後，那顆 hook **仍然帶著 quarantine 屬性**，但執行正常（exit 0、狀態檔產出）：
 系統認的是使用者對這個 app 的授權，不是逐檔的標記。
+
+</details>
 
 ## 開發者路徑
 

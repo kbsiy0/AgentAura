@@ -94,56 +94,58 @@ AgentAura 在選單列放一顆燈，代表你全部的 session。點開它會�
 
 ## 安裝
 
-一行指令，大約五秒。它會下載已發布的建置、比對公布的 checksum、裝進「應用程式」並打開。
+### 不用開終端機
+
+[**下載 AgentAura.dmg**](https://github.com/kbsiy0/AgentAura/releases/latest/download/AgentAura.dmg) · 1.4 MB
+
+1. 打開下載回來的檔案。
+2. 把 **AgentAura** 拖到 **應用程式** 資料夾。
+3. 從「應用程式」裡打開它。**第一次開啟時，macOS 會說無法驗證這個 App。**
+   請按**「完成」**，**不要**按**「移到垃圾桶」**。然後打開
+   **系統設定 ▸ 隱私權與安全性**，往下捲，按**「強制打開」**。這只會發生一次。
+4. 在 App 裡按**接上**，然後開一個**新的** Claude Code session。
+
+第 3 步的存在，是因為這個 App 沒有經過 Apple 公證（那需要付費的開發者帳號）。
+它不代表有什麼東西壞掉。同樣這段警告也畫在安裝視窗的背景裡，
+讓你在遇到那個對話框之前就先知道——**因為它最顯眼的按鈕是「移到垃圾桶」**。
+
+<details>
+<summary>改用終端機安裝</summary>
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/install.sh | bash
 ```
 
-把腳本接進 shell 等於執行你沒讀過的程式碼。它大約 170 行，可以[先讀](scripts/install.sh)。
-裡面有兩件事值得先知道，腳本自己的輸出也會講：
+大約五秒，而且不會跳安全性提示：腳本會比對公布的 SHA-256，然後自己清掉隔離標記。
+這是一個真實的取捨——你選擇相信 checksum 與這個 repo，而不是 Gatekeeper。
+它大約 170 行，可以[先讀](scripts/install.sh)。
 
-- 它會**清掉下載回來的 App 的隔離標記**。這正是它只需要一步、而不必跑一趟系統設定的原因
-  ——同時也是一個真實的取捨：你選擇相信 checksum 與這支腳本，而不是 Gatekeeper。
-- 如果沒有已發布的建置、或下載失敗，它會**改成從原始碼建**（約 30 秒，需要 Swift 工具鏈）。
-  加 `--from-source` 可以強制走這條。
-
-需要 **macOS 13 以上**與 **Claude Code**。工具鏈只有在從原始碼建時才需要。
-
-<details>
-<summary>想先 clone 再跑？</summary>
-
-```bash
-git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura && ./scripts/install.sh
-```
-
-同一支腳本、同樣結果，只是讓「讀過再跑」比較難被跳過。
+沒有已發布的建置、或下載失敗時，它會改成從原始碼建（約 30 秒，需要 Swift 工具鏈）。
+加 `--from-source` 可以強制走那條。
 
 </details>
 
-然後在 App 裡做兩件事：
-
-1. 按**接上**。
-2. 開一個**新的** Claude Code session。
-
-> **是下一個 session，不是你現在開著的那個。** Claude Code 在 session 啟動時載入 plugin，
-> 已經在跑的視窗不會中途載入。App 會照實這樣說，不會假裝立刻生效。
-
 <details>
-<summary>想自己一步一步做？</summary>
+<summary>自己建</summary>
 
 ```bash
+git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
 ./scripts/build-plugin.sh      # 建置 aura-hook 執行檔
 ./scripts/build-app.sh         # 產出 build/AgentAura.app
 ```
 
 然後把 `build/AgentAura.app` 拖進「應用程式」再打開。不要留在 `build/` 或「下載項目」——
-那些位置的 App 隨時會被搬走或清掉，掛載就斷了。
+那些位置的 App 隨時會被搬走或清掉，掛載就斷了。自己建出來的 App 不會被 Gatekeeper 擋。
 
 </details>
 
+需要 **macOS 13 以上**與 **Claude Code**。
+
+> **是下一個 session，不是你現在開著的那個。** Claude Code 在 session 啟動時載入 plugin，
+> 已經在跑的視窗不會中途載入。App 會照實這樣說，不會假裝立刻生效。
+
 要移除：Options →「移除掛載」解除掛載，或 Options →「完整移除 AgentAura」讓機器回到
-安裝前的狀態。`./scripts/verify-uninstall.sh` 會逐項驗證後面那個宣稱。
+安裝前的狀態。
 
 完整步驟、移除細節與疑難排解：[`docs/INSTALL.zh-TW.md`](docs/INSTALL.zh-TW.md)。
 
