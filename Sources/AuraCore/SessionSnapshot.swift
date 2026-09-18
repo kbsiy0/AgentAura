@@ -6,7 +6,7 @@ import Foundation
 /// 1. 每次事件**必定覆寫**的：`hookEventName`、`writtenAt`
 ///    （每個 payload 都一定帶這兩個值，所以沒有 carry-forward 的問題）
 /// 1b. **carry-forward** 的：`cwd`、`permissionMode`、`effort`、`model`、`source`、
-///    `reason`、`notificationType`、`toolDescription` … 這些用 `?? existing`
+///    `reason`、`notificationType`、`toolDescription`、`agent` … 這些用 `?? existing`
 ///    或 `if let`，不帶該欄位的事件會**保留舊值**。別改成直接賦值 ——
 ///    `fieldsCarryForward` 測試釘死的就是這件事。
 /// 2. **分槽**欄位（`main*` / `sub*`）—— subagent 不得覆蓋主 agent，見 §2.5
@@ -26,6 +26,15 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
     public var model: String?
     public var source: String?
     public var reason: String?
+
+    /// 產生這個 session 的來源 agent（`Agent.storedRawValue`；spec §3／D-a／D-c）。
+    /// `.claude` 回 `nil`，故 Claude 側狀態檔位元組與加上這個欄位之前**完全相同**
+    /// （CX9）。**必須是 Optional**（不是給預設空字串）——同 `outstandingSubagents`
+    /// 的既有理由：synthesized `Decodable` 對 Optional 屬性用 `decodeIfPresent`，
+    /// 缺這個 key 的舊版狀態檔才解得開；換成非 Optional 預設值不會改變這件事，
+    /// synthesis 仍會要求 key 存在，缺了就整包解碼失敗。型別化的解析（含未知值
+    /// 落回 `.claude`）只發生在 `Agent(stored:)` 這個邊界，這裡忠實保留磁碟上的原字串。
+    public var agent: String?
 
     public var mainActivity: Activity = .idle
     public var mainTool: String?
@@ -80,7 +89,7 @@ public struct SessionSnapshot: Codable, Sendable, Equatable {
         case pidStartedAt    = "pid_started_at"
         case cwd
         case permissionMode  = "permission_mode"
-        case effort, model, source, reason
+        case effort, model, source, reason, agent
         case mainActivity    = "main_activity"
         case mainTool        = "main_tool"
         case subActivity     = "sub_activity"

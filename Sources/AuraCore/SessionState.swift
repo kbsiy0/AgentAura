@@ -12,6 +12,15 @@ public struct SessionState: Sendable, Equatable, Identifiable {
     /// 補回時只補了 `HookPayload` 與 `SessionSnapshot`，忘了輸出端 —— 值存得到卻
     /// 傳不出去，面板拿不到。修一條資料流要走完 payload → 檔案 → state → UI 四段。
     public let model: String?
+    /// 產生這個 session 的來源 agent（codex-support §4.1／§3）。`SessionReducer` 從
+    /// `Agent(stored: snapshot.agent)` 解析，未知值／nil 落回 `.claude`（D-b）。
+    ///
+    /// **帶預設值 `.claude`**（同本檔 `toolDescription`／`notificationMessage` 的既有理由）：
+    /// 這個 init 有 21 個既有呼叫點散在 `Tests/AgentAuraAppTests` 的視覺／像素測試裡
+    /// （App 層，多半不歸這個 change 管），那些測試建構 `SessionState` 只是為了量版面，
+    /// 不關心 agent 是誰；生產路徑（`SessionReducer.state(from:liveness:)`）才是真正
+    /// 需要明確傳 `agent:` 的地方，見該檔案。
+    public let agent: Agent
     public let activity: Activity
     public let mainActivity: Activity
     public let subActivity: Activity?
@@ -40,6 +49,7 @@ public struct SessionState: Sendable, Equatable, Identifiable {
     // 跨模組（未來的 UI target）建構不到值。`IconState` 同理自帶 public init。
     public init(id: String, projectName: String,
                 permissionMode: String?, effort: String?, model: String?,
+                agent: Agent = .claude,
                 activity: Activity, mainActivity: Activity, subActivity: Activity?,
                 currentTool: String?, subagentTool: String?, toolDurationMs: Int?,
                 turnStartedAt: Date?, subagents: [String: Int], toolFailures: Int,
@@ -51,6 +61,7 @@ public struct SessionState: Sendable, Equatable, Identifiable {
         self.permissionMode = permissionMode
         self.effort = effort
         self.model = model
+        self.agent = agent
         self.activity = activity
         self.mainActivity = mainActivity
         self.subActivity = subActivity

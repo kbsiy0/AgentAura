@@ -17,7 +17,7 @@ struct MergeRulesTests {
     }
 
     func merge(_ p: HookPayload, into s: SessionSnapshot?, at t: Date? = nil) -> SessionSnapshot {
-        MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111, now: t ?? t0)
+        MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111, agent: .claude, now: t ?? t0)
     }
 
     // ---- 核心：subagent 不得蓋掉主 agent 的 waiting ----

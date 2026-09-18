@@ -3,21 +3,19 @@ import Foundation
 @testable import AuraCore
 @testable import AuraHookFile
 
-/// codex-support T01 骨架（CX13，**T05 解除**）：`round4-codex.ndjson` 的 18 筆逐筆解析，
+/// codex-support T01 骨架（CX13，**T05 已解除**）：`round4-codex.ndjson` 的 18 筆逐筆解析，
 /// 期望值來自 `docs/2026-09-18-codex-hook-probe.md` 的「每種事件的欄位」表（F2，該文件
 /// 第 36–45 行），**不是從 `HookPayload`／`EventMapping` 現有行為反推**——round4 的
 /// 6 種事件全部是既有 `handledEvents` 的既有映射（D-e：Codex 只在 `Interrupt` 上加新
 /// 東西），所以下面 `probeTable` 的期望值就是 `Sources/AuraCore/EventMapping.swift`
 /// 今天已經寫死的那六條規則本身，是讀原始碼寫下來的，不是呼叫它再拿結果比對自己。
 ///
-/// **型別依賴（RED 理由＝編譯依賴，不是斷言失敗）**：`MergeRules.merge(...)` 要到 T05
-/// 才加上不給預設值的 `agent:` 參數（spec §4.1「5a」），下面的真斷言用的是**新**簽章。
-/// 在那之前，真斷言關在 `#if AURA_CODEX_PENDING_T05` 區塊裡（Swift 對不啟用的 `#if`
-/// 分支不做型別檢查，所以引用尚不存在的簽章不會讓整個 test target 編不過）；
-/// `#else` 分支用 `Issue.record` 頂著，讓這條測試此刻確實是 RED。
-///
-/// **T05 解除方式**：把本檔測試函式裡的 `#if AURA_CODEX_PENDING_T05` / `#else` 到
-/// `Issue.record(...)` / `#endif` 這三行拿掉，只留中間原本在 `#if` 分支裡的真斷言。
+/// **歷史記錄（T01 → T05）**：`MergeRules.merge(...)` 原本沒有 `agent:` 參數，下面
+/// 「agent 貫穿之後一律 codex」那段真斷言在 T01 落地時關在一個編譯期旗標的條件區塊裡
+/// （Swift 對不啟用的分支不做型別檢查，所以引用尚不存在的簽章不會讓整個 test target
+/// 編不過），另一個分支用 `Issue.record` 頂著讓測試當時確實是 RED。T05 落地
+/// `MergeRules.merge(agent:)` 之後已拿掉那組條件編譯與 `Issue.record`，只留原本
+/// 條件為真那一側的真斷言（T12 的全 repo 殘留掃描負責確認沒有旗標殘留）。
 @Suite("round4-codex.ndjson 覆蓋（CX13）")
 struct Round4FixtureTests {
 
@@ -110,7 +108,6 @@ struct Round4FixtureTests {
                     "探針欄位表提到欄位 \"\(field)\"，但 round4 fixture 裡一次都沒出現過")
         }
 
-        #if AURA_CODEX_PENDING_T05
         for data in payloads {
             let p = try #require(HookPayload(data: data))
             let snapshot = MergeRules.merge(p, into: nil, pid: nil, pidStartedAt: nil,
@@ -118,12 +115,5 @@ struct Round4FixtureTests {
             #expect(snapshot.agent == Agent.codex.storedRawValue,
                     "--agent codex 貫穿之後，狀態檔的 agent 欄位必須是 \"codex\"，實際 \(String(describing: snapshot.agent))")
         }
-        #else
-        Issue.record("""
-            待 T05：MergeRules.merge(...) 尚未加上 agent: 參數（spec §4.1「5a」）——\
-            agent 貫穿 into SessionSnapshot 那一半無法驗證。T05 落地後把本測試函式裡的 \
-            #if AURA_CODEX_PENDING_T05 / #else / #endif 三行拿掉即可生效。
-            """)
-        #endif
     }
 }

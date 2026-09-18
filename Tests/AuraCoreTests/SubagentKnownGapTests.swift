@@ -37,7 +37,7 @@ struct SubagentKnownGapTests {
 
     static func merge(_ p: HookPayload, into s: SessionSnapshot?, after seconds: TimeInterval = 0) -> SessionSnapshot {
         MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111,
-                         now: t0.addingTimeInterval(seconds))
+                         agent: .claude, now: t0.addingTimeInterval(seconds))
     }
 
     // MARK: - 平台實測契約（不是落差，修的時候不得放寬）

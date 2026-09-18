@@ -42,6 +42,31 @@ struct EndToEndWiredGateTests {
         p.waitUntilExit()
     }
 
+    struct SpawnResult { let exitCode: Int32; let stdout: String; let stderr: String }
+
+    /// 真的 spawn aura-hook，額外帶 argv（CX8／CX10 用，測 `--agent` 解析）。
+    /// 經過 SpawnGate（T10b）序列化。
+    static func fireHookWithArgv(_ payload: String, root: URL, argv: [String]) async throws -> SpawnResult {
+        try await SpawnGate.shared.run {
+            let p = Process()
+            p.executableURL = try AuraHookCLITests.binaryURL()
+            p.arguments = argv
+            p.environment = ProcessInfo.processInfo.environment.merging(
+                ["AGENTAURA_ROOT": root.path]) { _, new in new }
+            let inPipe = Pipe(), outPipe = Pipe(), errPipe = Pipe()
+            p.standardInput = inPipe; p.standardOutput = outPipe; p.standardError = errPipe
+            try p.run()
+            inPipe.fileHandleForWriting.write(Data(payload.utf8))
+            try inPipe.fileHandleForWriting.close()
+            let out = outPipe.fileHandleForReading.readDataToEndOfFile()
+            let err = errPipe.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            return SpawnResult(exitCode: p.terminationStatus,
+                               stdout: String(decoding: out, as: UTF8.self),
+                               stderr: String(decoding: err, as: UTF8.self))
+        }
+    }
+
     /// 等到 iconState 滿足條件或逾時。
     func wait(for graph: PipelineGraph, until predicate: @escaping (IconState) -> Bool,
               timeout: TimeInterval = 5) async -> IconState {
@@ -145,5 +170,43 @@ struct EndToEndWiredGateTests {
         }
         let final = await wait(for: graph, until: { $0.counts.values.reduce(0,+) >= 50 }, timeout: 20)
         #expect(final.counts.values.reduce(0, +) >= 50)
+    }
+
+    /// CX8：`AgentArgvFixtures` 的 8 格表真的 spawn `aura-hook`，逐格斷言
+    /// exit 0、stdout 空、stderr 空——與 CX7（`AgentArgumentTests`，純函式解析）
+    /// 共用同一張表，這裡驗的是真正的行程行為，不是解析函式本身。
+    @Test("--agent 的 8 格 argv 表，真 spawn 全部靜默（CX8）")
+    func auraHookStaysSilentForEveryAgentArgument() async throws {
+        let root = try makeRoot()
+        #expect(!AgentArgvFixtures.cases.isEmpty, "CX8 的定義域不能空跑")
+        for testCase in AgentArgvFixtures.cases {
+            let payload = #"{"hook_event_name":"PreToolUse","session_id":"cx8-\#(UUID().uuidString)","tool_name":"Bash"}"#
+            let result = try await Self.fireHookWithArgv(payload, root: root, argv: testCase.argv)
+            #expect(result.exitCode == 0, "\(testCase.name)：exit code 應為 0，實際 \(result.exitCode)")
+            #expect(result.stdout.isEmpty, "\(testCase.name)：stdout 應為空，實際 \(result.stdout.prefix(120))")
+            #expect(result.stderr.isEmpty, "\(testCase.name)：stderr 應為空，實際 \(result.stderr.prefix(120))")
+        }
+    }
+
+    /// CX10：真的用 `--agent codex` spawn `aura-hook`，狀態檔的位元組必須含
+    /// `"agent":"codex"`——這是 `main.swift` 有沒有真的把解析出來的 agent 傳進
+    /// `MergeRules.merge` 的唯一 wired gate（純函式層的 CX9／CX11／CX12 在
+    /// `AgentThreadingTests`，都不 spawn，測不到 `main.swift` 忘了接線這件事）。
+    @Test("--agent codex 真 spawn → 狀態檔含 agent:codex（CX10）")
+    func codexStateFileCarriesAgent() async throws {
+        let root = try makeRoot()
+        let sessionID = "cx10-\(UUID().uuidString)"
+        let payload = #"{"hook_event_name":"PreToolUse","session_id":"\#(sessionID)","tool_name":"Bash"}"#
+        let result = try await Self.fireHookWithArgv(payload, root: root, argv: ["--agent", "codex"])
+        #expect(result.exitCode == 0)
+        #expect(result.stdout.isEmpty && result.stderr.isEmpty)
+
+        let url = try SnapshotIO.url(for: sessionID, root: root)
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        #expect(raw.contains(#""agent":"codex""#),
+                "狀態檔位元組必須含 agent:codex，實際：\(raw)")
+
+        let s = try #require(SnapshotIO.read(sessionID: sessionID, root: root))
+        #expect(s.agent == "codex")
     }
 }

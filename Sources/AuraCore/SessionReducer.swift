@@ -10,6 +10,7 @@ public enum SessionReducer {
             permissionMode: s.permissionMode,
             effort: s.effort,
             model: s.model,
+            agent: Agent(stored: s.agent),
             activity: s.effectiveActivity,
             mainActivity: s.mainActivity,
             subActivity: s.subActivity,

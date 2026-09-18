@@ -7,10 +7,13 @@ public enum MergeRules {
     static let storedMessageLimit = 500
 
 
+    /// `agent` **不給預設值**（spec §4.1「5a」）：呼叫端必須明確表態這筆事件來自哪個
+    /// agent，不能靜默落回 `.claude`——那會讓 Codex 的事件被誤標成 Claude 的。
     public static func merge(_ p: HookPayload,
                              into existing: SessionSnapshot?,
                              pid: Int32?,
                              pidStartedAt: Int64?,
+                             agent: Agent,
                              now: Date) -> SessionSnapshot {
         var s = existing ?? SessionSnapshot(sessionID: p.sessionID)
 
@@ -18,6 +21,10 @@ public enum MergeRules {
         s.writtenAt     = now
         s.pid           = pid ?? s.pid
         s.pidStartedAt  = pidStartedAt ?? s.pidStartedAt
+        // carry-forward，比照 cwd／model：`.claude` 的 storedRawValue 是 nil，
+        // 所以已經標成 codex 的 session 不會被後續不帶 agent 資訊的呼叫洗回 claude；
+        // 新 session 起始值本來就是 nil，等同 claude（CX9）。
+        s.agent          = agent.storedRawValue ?? s.agent
         s.cwd            = p.cwd ?? s.cwd
         s.permissionMode = p.permissionMode ?? s.permissionMode
         s.effort         = p.effortLevel ?? s.effort
