@@ -12,7 +12,12 @@ enum AgentArgvFixtures {
         let expectedRawValue: String
     }
 
-    /// 七格，由左至右第一個匹配者勝、大小寫敏感、未知一律 `.claude`（D-b／D-d）。
+    /// 八格，由左至右**第一個出現者勝**（不是「第一個有效者勝」）、大小寫敏感、
+    /// 未知一律 `.claude`（D-b／D-d）。第 8 格（T02 review）是「第一個出現者勝」與
+    /// 「第一個有效者勝」這兩種語意唯一分得出來的輸入：前七格裡不管哪一種語意都給
+    /// 同一個答案，換一個替代實作（挑第一個有效值）跑一樣會全綠。裁決理由：
+    /// 「第一個有效者勝」等於讓使用者手寫錯的第一個旗標被後面悄悄蓋過，
+    /// 違反 D-b 的保守失敗原則（寧可少一個標籤、不可把 Codex 標成 Claude 或反過來）。
     static let cases: [Case] = [
         Case(name: "空 argv", argv: [], expectedRawValue: "claude"),
         Case(name: "--agent 缺值", argv: ["--agent"], expectedRawValue: "claude"),
@@ -23,5 +28,7 @@ enum AgentArgvFixtures {
              expectedRawValue: "codex"),
         Case(name: "codex 在前、後面一個缺值的 --agent",
              argv: ["--agent", "codex", "--agent"], expectedRawValue: "codex"),
+        Case(name: "第一個 --agent 是未知值、後面還有一個有效的（釘住『第一個出現者勝』，不是『第一個有效者勝』）",
+             argv: ["--agent", "gemini", "--agent", "codex"], expectedRawValue: "claude"),
     ]
 }

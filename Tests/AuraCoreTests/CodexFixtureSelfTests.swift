@@ -135,9 +135,9 @@ struct CodexFixtureSelfTests {
 
     // ---- AgentArgvFixtures ----
 
-    @Test("argv 七格表：每格的 argv 都不是空表達式以外的東西——表本身結構完整")
-    func argvTableHasSevenDistinctCases() {
-        #expect(AgentArgvFixtures.cases.count == 7)
+    @Test("argv 八格表：每格的 argv 都不是空表達式以外的東西——表本身結構完整")
+    func argvTableHasEightDistinctCases() {
+        #expect(AgentArgvFixtures.cases.count == 8)
         let expectedValues = Set(AgentArgvFixtures.cases.map(\.expectedRawValue))
         #expect(expectedValues == ["claude", "codex"], "期望值只能是 claude／codex 兩種")
     }
