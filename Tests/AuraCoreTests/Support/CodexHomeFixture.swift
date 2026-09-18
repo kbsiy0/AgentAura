@@ -85,8 +85,11 @@ enum CodexHomeFixture {
         case .hooksJSONIsGarbageOver64KiB:
             try fm.createDirectory(at: codexHome, withIntermediateDirectories: true)
             try seedKnownConfigToml(in: codexHome)
-            // 5 MB，遠超過 D-q 的 64 KiB 上限；內容隨機，證明「不是我們認得的形狀」。
-            let garbage = Data((0..<(5 * 1024 * 1024)).map { _ in UInt8.random(in: 0...255) })
+            // T01b（review m4）：固定 byte 0xEE，128 KiB——遠超過 D-q 的 64 KiB 上限，
+            // 足以驗證「> 64 KiB 就不讀」；不必逐 byte 隨機（原本 5 MB 隨機讓自我測試
+            // 多花約 3.6 秒，且 T06 之後會反覆用到這個形狀）。0xEE 不是合法 JSON 開頭，
+            // 證明這不是我們認得的形狀，跟隨不隨機無關。
+            let garbage = Data(repeating: 0xEE, count: 128 * 1024)
             try garbage.write(to: codexHome.appendingPathComponent("hooks.json"))
 
         case .codexHomeIsExternalSymlink:

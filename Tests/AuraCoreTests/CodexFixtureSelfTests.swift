@@ -35,7 +35,11 @@ struct CodexFixtureSelfTests {
                         "\(shape)：codexHome 應是 symlink")
                 let target = try #require(layout.externalCodexHomeTarget, "\(shape) 應有 externalCodexHomeTarget")
                 #expect(FileManager.default.fileExists(atPath: target.appendingPathComponent("config.toml").path))
-            default:
+            // 以下六種都是「codexHome 本身是真目錄」——**逐一列出，不用 default:**
+            // （T01b review m3／D-r 的禁令：`default` 是看起來很無害的防禦性寫法，
+            // 卻能讓整條推導鏈靜默失效；`Shape` 未來新增 case 時，這裡必須跟著紅）。
+            case .codexHomeIsEmptyDirectory, .hooksJSONIsRegularFile, .hooksJSONIsDirectory,
+                 .hooksJSONIsSymlinkToConfigToml, .hooksJSONIsDanglingSymlink, .hooksJSONIsGarbageOver64KiB:
                 #expect(codexHomeExists && (st.st_mode & S_IFMT) == S_IFDIR,
                         "\(shape)：codexHome 應是目錄")
             }
@@ -152,6 +156,26 @@ struct CodexFixtureSelfTests {
             #expect(matching.hookBinaryPath.contains(c),
                     "字元 \(c) 的 case 應該在 hookBinaryPath 裡真的出現這個字元")
         }
+    }
+
+    @Test("路徑 fixture：expectedRejection 逐格與 translocated／inDownloads／字元對得上（T01b M1）")
+    func pathFixtureExpectedRejectionsAreConsistent() throws {
+        for c in CodexPathFixtures.cases {
+            if c.translocated || c.inDownloads {
+                #expect(c.expectedRejection == "mustMoveToApplications",
+                        "\(c.name)：translocated／inDownloads 的格期望值應為 mustMoveToApplications")
+            } else if c.name.contains("負對照") {
+                #expect(c.expectedRejection == nil, "\(c.name)：負對照格期望值應為 nil")
+            } else {
+                let ch = try #require(CodexPathFixtures.unsupportedCharacterSamples.first { c.hookBinaryPath.contains($0) })
+                #expect(c.expectedRejection == "unsupportedCharacter(\(ch))",
+                        "\(c.name)：期望值應為 unsupportedCharacter(\(ch))，實際 \(c.expectedRejection ?? "nil")")
+            }
+        }
+        // translocatedAndContainsSpace 是優先序的資料化表達：即使路徑含空白，期望值仍是
+        // mustMoveToApplications，不是 unsupportedCharacter(" ")。
+        let combo = try #require(CodexPathFixtures.cases.first { $0.name.contains("驗優先序") })
+        #expect(combo.expectedRejection == "mustMoveToApplications")
     }
 
 }

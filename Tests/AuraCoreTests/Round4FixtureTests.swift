@@ -21,15 +21,34 @@ import Foundation
 @Suite("round4-codex.ndjson 覆蓋（CX13）")
 struct Round4FixtureTests {
 
-    struct ProbeRow { let event: String; let expectedEffect: EventEffect }
+    /// `fields`（T01b review M3）：逐字抄 `docs/2026-09-18-codex-hook-probe.md` 第 36–45
+    /// 行「每種事件的欄位」表，把文件裡的「上述」展開成具體欄位名——不是從
+    /// `HookPayload` 反推。這是**跨事件聯集**用的欄位集合（見下方反向斷言），不是
+    /// 「這個事件的樣本恰好只有這些鍵」的窮盡宣告，所以某一列的欄位在別的事件才實際
+    /// 出現（例如 `source` 只出現在這次 round4 捕捉到的 `SessionStart` 樣本裡，
+    /// `UserPromptSubmit` 沒有）不影響這條防線要抓的東西。
+    struct ProbeRow { let event: String; let expectedEffect: EventEffect; let fields: [String] }
 
     static let probeTable: [ProbeRow] = [
-        ProbeRow(event: "SessionStart", expectedEffect: .setActivity(.idle)),
-        ProbeRow(event: "UserPromptSubmit", expectedEffect: .setActivity(.working)),
-        ProbeRow(event: "PreToolUse", expectedEffect: .setActivity(.working)),
-        ProbeRow(event: "PostToolUse", expectedEffect: .setActivity(.working)),
-        ProbeRow(event: "Stop", expectedEffect: .setActivity(.done)),
-        ProbeRow(event: "SessionEnd", expectedEffect: .sessionEnded),
+        ProbeRow(event: "SessionStart", expectedEffect: .setActivity(.idle),
+                 fields: ["session_id", "cwd", "hook_event_name", "model", "permission_mode",
+                          "source", "transcript_path"]),
+        ProbeRow(event: "UserPromptSubmit", expectedEffect: .setActivity(.working),
+                 fields: ["session_id", "cwd", "hook_event_name", "model", "permission_mode",
+                          "source", "transcript_path", "turn_id", "prompt"]),
+        ProbeRow(event: "PreToolUse", expectedEffect: .setActivity(.working),
+                 fields: ["session_id", "cwd", "hook_event_name", "model", "permission_mode",
+                          "source", "transcript_path", "turn_id", "prompt",
+                          "tool_name", "tool_input", "tool_use_id"]),
+        ProbeRow(event: "PostToolUse", expectedEffect: .setActivity(.working),
+                 fields: ["session_id", "cwd", "hook_event_name", "model", "permission_mode",
+                          "source", "transcript_path", "turn_id", "prompt",
+                          "tool_name", "tool_input", "tool_use_id", "tool_response"]),
+        ProbeRow(event: "Stop", expectedEffect: .setActivity(.done),
+                 fields: ["session_id", "cwd", "hook_event_name", "model", "permission_mode",
+                          "turn_id", "transcript_path", "last_assistant_message", "stop_hook_active"]),
+        ProbeRow(event: "SessionEnd", expectedEffect: .sessionEnded,
+                 fields: ["session_id", "cwd", "hook_event_name", "transcript_path", "reason"]),
     ]
 
     /// 讀 `round4-codex.ndjson`，把每行的 `_payload` 子物件重新序列化成獨立的
@@ -51,7 +70,7 @@ struct Round4FixtureTests {
             }
     }
 
-    @Test("18 筆逐筆解析：effect 對照探針欄位表；agent 貫穿之後一律 codex；反向涵蓋六個事件")
+    @Test("18 筆逐筆解析：effect 對照探針欄位表；agent 貫穿之後一律 codex；反向涵蓋六個事件與每個欄位")
     func round4FixtureParsesAndMatchesProbeTable() throws {
         // 前提檢查（不依賴 T05，先確認 fixture 本身在磁碟上真的是 18 筆、能被
         // 既有的 HookPayload 解析——這半不用等 T05，先確認地基是穩的）。
@@ -71,6 +90,24 @@ struct Round4FixtureTests {
         for row in Self.probeTable {
             #expect(seenEvents.contains(row.event),
                     "探針表列出 \(row.event)，但 round4 fixture 裡一次都沒出現")
+        }
+
+        // 反向斷言升級到**欄位層**（T01b review M3）：探針表提到的每個欄位，至少要在
+        // fixture 的某一筆樣本裡出現過一次——這才是防「有人把 fixture 每一筆的某個
+        // 欄位都拿掉，只留下事件本身」的那道防線。事件層（上面 seenEvents）看不到
+        // 這種弱化：拿掉每一筆的 model 欄位，事件仍然都在、事件層全綠，但那正好會讓
+        // `FixtureCodeAnchorTests.everyFixtureModelIsMapped`（跨層錨點 gate）從紅
+        // 變綠——用縮小證據來消滅一條紅燈，是這個專案最該防的那種弱化，只有欄位層
+        // 看得到它。
+        var seenFields: Set<String> = []
+        for data in payloads {
+            guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            seenFields.formUnion(obj.keys)
+        }
+        let allDocumentedFields = Set(Self.probeTable.flatMap(\.fields))
+        for field in allDocumentedFields.sorted() {
+            #expect(seenFields.contains(field),
+                    "探針欄位表提到欄位 \"\(field)\"，但 round4 fixture 裡一次都沒出現過")
         }
 
         #if AURA_CODEX_PENDING_T05
