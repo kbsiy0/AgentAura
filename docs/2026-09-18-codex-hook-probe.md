@@ -103,7 +103,12 @@ Codex 沒有 hook 文件；npm 套件只有二進位。所以先讀二進位字�
 spec review 指出 `aura-hook` 的判活靠 `getppid()`（父行程死了整列就顯示已結束），而 Codex 側的父行程沒量過。
 回頭查探針原始紀錄：每筆都記了探針腳本自己的 `$PPID`。**五個 session、共 24 筆事件，每個 session 內的所有事件
 （`SessionStart` 到 `SessionEnd`，跨 4–6 筆、數秒到數十秒）`$PPID` 完全相同**；不同 session 則不同。
-→ 呼叫 hook 的是一個**與 session 同壽命的長命行程**，不是每個事件開一次的 shell。`getppid()` 判活對 Codex 成立。
+→ 呼叫 hook 的**不是每個事件開一次的短命 shell**，而是一個至少活過「第一個事件到最後一個事件」的行程。
+`getppid()` 判活的前提（pid 在 session 期間穩定）對 Codex 成立。
 
-**未辨識**：那個 pid 是 `codex` 原生二進位還是 npm 的 node 啟動器（探針沒記 `ps -o comm=`）。
-兩者對判活的結論相同（都隨 session 結束），互動探針工具包已補上 `comm` 的記錄以便釐清。
+**範圍限定**：這五個 session **全部跑在 `codex exec`**。互動 TUI 的行程結構未量——TUI 有可能由一個常駐行程 fork 出 session，
+那樣的話父行程會跨 session 存活。實機驗收時要順帶記 `ps -o ppid=,comm=`。
+
+**未觀測**：(a) `SessionEnd` **之後**那個 pid 是否結束（探針沒有在 session 結束後再查）——「隨 session 結束」是推論，不是事實；
+實務後果有限，因為 `SessionEnd` 會設 `terminated`，判活的第一個 guard 就是它。(b) 那個 pid 是 `codex` 原生二進位還是 npm 的
+node 啟動器（探針沒記 `ps -o comm=`）。互動探針工具包已補上 `comm` 與祖父行程的記錄以便釐清。
