@@ -74,3 +74,26 @@ Codex 沒有 hook 文件；npm 套件只有二進位。所以先讀二進位字�
 `PermissionRequest` 的 payload 形狀、`Interrupt` 的形狀、`SubagentStart`／`SubagentStop`、
 信任提示的 UX 與持久化位置。互動探針工具包已備好，待有空檔時跑一次。
 **這些在量到之前，spec 只能寫成「待驗」，不能寫成事實。**
+
+## 補充：探針用的 `~/.codex/hooks.json` 逐字形狀（F14）
+
+被 Codex 成功解析並觸發的那份檔案，每個事件的值是下面這個形狀（`matcher` 為空字串、`timeout` 秒；
+最外層是 `hooks` 物件，與 Claude Code 的 `plugin/hooks/hooks.json` 相同）：
+
+```json
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "/abs/path/to/aura-hook --agent codex", "timeout": 5 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**未測**：省略 `matcher` 是否可行、Claude 側用的 `"async": true` Codex 是否接受或拒絕、`timeout` 省略時的預設值。
+產生器一律照上面這個**已驗證**的形狀輸出，不加未測欄位。
