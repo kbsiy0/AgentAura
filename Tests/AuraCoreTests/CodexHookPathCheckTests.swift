@@ -41,12 +41,32 @@ struct CodexHookPathCheckTests {
     @Test("unsupportedCharacters 逐字元推導格")
     func matchesEveryProductionUnsupportedCharacter() {
         #expect(!CodexHookPathCheck.unsupportedCharacters.isEmpty, "定義域不能空跑")
+        // 六個原始字元 ＋ M3 新增的換行、tab——這條從生產常數自動推導出 8 格，
+        // 不必回來手改這條測試；數字本身只是佐證，真正的守衛是下面的逐字元迴圈。
+        #expect(CodexHookPathCheck.unsupportedCharacters.count == 8,
+                "spec-reviewer M3 之後應為 8 個字元（原六個 ＋ 換行、tab）")
         for character in CodexHookPathCheck.unsupportedCharacters {
             let path = "/Applications/Agent\(character)Aura.app/Contents/MacOS/aura-hook"
             let result = CodexHookPathCheck.rejection(
                 translocated: false, inDownloads: false, hookBinaryPath: path)
             #expect(result == .unsupportedCharacter(character),
                     "字元 \(character) 應被判定為 unsupportedCharacter，實際 \(String(describing: result))")
+        }
+    }
+
+    /// spec-reviewer M3（裁決）：原本六個字元擋不住換行與 tab，而兩種解析假設下
+    /// （command 交給 shell，或只是單純用空白切分參數）它們都會出問題，且合法路徑幾乎
+    /// 不會用到——加了零過度拒絕代價。寫死字面（不是從 `unsupportedCharacters` 推導）：
+    /// 這條要能在有人把它們從生產常數移除時紅，而不是隨生產常數一起消失。
+    @Test("換行與 tab 各自被判定為 unsupportedCharacter")
+    func newlineAndTabAreRejected() {
+        let mustReject: [Character] = ["\n", "\t"]
+        for character in mustReject {
+            let path = "/Applications/Agent\(character)Aura.app/Contents/MacOS/aura-hook"
+            let result = CodexHookPathCheck.rejection(
+                translocated: false, inDownloads: false, hookBinaryPath: path)
+            #expect(result == .unsupportedCharacter(character),
+                    "字元 \(character.debugDescription) 應被判定為 unsupportedCharacter，實際 \(String(describing: result))")
         }
     }
 

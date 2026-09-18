@@ -25,7 +25,8 @@ public enum CodexHookPathCheck {
     public enum Rejection: Equatable, Sendable {
         /// App 是 translocated（Gatekeeper 隔離）或跑在 `~/Downloads`——路徑下次啟動就消失。
         case mustMoveToApplications
-        /// 路徑含 shell／JSON 都會出問題的字元；帶的是**第一個**命中的那一個。
+        /// 路徑含已知會出問題的字元（見 `unsupportedCharacters` 的完整說明）；
+        /// 帶的是**第一個**命中的那一個。
         case unsupportedCharacter(Character)
 
         /// 窮盡 switch，**不得有 `default`**——那正是 `RejectionKind` 這個平行型別存在的
@@ -40,7 +41,7 @@ public enum CodexHookPathCheck {
 
         /// 每個 `RejectionKind` 的**全部**代表值。`.unsupportedCharacter` 這一格從
         /// `unsupportedCharacters` 推導、逐字元各給一個代表值，不是單一代表值
-        /// （同 `PanelAction.samples` 的既有理由：單一代表值時「六個字元裡漏了一個」照樣全綠）。
+        /// （同 `PanelAction.samples` 的既有理由：單一代表值時「字元集合裡漏了一個」照樣全綠）。
         /// 窮盡 switch，**不得有 `default`**——理由與 `kind` 逐字相同：新 case 忘了補這裡，
         /// 编譯器擋下來；`default: []` 會讓這條定義域推導鏈靜默失效。
         public static func samples(_ kind: RejectionKind) -> [Rejection] {
@@ -51,10 +52,22 @@ public enum CodexHookPathCheck {
         }
     }
 
-    /// 會讓寫進 hooks.json 的 `command` 字串出問題的字元（spec §4.4）：空白（拆開 shell
-    /// 參數）、`'`／`"`（提前結束引號）、`$`（shell 變數展開）、`` ` ``（shell 指令替換）、
-    /// `\`（跳脫序列）。
-    public static let unsupportedCharacters: Set<Character> = [" ", "'", "\"", "$", "`", "\\"]
+    /// **已知最可能讓寫進 hooks.json 的 `command` 字串出問題、且不會過度拒絕合法路徑的
+    /// 最小集合**（spec-reviewer M3 裁決）——**啟發式，不是完整的 shell 元字元清單**：
+    /// 空白（拆開 shell 參數）、`'`／`"`（提前結束引號）、`$`（shell 變數展開）、
+    /// `` ` ``（shell 指令替換）、`\`（跳脫序列），加上換行、tab（不論 Codex 把 `command`
+    /// 交給 shell 解析、還是只用空白切分參數，這兩者都會出問題；且合法路徑幾乎不會用到，
+    /// 加了零過度拒絕成本）。
+    ///
+    /// **刻意未擋**：`(`／`)`／`;`／`&`／`|`／`>`／`<`／`*`／`?` 等其餘 shell 元字元——
+    /// `(`／`)` 尤其常見於一般人的資料夾命名（「AgentAura (beta)」），擴進來會有明顯的
+    /// 過度拒絕代價；而我們**不知道** Codex 是否真的把 `command` 交給 shell 解析
+    /// （探針從未測過這件事，見 `docs/2026-09-18-codex-hook-probe.md` 的「尚未量到」段、
+    /// R-7）。完整集合待互動探針量到 Codex 的實際解析方式再決定——這裡先求「已知會出事
+    /// 的先擋、不確定的先不賭」，不是遺漏。
+    public static let unsupportedCharacters: Set<Character> = [
+        " ", "'", "\"", "$", "`", "\\", "\n", "\t",
+    ]
 
     /// 判定 `hookBinaryPath` 能不能寫進 hooks.json。
     ///
