@@ -1,6 +1,6 @@
 # DoD 帳本 · `change/codex-support`（T12）
 
-spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r4**）§7 為門檻來源；
+spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r5**）§7 為門檻來源；
 證據層 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 基準取自 `change/codex-support` 分支點（`c131c30`，＝ `main` ＋ 探針文件），量測時用
 `git worktree add <temp> <基準> --detach` 取乾淨副本，**不動共享工作目錄**。
@@ -9,7 +9,7 @@ spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r4**）§7 
 門檻不得在量完之後往下調——miss 就記 known gap（本專案已有兩次前例：+292 KB、+746 KB，
 都是如實記錄不調門檻）。
 
-**gate 編號**：本 change 新增的一律 `CX<n>`（**41 條**）；既有 gate 一律寫測試函式名。
+**gate 編號**：本 change 新增的一律 `CX<n>`（**43 條**；CX37 拆成 a／b）；既有 gate 一律寫測試函式名。
 
 **起點不是全綠**：`FixtureCodeAnchorTests.everyFixtureModelIsMapped` **目前是紅的**——
 round4 fixture 進 repo 之後，`Jargon.model("gpt-5.5")` 原字回傳（實測輸出：
@@ -36,8 +36,8 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | # | 項目 | 門檻 | 量法 | 實測 | 判定 |
 |---|---|---|---|---|---|
 | 1 | 測試全綠 | 連跑 **3 次** 0 flake，**含修好 `everyFixtureModelIsMapped`**；每次存全量 log | `swift test` ×3 | | |
-| 2 | 新增測試數 | `#expect` 淨增 **≥ 170**（基準 1652）；新增測試函式 **≥ 62** | 前後 `grep -rho '#expect' Tests \| wc -l`；`swift test` 的 tests 計數 | | |
-| 3 | gate mutation 帳 | **41 條**（CX1–CX41）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**） | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | | |
+| 2 | 新增測試數 | `#expect` 淨增 **≥ 180**（基準 1652）；新增測試函式 **≥ 65**。r4 是 170／62，**r5 增量＝CX42 約 +5、Jargon 三列 +3、CX37 拆 a／b +2**（`grep -c '#expect'` 數的是**原始碼出現次數**，迴圈只算一次——20／780 條序列不會讓這個數字暴增） | 前後 `grep -rho '#expect' Tests \| wc -l`；`swift test` 的 tests 計數 | | |
+| 3 | gate mutation 帳 | **43 條**（CX1–CX42，CX37 拆 a／b）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**） | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | | |
 | 4 | **Claude 側零回歸**（紅線） | `git diff <基準>..HEAD -- plugin/hooks/hooks.json` **完全為空**；`handledEvents` 的 19 個名字一字未動 | `git diff` ＋ 逐行看 `EventMapping.swift` 的 diff | | |
 | 5 | **Claude 狀態檔位元組不變** | round1／1b／2／3 跑 merge，序列化後**不含 `agent` 鍵** | CX9 | | |
 | 6a | **`config.toml` 零變動（自動化側）** | `swift test` ×3 全程位元組完全不變 | 開工前存副本，跑完 `diff` | | |
@@ -58,7 +58,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | 20 | 測試不得跑 `codex exec` | `Tests/`／`scripts/` 命中數 **= 0**（＋正向對照） | CX30 | | |
 | 21 | 文件路徑一致 | `README.md`／`SECURITY.md` 都含 `.codex/hooks.json` | CX29 | | |
 | 22 | help 涵蓋 | 兩個語言都涵蓋**每一個**新的 Options 列標題（含「重新接上 Codex」） | CX28 | | |
-| 23 | **CX37 的成本** | 先量單次 `connectClaude`，乘上序列數（780）；**若 > 60s 依 §4.8 的規則縮減**（保留全部長度 ≤ 3；長度 4 只留含跨側交錯的）。**縮減規則與實測數字寫進 gate 的 doc comment** | T06 的完成報告 ＋ 現場重跑 | | |
+| 23 | **CX37a／CX37b 的成本** | CX37a **780 條全跑、零 spawn**（毫秒級，**不縮減**）；CX37b **30 條、11 次真 spawn**、走 `SpawnGate`。兩條的 doc comment 要互相點名（a 的等價理由／b 的長度上限理由）。**實測秒數寫進報告** | T06 的完成報告 ＋ 現場重跑 | | |
 | 24 | persona | 加權 **≥ 6.0**；硬下限四條（見下） | Tier 1，integrator 綠後派 persona-tester | | |
 
 ### persona 硬下限（低於門檻即 no-go，不得用平均分蓋過）
@@ -70,7 +70,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | P3 | 不懂「信任」提示的 vibe coding 使用者 | 按下接上之後，知道「還要在 Codex 裡按一次同意」才會生效 | **≥ 5** |
 | P4 | 兩個都用的人 | 同專案同時跑時兩列分得出來；**兩側都接上時兩邊的燈都真的會動**（R-8） | **≥ 5** |
 
-## Gate mutation 帳（41 條；T12 彙整，✓現場 = 抽驗重跑）
+## Gate mutation 帳（43 條；T12 彙整，✓現場 = 抽驗重跑）
 
 | Gate | 位置 | Mutation | 指名測試 | 秒數 | 來源 task |
 |---|---|---|---|---|---|
@@ -110,11 +110,13 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | **CX34** | `CodexStateTests` | `from` 忽略 `currentExpectedContents` | `codexStalePathIsDetectedAndOffersReconnect` | | T07 |
 | **CX35** | `CodexWiringSmokeTests` | stale 時直接 `connect`（不先 disconnect） | `stalePathReconnectDisconnectsBeforeConnecting`（**前提：`pathRejection == nil`**） | | T10 |
 | **CX36** | `CodexSectionRenderTests` | ① 錯誤文案不插字元（籠統句） ② **被拒時仍畫「重新接上」按鈕** | `codexSectionRendersEveryState`（六態 ＋ 兩種 Rejection） | | T09 |
-| **CX37** | `CodexCoexistenceSequenceTests` | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime | `bothSidesNeverDisturbEachOther`（**程式推導**長度 ≤ 4 的序列；縮減規則見 §4.8） | | T06 |
+| **CX37a** | `CodexCoexistenceSequenceTests` | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime（**CX37a 與 CX37b 都必須紅**，兩條都記） | `bothSidesNeverDisturbEachOthersFiles`（**780 條全跑**，`connectClaude` 走 `guardWriteTarget()` ＋ `atomicReplace()`，零 spawn） | | T06 |
+| **CX37b** | `CodexCoexistenceSequenceTests` | 同 CX37a | `bothSidesNeverDisturbEachOthersFilesOnProductionPath`（長度 ≤ 2 共 30 條，完整 `connect`，11 次真 spawn） | | T06 |
 | **CX38** | `EndToEndWiredGateTests`（或拆出的 `EndToEndDualAgentTests`） | `--agent` 解析改成一律回 `.claude` | `oneBinaryServesBothAgentsInOneRoot`（兩個方向各跑一次） | | T05 |
 | **CX39** | `CodexWiringSmokeTests` | **把 R-9 的 guard 移到 `disconnect` 之後** | `codexReconnectNeverDisconnectsWhenPathIsRejected`（`disconnect` 次數 0、檔案仍在） | | T10 · **抽驗必做** |
 | **CX40** | `CodexStateTests` ＋ `CodexWiringSmokeTests` | 拿掉 `codexSnippet` 的條件（無條件給 snippet） | `codexSnippetIsWithheldWhenPathWillVanish`（**乘積表**，`.mustMoveToApplications` 整行 nil） | | T10 |
-| **CX41** | `JargonCodexModelTests` | ① Codex 分支回傳 raw（**既有 `everyFixtureModelIsMapped` 也必須紅**，兩條都記） ② 把 `o3` 改成 `O3` | `jargonModelCoversCodexNaming`（釘死的輸入→輸出表；既有九列輸出完全不變） | | T05 |
+| **CX41** | `JargonCodexModelTests` | ① Codex 分支回傳 raw（**既有 `everyFixtureModelIsMapped` 也必須紅**，兩條都記） ② 把 `o3` 改成 `O3` ③ **把 Codex 分支移到既有演算法之後 → `gpt-5` 那列必須紅** | `jargonModelCoversCodexNaming`（釘死的輸入→輸出表**九列**，含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]`；既有九列輸出完全不變） | | T05 |
+| **CX42** | `CodexCredentialSequenceTests` | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` | `bothSidesNeverDisturbEachOthersCredentials`（**20 條**長度 ≤ 2 序列，fake ＋ 注入 suite、零 spawn；另一側鍵位元組不變 ＋ 鍵集合**差集**斷言） | | T10 |
 
 **額外必記的三筆（不是新 gate，是回歸證人）**
 1. T01 的 `DirectoryTreeSnapshot` 抽取之後，**當場重跑既有 `installerTouchesOnlyAllowedPaths`
@@ -147,11 +149,14 @@ DoD #1 的「全綠」以「修好它之後」為準。
 
 ## Known gaps（spec §10 沿用 15 條；T12 若有新增在此追加）
 
-沿用 spec r4 §10 第 1–15 條（Codex 互動事件形狀待驗、無 error 來源、無法偵測信任、不寫 `async`、
+沿用 spec r5 §10 第 1–16 條（Codex 互動事件形狀待驗、無 error 來源、無法偵測信任、不寫 `async`、
 **第 5 條已由 F14 關閉**、TOCTOU 窄窗、`codex exec` 不可用於自動驗收、F15 的三項範圍限定、
 `timeout: 3` 未觀測 ＋ 失去診斷訊號、裸路徑遇到空白未測、兩個 agent 共用狀態目錄、
-App 搬家的偵測延遲、**R-8 不變式 2 的人類面只有實機 ⑧**、**CX37 的序列長度上限是 4**、
-**`Jargon` 的 Codex 分支只有 `gpt-5.5` 是實測**），逐字見 spec §10。
+App 搬家的偵測延遲、**R-8 不變式 2 的人類面只有實機 ⑧**、
+**序列長度上限**（CX37a 全部 ≤4／CX37b 生產路徑 ≤2／CX42 憑證 ≤2）、
+**`Jargon` 的 Codex 分支只有 `gpt-5.5` 是實測**、
+**兩個上游的 session id 空間不交集是明寫的假設**——CX38 的「互不覆蓋」是結構性結論不是被測性質），
+逐字見 spec §10。
 
 | # | 內容 | 性質 | 落點 |
 |---|---|---|---|

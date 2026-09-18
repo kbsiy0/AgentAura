@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r4（2026-09-18，折入 review r3 的 1B／1M／4m ＋ Jargon ＋ R-8）
+revision: r5（2026-09-18，折入 review r4 APPROVED 的 3M／2m；不再送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -11,7 +11,7 @@ revision: r4（2026-09-18，折入 review r3 的 1B／1M／4m ＋ Jargon ＋ R-8
 > 正典 `2026-09-08-agentaura-design.md` 為權威；本 change 對正典的修訂在 §8.2。
 > 證據層是 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 > **任何關於 Codex 行為的斷言都標了 F 編號；沒有 F 編號的一律寫成「待驗」，不得當事實用。**
-> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **41** 條）；提到**既有** gate 一律寫
+> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **43** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫
 > 測試函式名（例如 `installerTouchesOnlyAllowedPaths`），**不寫 `G<n>`**。
 
 ## 0. 背景與裁決
@@ -42,7 +42,7 @@ Codex CLI 0.155.0 讀 `~/.codex/hooks.json`，結構與 Claude Code 相同（F1�
 | R-5 | 「這個 bundle 路徑能不能寫進 hooks.json」收斂成**單一純函式判定** `CodexHookPathCheck`；輸出餵**路由層**（`CodexState` 的 explain-only 分支）與**執行層**（`connect` 的 guard），**r4 再加第三個消費者**：`performConnectCodex()` 的前置 guard（R-9） | r2 完全沒有 translocation／路徑字元護欄 |
 | R-6 | app 搬家導致絕對路徑失效 → `CodexState.from` 多吃 `currentExpectedContents`，新增 **`.connectedStalePath`**，UI 給「App 移動過，要重新接上」＋一鍵重接 | r2 的 `.connected` 在搬家後永遠成立 |
 | R-7 | 含空白路徑的**探索性量測**移到互動探針工具包；DoD 實機 ⑦ 只驗「拒絕 ＋ 訊息指名字元 ＋ 有出路」 | r2 實機 ⑦「按接上 → 燈會動」 |
-| **R-8** | **兩側互不干擾、最終都要成功**（使用者 2026-09-18 口述）：對任一側做 connect／disconnect／reconnect／完整移除的**任意操作序列**，另一側的檔案位元組與 `InstallState`／`CodexState` 不變；兩側都接上時，兩側都**真的能運作**。寫成不變式 ＋ 兩層 gate（CX37／CX38）＋ 實機一格，見 §4.8 | r3 完全沒有把「兩側共存」寫成契約 |
+| **R-8** | **兩側互不干擾、最終都要成功**（使用者 2026-09-18 口述）：對任一側做 connect／disconnect／reconnect／完整移除的**任意操作序列**，另一側的檔案位元組與 `InstallState`／`CodexState` 不變；兩側都接上時，兩側都**真的能運作**。寫成不變式 ＋ 三條 gate（CX37a／CX37b 檔案、CX42 憑證、CX38 端到端）＋ 實機一格，見 §4.8 | r3 完全沒有把「兩側共存」寫成契約 |
 | **R-9** | **「重新接上」在路徑被拒時不得先刪檔**：`performConnectCodex()` 第一行先看 `pathRejection`，非 nil 就顯示 banner／explain-only 並在**任何 `disconnect` 之前 return**；`.connectedStalePath` 的文案依 `pathRejection` 分兩種（非 nil 那種**不給按鈕**）。判定表列序**不動** | r3 的「stale → 先 disconnect 再 connect」在 translocated 下會刪掉使用者還在運作的檔（r3 B1） |
 | **R-10** | **snippet 也要穿過 `CodexHookPathCheck`**：`pathRejection == .mustMoveToApplications` 時 `codexSnippet = nil`，`.occupiedByOther` 的 snippet 區塊換成「先把 App 移到『應用程式』，我們才給得出一份不會過期的設定」 | r3 的 `.occupiedByOther` 無條件給 snippet，繞過 D-s（r3 M1） |
 
@@ -329,7 +329,7 @@ public enum CodexStateKind: String, Sendable, CaseIterable {
 | `.notConnected` | 單行提示 ＋ 按鈕（R-3，一律如此） | — | 恰一列「接上 Codex」（`.connectCodex`） |
 | `.connected` | 不畫說明卡 | — | 恰一列「移除 Codex 掛載…」 |
 | `.connectedStalePath`，`pathRejection == nil` | 「App 移動過，要重新接上」**＋ 按鈕** | — | 恰**兩**列：「重新接上 Codex」（`.connectCodex`）＋「移除 Codex 掛載…」 |
-| **`.connectedStalePath`，`pathRejection != nil`** | 「App 現在跑在一個下次開機就消失的位置；先把它移到『應用程式』再回來重新接上」**不給按鈕**（R-9） | — | **恰一列**「移除 Codex 掛載…」（不給「重新接上」） |
+| **`.connectedStalePath`，`pathRejection != nil`** | **「這份設定指向另一個位置的 AgentAura；這個副本跑在一個下次開機就會消失的位置」**＋ 出路（先把要留下的那份放進「應用程式」再回來）**不給按鈕**（R-9）。**文案不預設成因**（r4 m2）：觸發條件是「磁碟 == 憑證 ≠ 現在預期」，而「現在預期」用的是**當下這個行程的** bundle 路徑——使用者同時有正本與一份 DMG／備份副本時，從副本啟動就會落進這一列，而 App 其實**沒有**移動過 | — | **恰一列**「移除 Codex 掛載…」（不給「重新接上」） |
 | `.occupiedByOther`，`codexSnippet != nil` | 「你已經有自己的 `~/.codex/hooks.json`，我們不會動它」＋ 可選取 snippet ＋「複製」 | 有 | 零列 |
 | **`.occupiedByOther`，`codexSnippet == nil`** | 同上，但 snippet 區塊換成「先把 App 移到『應用程式』，我們才給得出一份不會過期的設定」（R-10） | 無 | 零列 |
 | `.blockedByBundlePath(.mustMoveToApplications)` | 解釋 ＋ 出路＝把 App 移到「應用程式」。**不給 snippet**（D-s） | 無 | 零列 |
@@ -396,20 +396,45 @@ Codex 啟動時會問你一次是否信任這個 hook，要按同意才會生效
 狀態檔以 `session_id` 分檔，兩個上游的 id 空間不交集（Claude 的 UUID 與 Codex 的 UUIDv7）。
 **但「不重疊」是兩條獨立 gate 各自的結論，沒有人驗過「交錯操作」本身**——R-8 補的就是那個。
 
-**CX37 序列 gate**（AuraHookFile 層，fixture home，見 §6.3）：對
+**不變式 1 由兩條 gate 共同守，缺一不可**（r4 M3）：`InstallState` = `LinkObservation`（檔案）
+＋ `verification`（App 層三個 `AgentAuraHook*` 鍵）；`CodexState` = `CodexObservation`（檔案）
+＋ `recordedContents`（App 層 `AgentAuraCodexHookContents`）。**CX37a／CX37b 住 AuraHookFile，
+只看得到檔案那一半**；憑證那一半（真實 App 層有沒有把兩邊的鍵搞混）由 **CX42** 守。
+三條 gate（CX37a／CX37b／CX42）的 doc comment 要互相點名，否則下一個人讀到檔案那兩條會以為整條不變式都守住了。
+
+**CX37a／CX37b 序列 gate**（AuraHookFile 層，fixture home，見 §6.3）：對
 `{connectClaude, connectCodex, disconnectClaude, disconnectCodex, reconnectCodex(stale)}`
-**程式推導**出全部長度 ≤ 4 的序列（不手列），每一步之後對「另一側」整棵樹取 `DirectoryTreeSnapshot`
+**程式推導**出序列（不手列），每一步之後對「另一側」整棵樹取 `DirectoryTreeSnapshot`
 斷言零差異；序列結束時若兩側皆 connected，兩側 `probe()` 推導出的狀態皆為 connected。
-**成本（開工前就知道）**：5＋25＋125＋625 = **780 條序列**，而 Claude 側的 `connect` 每次都**真的
-spawn `aura-hook`** 做 exec 驗證（§4.1 既有實作步驟 6）。T06 要**先量一次單次 `connectClaude` 的成本**
-再乘上去；若總時間 > 60s，依**規則**縮減（不是手列清單）：保留全部長度 ≤ 3，長度 4 只保留
-**含跨側交錯**（序列中同時出現至少一個 claude 操作與一個 codex 操作）的那些。縮減規則與實測數字
-都要寫進 gate 的 doc comment，不是註解掉幾行。
+**拆成兩條，覆蓋不減、spawn 從 586 次降到 11 次**（r4 M2）：
+
+- **CX37a（檔案不變式，全部 780 條序列）**：`connectClaude` 這一步**直接呼叫
+  `installer.guardWriteTarget()` ＋ `installer.atomicReplace()`**，零 spawn。
+  **這不是抄近路，是等價**：那兩步就是 `claudeHome` 底下唯一會被碰到的動作，
+  `verifyByExecuting` 對 `claudeHome` 的樹**沒有任何貢獻**（它只寫 `verificationRootOverride`
+  指定的位置，`removexattr` 作用在 bundle 內的二進位）。先例：
+  `InstallerClobberTests.performConnectStepsGuardsWriteTargetDirectly` 就是直接呼叫內部步驟，
+  doc comment 逐字寫著理由；`@testable import AuraHookFile` 在 `Tests/AuraCoreTests/` 已有十個檔在用。
+  序列數 5＋25＋125＋625 = **780**，總操作數 2930，毫秒級，**全跑，不縮減**。
+- **CX37b（生產路徑，長度 ≤ 2 共 30 條）**：走完整的
+  `installer.connect(force:translocated:inDownloads:)`，**含 spawn**，注入小的 `verificationTimeout`。
+  `connectClaude` 出現次數 = 1（長度 1）＋ 10（25 條 × 2 步 ÷ 5）= **11 次真 spawn**，走 `SpawnGate`。
+  守的是「完整流程也不碰另一側」，接住 CX37a 跳過那一步可能漏掉的東西。
+
+兩條的 doc comment 要**互相點名**：a 要寫「為什麼跳過 spawn 是等價的」，b 要寫「為什麼只到長度 2」。
+（**注意**：`verificationRootOverride`／`verificationTimeout` **都不能免 spawn**——前者只改驗證
+session 的寫入位置，後者只改等待上限；`verifyByExecuting` 是 `performConnectSteps()` 的無條件最後一步。）
 
 **CX38 雙 agent 端到端 wired gate**（沿用 `EndToEndWiredGateTests` 的真 spawn，見 §6.3）：
 同一顆 `aura-hook`，先以 Claude payload（round1 fixture）**無參數**呼叫、再以 Codex payload
 （round4 fixture）`--agent codex` 呼叫，寫到**同一個** `AGENTAURA_ROOT`；斷言兩個 snapshot
-各自 `agent` 正確、activity 對、**互不覆蓋**；接著**反序再跑一次**。
+各自 `agent` 正確、activity 對；接著**反序再跑一次**。
+**「互不覆蓋」是結構性結論，不是被測性質**（r4 m1）：`SnapshotIO` 以 `<session_id>.json` 分檔，
+而兩份 fixture 的 session id 本來就不同，所以那個斷言在任何實作下都會通過（包括完全壞掉的實作）。
+CX38 真正有牙齒的是另外兩半（同一顆二進位服務兩個上游、兩邊 `agent` 各自正確），
+mutation（`--agent` 一律回 `.claude`）打的也是那兩半。gate 的 doc comment 要把這件事標明。
+**明寫的假設**：兩個上游的 session id 空間不交集（Claude 的 UUID 與 Codex 的 UUIDv7）——
+實務上不碰撞，但那是假設、不是我們控制的東西，列進 §10-16。
 
 ### 4.9 Codex 的模型命名：`Jargon.model`（D-u）
 
@@ -420,15 +445,28 @@ spawn `aura-hook`** 做 exec 驗證（§4.1 既有實作步驟 6）。T06 要**�
 兩段都不是純數字（`5.5` 含 `.`），命中規則 6「多於一個非數字段 → 原樣回傳」。
 
 **處置**：在既有演算法**之前**加一個 Codex 家族分支；**既有六條規則一行不動**，
-判不出來一律落回既有的「原樣回傳」。期望值**寫死在表裡**（`!= raw` 這種弱斷言不足以定義行為——
-把每個輸入都回傳 `"x"` 也能讓既有 gate 變綠）：
+判不出來一律落回既有的「原樣回傳」。
+
+**Codex 家族分支的規則（四步，讓下表每一列都可推導）**：
+1. 先抓 `[...]` 尾綴 → ` (內容大寫)`，其餘部分繼續處理（**與既有規則 1 同形**，不是另一套）。
+2. 第一段（以 `-` 切）若是 `o` ＋ 數字開頭（`o3`、`o4`）→ **整串原樣回傳**（OpenAI 的 `o` 系列
+   品牌寫法是小寫，**不得**改成 `O3`）。
+3. 否則前綴必須是 `gpt-`，去前綴後名字部分固定為 `GPT`；**第一個剩餘段以連字號接上**
+   （`GPT-<第一段>`，不論它是不是純數字——`4o` 也走這條，所以是 `GPT-4o` 不是 `GPT 4o`）。
+4. 之後每一段**首字大寫、以空白連接**。任一步不符（沒有 `gpt-` 前綴、去前綴後為空）→ 落回既有演算法。
+
+期望值**寫死在表裡**（`!= raw` 這種弱斷言不足以定義行為——把每個輸入都回傳 `"x"`
+也能讓既有 gate 變綠）：
 
 | 輸入 | 輸出 | 證據強度 |
 |---|---|---|
 | `gpt-5.5` | `GPT-5.5` | **實測**（`round4-codex.ndjson` 的唯一 model 值） |
 | `gpt-5.5-codex` | `GPT-5.5 Codex` | 預期；**未在任何 payload 觀測過** |
 | `gpt-4o` | `GPT-4o` | 既有測試表裡的字面（見下方 test-edit scrutiny） |
-| `o3` | `o3` | 預期；OpenAI 的 `o` 系列品牌寫法是小寫，**不得**改成 `O3` |
+| **`gpt-5`** | **`GPT-5`** | 預期；**現行輸出是 `Gpt 5`（不是原樣回傳），本 change 刻意變更**。`["gpt","5"]` 的 `5` 是純數字 → 既有演算法**成功**並回傳 `Gpt 5`。它不在任何 fixture（層一看不到）也不在原本的釘死表（層二看不到），**正好掉在兩層守衛之間**——必須釘住，否則是一個使用者看得到的字串靜默改變（r4 M1） |
+| **`gpt-4.1-mini`** | **`GPT-4.1 Mini`** | 預期；用來釘住規則 3／4 的分工（第一段連字號、其餘空白＋首字大寫） |
+| **`gpt-5.5[high]`** | **`GPT-5.5 (HIGH)`** | 預期；用來釘住規則 1（Codex 分支**先**處理 `[...]` 尾綴，與既有規則同形，不是各寫一套） |
+| `o3` | `o3` | 預期；規則 2 |
 | `o4-mini` | `o4-mini` | 同上 |
 | `claude-fable-5-1` 等既有九列 | 與現在**完全相同** | 既有 `JargonTests` 釘死 |
 
@@ -438,8 +476,12 @@ spawn `aura-hook`** 做 exec 驗證（§4.1 既有實作步驟 6）。T06 要**�
   不是「gpt-4o 必須原樣回傳」。
 - 所以**性質要保住**：把輸入換成不屬於 Codex 家族的例子（例如 `foo-bar-5`），
   原斷言形狀不變；**另外新增**一列釘死 `gpt-4o` 的新期望值。
-- 這是**對齊新契約**不是弱化（斷言數不減、被測性質不減）。若實作者選擇直接刪掉那條測試，
-  那就是弱化，要退回。
+- **換掉的輸入必須真的落在既有演算法的規則 6**（`foo-bar-5` → 兩個非數字段 `foo`／`bar`
+  ＋ 一個數字段 → 命中規則 6，形狀成立）。換一個其實走別條規則的輸入，等於把那條測試
+  換成測別的東西。
+- 報告要附**「改前／改後／測的還是不是同一件事」三欄**。
+- 這是**對齊新契約**不是弱化（測試名不變、被測性質不變、斷言數**增加**一條）。
+  若實作者選擇直接刪掉那條測試，那就是弱化，要退回。
 
 **守衛分兩層**：既有 `everyFixtureModelIsMapped`（fixture 推導的跨層錨點，只驗 `!= raw`）
 ＋ 新的 CX41（釘死的輸入→輸出表）。前者保證「fixture 裡真的出現過的值有被處理」，
@@ -464,7 +506,7 @@ spawn `aura-hook`** 做 exec 驗證（§4.1 既有實作步驟 6）。T06 要**�
 | `connect` 寫入失敗（權限、磁碟滿） | throw `.writeFailed(errno)` → banner；**不重試、不 fallback 到非原子寫法** |
 | 讀 `hooks.json` 失敗（權限） | `.occupiedByOther`（讀不到不等於不存在） |
 | Codex 未信任 hook（F5） | **偵測不到**。UI 不得宣稱已生效；help／INSTALL 寫明 |
-| **對任一側的操作影響到另一側** | 不得發生（R-8 §4.8 的不變式）；CX37／CX38 兩層守 |
+| **對任一側的操作影響到另一側** | 不得發生（R-8 §4.8 的不變式）；檔案半由 CX37a／CX37b 守、**憑證半由 CX42 守**、端到端由 CX38 守 |
 | 收尾步驟（codex disconnect）在完整移除中失敗 | `try?` 吞掉，後面步驟照跑（Lessons #8）；`verify-uninstall.sh` 第 7 項會把殘留說出來 |
 
 ## 6. 測試策略
@@ -482,7 +524,8 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
    5 MB 垃圾（> 64 KiB，驗 D-q）；`~/.codex` 自己是外部 symlink／是普通檔／不存在。
 4. **路徑**：`translocated: true`／`inDownloads: true`／六個不支援字元各一／**同時 translocated
    ＋ 含空白**（驗優先序）／乾淨路徑（負對照）。
-5. **兩側交錯（R-8）**：同一個 fixture home 下同時有 `claudeHome` 與 `codexHome`，供 CX37 推導序列。
+5. **兩側交錯（R-8）**：同一個 fixture home 下同時有 `claudeHome` 與 `codexHome`，供 CX37a／CX37b 推導序列；
+   App 層另備 fake installer／fake store ＋ 注入 suite，供 CX42 的 20 條序列使用（零 spawn）。
 6. **`FakeCodexStore`**：可設定「寫進去與讀回來不一致」。
 7. **`FakeCodexInstaller`**：① `connect()` 成功但 `probe()` 仍回 `.notConnected`；
    ② `disconnect()` 宣稱成功但檔案還在；③ `probe()` 丟錯；
@@ -493,7 +536,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
   `environment["HOME"]`）；`codexConnectChainIsWired`（五段，CX24）；
   `codexRowsReachTheView`（`.unavailable` 時 `preferredContentSize` 與零 Codex 狀態完全相同）。
 
-### 6.3 Gate 表（新增一律 `CX<n>`，共 **41** 條；既有 gate 寫測試函式名）
+### 6.3 Gate 表（新增一律 `CX<n>`，共 **43** 條；CX37 拆成 a／b；既有 gate 寫測試函式名）
 
 | Gate | 層 | 守什麼 | Mutation（→ 指名測試 ≤60s 變紅） |
 |---|---|---|---|
@@ -533,11 +576,13 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX34 `codexStalePathIsDetectedAndOffersReconnect`** | AuraCore | 磁碟 == 憑證 != 現在預期 → `.connectedStalePath`（三份內容都用真產生器輸出、兩個不同路徑） | `from` 忽略 `currentExpectedContents` |
 | **CX35 `stalePathReconnectDisconnectsBeforeConnecting`** | App | **（前提：`pathRejection == nil`）** `.connectedStalePath` 下送 `.connectCodex` → 呼叫順序是 `disconnect` → `connect`；`.notConnected` 下只有 `connect` | 直接 `connect`（不先 disconnect） |
 | **CX36 `codexSectionRendersEveryState`** | App（離屏） | 六態 ＋ 兩種 Rejection 各渲一次：預期元素在（按鈕／snippet 區塊／指名字元的文案）；`.unavailable` 不畫任何東西 | ① 錯誤文案不插字元（籠統句） ② 被拒時仍畫「重新接上」按鈕 |
-| **CX37 `bothSidesNeverDisturbEachOther`** | AuraHookFile | R-8 不變式 1：**程式推導**全部長度 ≤ 4 的操作序列（縮減規則見 §4.8），每步之後「另一側」整棵樹零差異；結束時若兩側皆 connected，兩側 `probe()` 皆 connected | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime |
-| **CX38 `oneBinaryServesBothAgentsInOneRoot`** | E2E（真 spawn） | R-8 不變式 2：同一顆 `aura-hook`，Claude payload（round1，無參數）與 Codex payload（round4，`--agent codex`）寫進**同一個** `AGENTAURA_ROOT`；兩個 snapshot 的 `agent`／activity 各自正確、互不覆蓋；**反序再跑一次** | `--agent` 解析改成一律回 `.claude` |
+| **CX37a `bothSidesNeverDisturbEachOthersFiles`** | AuraHookFile | R-8 不變式 1（檔案半）：**程式推導**全部長度 ≤ 4 的操作序列（**780 條，全跑**），`connectClaude` 走 `guardWriteTarget()` ＋ `atomicReplace()`（零 spawn，等價理由見 §4.8）；每步之後「另一側」整棵樹零差異；結束時若兩側皆 connected，兩側 `probe()` 皆 connected | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime |
+| **CX37b `bothSidesNeverDisturbEachOthersFilesOnProductionPath`** | AuraHookFile | 同上不變式，但 `connectClaude` 走**完整** `connect(force:translocated:inDownloads:)`（含 spawn，注入小 `verificationTimeout`）；長度 ≤ 2 共 **30 條**、**11 次真 spawn**、走 `SpawnGate`。接住 CX37a 跳過 exec 驗證可能漏掉的東西 | 同 CX37a（兩條都必須紅） |
+| **CX38 `oneBinaryServesBothAgentsInOneRoot`** | E2E（真 spawn） | R-8 不變式 2：同一顆 `aura-hook`，Claude payload（round1，無參數）與 Codex payload（round4，`--agent codex`）寫進**同一個** `AGENTAURA_ROOT`；兩個 snapshot 的 `agent`／activity 各自正確；**反序再跑一次**。**「互不覆蓋」在 doc comment 標成結構性結論**（id 空間不交集），不是被測性質 | `--agent` 解析改成一律回 `.claude` |
 | **CX39 `codexReconnectNeverDisconnectsWhenPathIsRejected`** | App | 注入 `.connectedStalePath` ＋ `translocated: true` → 送 `.connectCodex` → **`disconnect` 呼叫次數 0**、檔案仍在、banner 是 `.mustMoveToApplications` 那句 | 把 guard 移到 `disconnect` 之後 |
 | **CX40 `codexSnippetIsWithheldWhenPathWillVanish`** | AuraCore ＋ App | **乘積表**：定義域 `CodexStateKind.allCases × [nil, .mustMoveToApplications, .unsupportedCharacter(" ")]`，斷言 `.mustMoveToApplications` **整行** `codexSnippet == nil`（含 `.occupiedByOther`）；`.unsupportedCharacter` 整行非 nil | 拿掉 `codexSnippet` 的條件 |
-| **CX41 `jargonModelCoversCodexNaming`** | AuraCore | §4.9 的**釘死輸入→輸出表**（含 `o` 系列維持小寫）；既有九列反例輸出**完全不變** | ① Codex 分支回傳 raw ② 把 `o3` 改成 `O3` |
+| **CX41 `jargonModelCoversCodexNaming`** | AuraCore | §4.9 的**釘死輸入→輸出表九列**（含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]` 與 `o` 系列維持小寫）；既有九列反例輸出**完全不變** | ① Codex 分支回傳 raw ② 把 `o3` 改成 `O3` ③ **把 Codex 分支從既有演算法之前移到之後 → `gpt-5` 那列必須紅**（那是唯一能區分前置／後置的輸入） |
+| **CX42 `bothSidesNeverDisturbEachOthersCredentials`** | App | R-8 不變式 1（憑證半，r4 M3）：定義域 `{performConnect, performDisconnect, performConnectCodex, performDisconnectCodex}` 的**全部長度 ≤ 2 序列＝20 條**（程式推導，不手列）；fake installer／fake store ＋ 注入的 `UserDefaults` suite，全記憶體、**零 spawn**。每步之後斷言**另一側的鍵位元組完全不變**（Claude 側三個 `AgentAuraHook*` vs Codex 側 `AgentAuraCodexHookContents`），且該 suite **沒有其他鍵被新增或刪除**（用鍵集合的**差集**斷言，不逐鍵列舉——鍵清單會 drift） | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` |
 | 既有全部 gate | — | 繼續綠（尤其 `registeredEventsMatchHandledEvents`、`installerTouchesOnlyAllowedPaths`、`everyFixtureModelIsMapped`（**目前紅，本 change 必須修好**）、`fileLengthLimit`、`nonUITargetsLoadNoUIModules`、`noStrayLiteralOutsideAllowlist`、`panelModelMakeHasNoDefaults`、`RowHeightDerivationTests`、`FooterPositionStabilityTests`） | — |
 
 ### 6.4 test-edit scrutiny 預告（Lessons #3）
@@ -548,7 +593,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 4. `OptionsMenuModel.rows` 新增 `codex:` → **26 個呼叫點（10 個檔）**。
 5. 上面 2／3／4 合計 94 個呼叫點：**`#expect` 淨數量不得下降**（基準 1652）。
 6. `HelpDocOptionsRowCoverageTests.allRows` 改成對 `CodexStateKind.allCases` 取聯集。
-7. `ClaudeHomeTreeSnapshot` 抽成共用 `DirectoryTreeSnapshot`（CX14／CX32／CX37 共用）——**純重構**，
+7. `ClaudeHomeTreeSnapshot` 抽成共用 `DirectoryTreeSnapshot`（CX14／CX32／CX37a／CX37b 共用）——**純重構**，
    既有 `installerTouchesOnlyAllowedPaths` 全綠且 **mutation 當場重跑**確認仍精準紅。
 8. **`JargonTests.modelTwoNonNumericSegmentsPassesThrough`**（§4.9）：輸入從 `gpt-4o` 換成
    非 Codex 家族的例子以保住原性質，**另外新增**一列釘死 `gpt-4o` 的新期望值。
@@ -561,7 +606,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 - `PermissionRequest`／`Interrupt`／`Subagent*` 的實際 payload 形狀（F10）→ 互動探針。
 - hook 父行程的 `comm` 與**互動 TUI 的行程結構**（F15 範圍限定）→ 互動探針 ＋ 實機 ③。
 - 含空白路徑＋引號的 `command` 是否可行（R-7）→ 互動探針工具包。
-- **兩側同時真的在跑**（R-8 不變式 2 的人類面）→ 實機 ⑧（CX38 只驗到同一顆二進位與狀態檔，
+- **兩側同時真的在跑**（R-8 不變式 2 的人類面）→ 實機 ⑧（CX38 只驗到同一顆二進位與兩邊 `agent` 各自正確，
   沒有驗到兩個上游**同時**真的觸發它）。
 
 ## 7. DoD
@@ -604,11 +649,12 @@ Sources/AgentAuraApp/AppDelegate.swift             改  +10
 Tests/AuraCoreTests/Fixtures/round4-codex.ndjson   已就位（18 筆／4 個 session，唯讀證據）
 Tests/AuraCoreTests/*（新）：AgentArgumentTests、CodexEventSeamTests、CodexHooksJSONTests、
   CodexHookPathCheckTests、CodexStateTests、CodexOptionsRowTests、CodexInstallerTests、
-  CodexInstallerClobberTests、CodexPathScopeTests、CodexCoexistenceSequenceTests（CX37）、
+  CodexInstallerClobberTests、CodexPathScopeTests、CodexCoexistenceSequenceTests（CX37a／CX37b）、
   Round4FixtureTests、AgentSnapshotCodableTests、JargonCodexModelTests（CX41）
 Tests/AuraCoreTests/Support/DirectoryTreeSnapshot.swift  新（從 ClaudeHomeTreeSnapshot 抽出，純重構）
 Tests/AgentAuraAppTests/*（新）：CodexWiringSmokeTests、AppDelegateCodexWiredTests、
   CodexHookStoreTests、CodexRowLabelPixelTests、CodexSectionRenderTests（CX36）、
+  CodexCredentialSequenceTests（CX42）、
   Support/FakeCodexInstaller、Support/FakeCodexStore
 Tests/AuraCoreTests/EndToEndWiredGateTests.swift   改（CX38 兩個方向；注意 300 行上限，必要時拆
                                                    EndToEndDualAgentTests.swift）
@@ -676,9 +722,10 @@ scripts/verify-uninstall.sh                        改（第 7 項 ＋ CODEX_HOM
 | 10 | `command` 是裸路徑；**含空白／引號的路徑行為未測**（R-5 讓產品不賭它） | 待驗；互動探針 |
 | 11 | 兩個 agent 共用 `~/.agentaura/sessions/`；同專案同時跑時兩列只靠標籤區分 | persona |
 | 12 | **App 被搬走或改名**：R-6 偵測得到，但偵測發生在**下一次 `reprobeCodex()`**（啟動或開面板）；在那之前 Codex 那側已經不動而我們還沒機會講 | 設計代價 |
-| 13 | **R-8 的不變式 2（兩側同時真的在跑）自動化只驗到「同一顆二進位、同一個狀態目錄、互不覆蓋」**（CX38）；「兩個上游**同時**真的觸發它」只有實機 ⑧ | 驗收缺口 |
-| 14 | **CX37 的序列長度上限是 4**（780 條，可能依 §4.8 的規則縮減）。長度 ≥ 5 的交錯序列未涵蓋——選 4 是成本與覆蓋的取捨，不是「4 步之後就安全了」的論證 | 覆蓋缺口，明寫 |
-| 15 | **`Jargon.model` 的 Codex 分支只有 `gpt-5.5` 是實測**；`gpt-5.5-codex`／`o3`／`o4-mini` 是預期值，任何一個實際出現時要回頭對照（既有 `everyFixtureModelIsMapped` 會在新 fixture 進來時把沒處理到的值變紅） | 待驗；有守衛 |
+| 13 | **R-8 的不變式 2（兩側同時真的在跑）自動化只驗到「同一顆二進位、兩邊 `agent` 各自正確」**（CX38）；「兩個上游**同時**真的觸發它」只有實機 ⑧ | 驗收缺口 |
+| 14 | **序列長度上限**：CX37a **全部 ≤ 4**（780 條全跑）、CX37b **生產路徑 ≤ 2**（30 條）、CX42 **憑證 ≤ 2**（20 條）。更長的交錯序列未涵蓋——那是成本與覆蓋的取捨，不是「N 步之後就安全了」的論證 | 覆蓋缺口，明寫 |
+| 15 | **`Jargon.model` 的 Codex 分支只有 `gpt-5.5` 是實測**；其餘八列（含 `gpt-5` 的**刻意變更**）是預期值，任何一個實際出現時要回頭對照（既有 `everyFixtureModelIsMapped` 會在新 fixture 進來時把沒處理到的值變紅） | 待驗；有守衛 |
+| 16 | **兩個上游的 session id 空間不交集是明寫的假設，不是我們控制的東西**（Claude 的 UUID vs Codex 的 UUIDv7）。`SnapshotIO` 以 `<session_id>.json` 分檔，所以「互不覆蓋」在結構上必然成立——CX38 的那個斷言在任何實作下都會通過，**它是結構性結論不是被測性質**（r4 m1） | 假設，明寫 |
 
 ## 11. 風險
 
@@ -694,11 +741,11 @@ scripts/verify-uninstall.sh                        改（第 7 項 ＋ CODEX_HOM
 | **App 搬家後 `.connected` 永遠成立** | R-6 ＋ CX34／CX35 |
 | **憑證 round-trip 壞掉 → 永遠刪不掉自己的檔 → 完整移除留殘留** | CX31 ＋ CX24③ |
 | **`reprobeCodex()` 沒被呼叫 → 裝了 Codex 卻要重開 app 才看得到** | §4.6 四個時機 ＋ CX24⑤ |
-| **兩側互相干擾**（新需求 R-8） | CX37（序列）＋ CX38（端到端）＋ 實機 ⑧；結構理由寫進 §4.8 |
+| **兩側互相干擾**（新需求 R-8） | CX37a／CX37b（檔案序列）＋ **CX42（憑證序列）** ＋ CX38（端到端）＋ 實機 ⑧；結構理由寫進 §4.8 |
 | **既有 `everyFixtureModelIsMapped` 目前是紅的** | D-u／§4.9；CX41 的釘死表 ＋ 既有 gate 當跨層錨點。DoD 起點寫明「這一條紅是本 change 必須修好的既有 gate，不是弱化對象」 |
 | **94 個呼叫點的機械改動**中夾帶弱化 | §6.4(2)(3)(4)(5)；`#expect` 淨數量不得下降 |
 | `CodexState` 六態 ＋ 兩種 Rejection，四條聯集 gate 的定義域 | 全部從 `CodexStateKind.allCases` ＋ `RejectionKind.allCases` 推導（D-r 兩層都不得有 `default`） |
-| **CX37 的 780 條序列可能太慢** | §4.8 已寫明先量再乘、超過 60s 依規則縮減；規則與實測數字進 gate 的 doc comment |
+| **CX37 的 780 條序列會跑 586 次真 spawn**（r4 M2 算出來的數字） | 拆成 CX37a（零 spawn、780 條全跑）＋ CX37b（生產路徑、30 條、11 次 spawn）；覆蓋不減、spawn 降約 53 倍，**不必縮減序列** |
 | Codex 端到端無法自動驗收（F12） | 實機清單 ①–⑧ |
 
 **待確認（不自行決定，列給主 session）**：見最終報告的「裁決有問題之處」四點。
