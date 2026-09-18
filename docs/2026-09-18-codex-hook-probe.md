@@ -97,3 +97,13 @@ Codex 沒有 hook 文件；npm 套件只有二進位。所以先讀二進位字�
 
 **未測**：省略 `matcher` 是否可行、Claude 側用的 `"async": true` Codex 是否接受或拒絕、`timeout` 省略時的預設值。
 產生器一律照上面這個**已驗證**的形狀輸出，不加未測欄位。
+
+## 補充：hook 的父行程在整個 session 裡是同一個（F15）
+
+spec review 指出 `aura-hook` 的判活靠 `getppid()`（父行程死了整列就顯示已結束），而 Codex 側的父行程沒量過。
+回頭查探針原始紀錄：每筆都記了探針腳本自己的 `$PPID`。**五個 session、共 24 筆事件，每個 session 內的所有事件
+（`SessionStart` 到 `SessionEnd`，跨 4–6 筆、數秒到數十秒）`$PPID` 完全相同**；不同 session 則不同。
+→ 呼叫 hook 的是一個**與 session 同壽命的長命行程**，不是每個事件開一次的 shell。`getppid()` 判活對 Codex 成立。
+
+**未辨識**：那個 pid 是 `codex` 原生二進位還是 npm 的 node 啟動器（探針沒記 `ps -o comm=`）。
+兩者對判活的結論相同（都隨 session 結束），互動探針工具包已補上 `comm` 的記錄以便釐清。
