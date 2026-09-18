@@ -27,6 +27,9 @@ public struct HookPayload: Sendable, Equatable {
     ///
     /// 語意差別有後果：中斷是使用者的動作，**不該計入 `tool_failures`**。
     /// 缺欄位時視為 `false`（絕大多數事件不帶它）。
+    ///
+    /// **反向點名**：這個欄位跟 `EventMapping.codexOnlyEvents` 裡的 `Interrupt` **事件**
+    /// 是兩件不同的事——這裡是單一個 tool 被中斷，那邊是整輪 Codex session 被中斷。
     public let isInterrupt: Bool
     public let toolDurationMs: Int?
     /// 只有 `SessionStart` 帶 `model`；`PostModelSwitch` 用 `to_model` 帶新模型。
