@@ -52,6 +52,14 @@ public enum EventMapping {
     /// 從未認得過 `Interrupt`（`handledEvents` 19 個名字裡沒有它、hooks.json 從未註冊過它），
     /// 那份 hooks.json 會被 Claude Code 整份拒載，產品對 Claude 使用者完全停止運作。
     ///
+    /// **注意**：本機 `claude plugin validate --strict` 對未知 event 只給 warning
+    /// 「entry ignored at runtime」，看起來像只有那一條被忽略。整份拒載是 2026-09-15
+    /// 在同事機器上實測到的（`PostModelSwitch` 讓整個 plugin 不運作），與 Claude Code
+    /// 版本有關；本機驗證器通過不構成反證。
+    ///
+    /// 順帶一提：`claude plugin validate --strict`（DoD 要求零 warning）對註冊 `Interrupt`
+    /// 會直接失敗——這是不靠我們自己斷言的第四道防線。
+    ///
     /// `Interrupt` **事件**與 `HookPayload.isInterrupt` **欄位**是兩件不同的事：前者是整輪
     /// Codex session 被中斷（見 `effect(forEvent:)` 的對應 case），後者是使用者用 Ctrl+C
     /// 中斷了單一個 tool、且刻意不計入 `tool_failures`（見該欄位的 doc comment）。

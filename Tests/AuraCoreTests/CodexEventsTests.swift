@@ -45,6 +45,8 @@ struct CodexEventsTests {
             Claude Code 對 hooks.json 是全有全無解析——這些事件一旦被要求註冊，
             plugin/hooks/hooks.json 會被 Claude Code 整份拒載，
             產品對 Claude 使用者完全停止運作。
+            （本機 validate --strict 只給 warning，不構成反證——整份拒載是實測於
+            另一個 Claude Code 版本，見 codexOnlyEvents 的 doc comment。）
             """)
     }
 
@@ -88,6 +90,8 @@ struct CodexEventsTests {
     @Test("Claude 側 hooks.json 不含任何 codexOnlyEvents")
     func claudeHooksJSONHasNoInterrupt() throws {
         let registered = Set(try PluginWiringTests.hooksJSON().keys)
+        #expect(registered.count == EventMapping.handledEvents.count,
+                "hooks.json 讀出 \(registered.count) 個事件——gate 不能空跑")
         let leaked = registered.intersection(EventMapping.codexOnlyEvents)
         #expect(leaked.isEmpty,
                 "plugin/hooks/hooks.json 含有 Codex 專屬事件：\(leaked.sorted())")
