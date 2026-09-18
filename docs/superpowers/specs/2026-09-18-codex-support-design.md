@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r5（2026-09-18，折入 review r4 APPROVED 的 3M／2m；不再送審）
+revision: r6（2026-09-18，折入 T01 實作 review；不送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -11,7 +11,7 @@ revision: r5（2026-09-18，折入 review r4 APPROVED 的 3M／2m；不再送審
 > 正典 `2026-09-08-agentaura-design.md` 為權威；本 change 對正典的修訂在 §8.2。
 > 證據層是 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 > **任何關於 Codex 行為的斷言都標了 F 編號；沒有 F 編號的一律寫成「待驗」，不得當事實用。**
-> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **43** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫
+> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **44** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫
 > 測試函式名（例如 `installerTouchesOnlyAllowedPaths`），**不寫 `G<n>`**。
 
 ## 0. 背景與裁決
@@ -536,7 +536,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
   `environment["HOME"]`）；`codexConnectChainIsWired`（五段，CX24）；
   `codexRowsReachTheView`（`.unavailable` 時 `preferredContentSize` 與零 Codex 狀態完全相同）。
 
-### 6.3 Gate 表（新增一律 `CX<n>`，共 **43** 條；CX37 拆成 a／b；既有 gate 寫測試函式名）
+### 6.3 Gate 表（新增一律 `CX<n>`，共 **44** 條；CX37 拆成 a／b；既有 gate 寫測試函式名）
 
 | Gate | 層 | 守什麼 | Mutation（→ 指名測試 ≤60s 變紅） |
 |---|---|---|---|
@@ -552,7 +552,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | CX10 `codexStateFileCarriesAgent` | E2E（真 spawn） | `--agent codex` 真跑 → 檔案含 `"agent":"codex"` | `main.swift` 忘了傳 agent |
 | CX11 `legacySnapshotWithoutAgentDecodes` | AuraCore | 無 `agent` 鍵的舊 JSON 解得開且 `.claude` | `agent` 改成非 Optional |
 | CX12 `unknownAgentFallsBackWithoutFailingDecode` | AuraCore | `"agent":"gemini"` → 整包解得開、`.claude`、無標籤 | `agent` 改成 `Agent?`（enum） |
-| CX13 `round4FixtureParsesAndMatchesProbeTable` | AuraCore | 18 筆全解析；`effect` 與欄位表一致；`isSafeSessionID` 全過 | **`Stop` 改成 `.noChange`** |
+| CX13 `round4FixtureParsesAndMatchesProbeTable` | AuraCore | 18 筆全解析；`effect` 與欄位表一致；`isSafeSessionID` 全過；**外加欄位層反向斷言：探針表列出的每個欄位，在該事件的樣本裡至少出現一次**（T01 review M3：事件層的反向斷言擋不住「把 fixture 裡每一筆的 `model` 欄位拿掉」——那會讓跨層錨點 `everyFixtureModelIsMapped` 從紅變綠，**用縮小證據來消滅一條紅燈**；欄位層是唯一看得到它的東西，與那條錨點是同一條防線） | ① **`Stop` 改成 `.noChange`** ② **從 fixture 抽掉某個事件的一個欄位**（例如 `SessionStart` 的 `model`）→ 欄位層那半必須紅 |
 | **CX14 `codexInstallerTouchesOnlyHooksJSON`** | AuraHookFile | 整棵樹差異**恰為** `{hooks.json}`；`config.toml` 位元組不變 | connect 順手寫 `hooks.json.bak` |
 | **CX15 `codexConnectRefusesEveryOccupiedShape`** | AuraHookFile | 佔用形狀各 throw `.alreadyExists`，且該路徑（含 symlink 目標）位元組與型別不變 | 拿掉 `O_EXCL`（symlink→`config.toml` 那格必須紅） |
 | CX16 `codexConnectWritesGeneratorBytes` | AuraHookFile | 檔案內容 == 產生器位元組；回傳值 == 那些位元組 | 少寫最後一個 byte |
@@ -583,6 +583,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX40 `codexSnippetIsWithheldWhenPathWillVanish`** | AuraCore ＋ App | **乘積表**：定義域 `CodexStateKind.allCases × [nil, .mustMoveToApplications, .unsupportedCharacter(" ")]`，斷言 `.mustMoveToApplications` **整行** `codexSnippet == nil`（含 `.occupiedByOther`）；`.unsupportedCharacter` 整行非 nil | 拿掉 `codexSnippet` 的條件 |
 | **CX41 `jargonModelCoversCodexNaming`** | AuraCore | §4.9 的**釘死輸入→輸出表九列**（含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]` 與 `o` 系列維持小寫）；既有九列反例輸出**完全不變** | ① Codex 分支回傳 raw ② 把 `o3` 改成 `O3` ③ **把 Codex 分支從既有演算法之前移到之後 → `gpt-5` 那列必須紅**（那是唯一能區分前置／後置的輸入） |
 | **CX42 `bothSidesNeverDisturbEachOthersCredentials`** | App | R-8 不變式 1（憑證半，r4 M3）：定義域 `{performConnect, performDisconnect, performConnectCodex, performDisconnectCodex}` 的**全部長度 ≤ 2 序列＝20 條**（程式推導，不手列）；fake installer／fake store ＋ 注入的 `UserDefaults` suite，全記憶體、**零 spawn**。每步之後斷言**另一側的鍵位元組完全不變**（Claude 側三個 `AgentAuraHook*` vs Codex 側 `AgentAuraCodexHookContents`），且該 suite **沒有其他鍵被新增或刪除**（用鍵集合的**差集**斷言，不逐鍵列舉——鍵清單會 drift） | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` |
+| **CX44 `noPendingFlagRemains`** | 全 repo 掃描 | `Tests/` 不得殘留 `AURA_CODEX_PENDING`（T01 用 `#if AURA_CODEX_PENDING_T05`／`_T10` 讓兩條 gate 骨架在依賴型別落地前仍可編譯；`Package.swift` 沒有任何 `-D`，所以那些分支**永不編譯、不做型別檢查**）。**＋暫存目錄正向對照**證明掃描沒壞（比照 CX30 的形狀） | 在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` |
 | 既有全部 gate | — | 繼續綠（尤其 `registeredEventsMatchHandledEvents`、`installerTouchesOnlyAllowedPaths`、`everyFixtureModelIsMapped`（**目前紅，本 change 必須修好**）、`fileLengthLimit`、`nonUITargetsLoadNoUIModules`、`noStrayLiteralOutsideAllowlist`、`panelModelMakeHasNoDefaults`、`RowHeightDerivationTests`、`FooterPositionStabilityTests`） | — |
 
 ### 6.4 test-edit scrutiny 預告（Lessons #3）

@@ -1,10 +1,10 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r5**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r6**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 r5 的 spec。
-> **gate 編號**：本 change 新增的一律 `CX<n>`（共 **43** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
+> 節號引用一律指 r6 的 spec。
+> **gate 編號**：本 change 新增的一律 `CX<n>`（共 **44** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
 
 ## 0. 給每個 implementer 的共同規則
 
@@ -120,6 +120,12 @@ wave 9: T12
 4. **路徑 fixture（CX32／CX33／CX39 用）**：`translocated: true`／`inDownloads: true`／
    六個不支援字元（空白、`'`、`"`、`$`、`` ` ``、`\`）各一條路徑／**同時 translocated ＋ 含空白**
    （驗優先序）／乾淨路徑（負對照）。
+   **每一格要帶 `expectedRejection`，期望值寫死、不從實作反推**（T01 review M1）：
+   用不依賴 T04 型別的字串描述（`nil`／`"mustMoveToApplications"`／`"unsupportedCharacter(<字元>)"`），
+   比照 argv 表的 `expectedRawValue` 那一招。理由：CX33（T04）／CX32（T06）／CX39（T10）三條 gate
+   守的是 R-5 那道安全護欄，期望值若等實作出現才寫，等於三條 gate 都是事後對答案；
+   而 `translocatedAndContainsSpace` 要驗的「translocated 優先於字元檢查」**只存在於 case 名字裡**，
+   沒有任何資料表達它。
 5. **對抗式 payload fixture**（程式合成）：缺 `permission_mode`／缺 `model`／`tool_response`
    是 200 KB 字串／`hook_event_name: "Interrupt"` **帶** `agent_id`／`session_id` 是 UUIDv7。
 6. **argv 對抗式表（7 格）**：`[]`、`["--agent"]`、`["--agent","gemini"]`、`["--agent","CODEX"]`、
@@ -127,16 +133,37 @@ wave 9: T12
    期望值寫死在表裡，**不是從實作反推**；**這張表是 CX7 與 CX8 共用的唯一來源**，放共用 helper。
 7. **`FakeCodexInstaller`**：① `connect()` 成功但 `probe()` 仍回 `.notConnected`；
    ② `disconnect()` 宣稱成功但檔案還在；③ `probe()` 丟錯；
-   ④ **記錄 `connect`／`disconnect`／`probe` 的呼叫順序與次數**（CX24⑤、CX35、CX39 都要用）。
-   **`FakeCodexStore`**：可設定「寫進去與讀回來不一致」。
+   ④ **記錄 `connect`／`disconnect`／`probe` 的呼叫順序與次數**（CX24⑤、CX35、CX39 都要用）；
+   ⑤ **`connect` 在 `translocated == true` 時拒絕**。
+   **本地協定的簽章必須就是 spec §4.4 已定案的那個**（T01 review M2）：
+   `connect(json:translocated:inDownloads:) throws -> Data`、`disconnect(ifContentsEqual:) throws`。
+   四個參數都不需要任何 T04／T06 的新型別，現在就能編譯；**簽章少一個維度不是「之後微調」，
+   是情境表達不出來**——CX39 的全部意義是「`connect` 因為 `translocated` 被拒，所以 `disconnect`
+   的呼叫次數必須是 0」，`connect()` 收不到 `translocated` 就承載不了它；`disconnect()` 沒有
+   `ifContentsEqual:` 則 CX35／CX17 的「內容不符就不刪」同樣表達不出來。
+   **`FakeCodexStore`**：可設定「寫進去與讀回來不一致」；**原始值欄位設 `private`，只留 `read()`**
+   （T01 review m2：`contents` 與 `read()` 並存時，一條寫 `store.contents == written` 的測試會完全
+   繞過 corruption，而 CX24③ 正是最該被它咬到的地方）。真的需要看原始值就叫
+   `rawContentsForAssertion`，讓繞過變成一個看得見的動作。
 8. **round4 fixture 覆蓋測試骨架**（CX13）：18 筆逐筆解析；**期望值來自探針文件的欄位表**，
-   不是從 `HookPayload` 現有行為反推；外加反向斷言（探針表的每個欄位至少出現一次）。
+   不是從 `HookPayload` 現有行為反推；外加**兩層**反向斷言——事件層（表列的每個事件都有樣本）
+   **與欄位層（表列的每個欄位在該事件的樣本裡至少出現一次）**。
+   **欄位層不可省**（T01 review M3，主 session 裁決保留）：只有事件層的話，把 fixture 裡每一筆的
+   `model` 欄位拿掉會全綠，而那正好讓跨層錨點 `everyFixtureModelIsMapped` 從紅變綠——
+   **用縮小證據來消滅一條紅燈**。`ProbeRow` 因此要帶 `fields: [String]`（六列逐字抄探針文件
+   「每種事件的欄位」表）。
 9. **composition-root smoke 骨架**：`CodexWiringSmokeTests` 的**五段**（CX24），
    第三段要比對**位元組**（不是「非 nil」）。
 10. **像素 harness 沿用**：`renderPinned` ＋ `differingPixels`；CX22／CX23／CX36 用它們。
 
-**驗收**：`swift test` 全跑得完（不掛住），新增測試全 RED，逐條說明 RED 的理由。
+**驗收**：`swift test` 全跑得完（不掛住），且**兩類分開講**（T01 review m5）——
+**gate 骨架**必須 RED 且理由正確（「斷言失敗」或「型別還不存在」）；
+**fixture／double 的自我測試**必須 GREEN（它們驗的是 fixture 自己，純 Foundation／POSIX，
+RED 沒有意義）。兩類各自逐條說明。
 **外加**：`grep -rn "codex exec" Tests/ scripts/` 為零（CX30 的人工預跑）。
+**再外加**：自我測試的 `switch` **不得有 `default`**（同 D-r 的禁令，理由一字不差適用於測試碼——
+新增一個 fixture 形狀會靜默落進 `default` 被當成別的東西）；5 MB 垃圾檔用
+`Data(repeating:count:)` 而不是逐 byte 隨機（隨機性不是需求，而 T06 還會反覆建它）。
 
 ---
 
@@ -262,6 +289,12 @@ translocated 優先；乾淨路徑 nil）。
   超過 300 就拆 `EndToEndDualAgentTests.swift`。
 
 **gates**：CX8（7 格共用表真 spawn）、CX9、CX10、CX11、CX12、CX13、**CX38**、**CX41**。
+
+**驗收必含：解除 `#if AURA_CODEX_PENDING_T05`**（T01 review m1）。T01 用這個旗標讓 gate 骨架在
+依賴的型別落地前仍可編譯，而 `Package.swift` 沒有任何 `-D`（DoD #9 要求它的 diff 為空），
+所以**那些分支從未被型別檢查過**——解除等於「在最想看到綠燈的時刻，對一段沒編譯過的程式碼
+做無上限的編輯」。報告要附**解除前／後的 `#expect` 數與測試函式數，只准上升**；
+殘留由 T12 的 CX44 掃描把關。
 **mutation**：① `main.swift` 忘了傳 agent → CX10 紅；② `storedRawValue` 對 `.claude` 回 `"claude"`
 → CX9 紅；③ `agent` 改成非 Optional → CX11 紅；④ 改成 `Agent?`（enum）→ CX12 紅；
 ⑤ `effect` 對 `Stop` 改成 `.noChange` → CX13 紅；⑥ **`--agent` 解析改成一律回 `.claude` → CX38 紅**；
@@ -277,6 +310,17 @@ translocated 優先；乾淨路徑 nil）。
 ## T06 `CodexInstaller` ＋ 兩側序列不變式
 
 **獨立型別、獨立檔**，不塞進既有 `Installer`（157 行）或 `Installer+Connect`（125 行）。
+
+**本 task 不需要 fake installer**（T01 review m6）：這裡測的是**真** `CodexInstaller` 對真 fixture 目錄，
+CX37a／CX37b 用的也是真 installer。App 層的 fake 住在 `Tests/AgentAuraAppTests/Support`，
+兩個 test target 互不可見——**不要抄一份過來**。需要 fake 的是 T10 那些 smoke（CX24／CX35／CX39／CX42）。
+
+**動手前先量一件事**（T01 review 給 T06 的提醒）：`DirectoryTreeSnapshot.take(root:)` 內部用
+`FileManager.enumerator(at:)`，而它對「指向目錄的 symlink」會**穿透**去列舉目標內容。
+CX18 想斷言的是「字面樹不變、`realpath` 樹差異恰為 `{hooks.json}`」——若 `take(root:)` 穿透，
+兩棵樹在 `codexHomeIsExternalSymlink` 這個形狀下**可能是同一棵**，斷言就變成套套邏輯。
+先用一個一次性測試量 `take(root:)` 對 symlink root 的實際行為，必要時在 `DirectoryTreeSnapshot`
+加一個「**不穿透 root symlink**」的取法，再寫 CX18。量到的結果寫進 CX18 的 doc comment。
 
 - `Sendable`；**欄位只有兩個 `URL`**。**`Sources/AuraHookFile/` 不得出現 `UserDefaults(`／
   `UserDefaults.`**（既有 `HookVerificationStoreSourceScanTests` 會抓），**也不得 import Security**。
@@ -435,6 +479,9 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
 - `Uninstaller.run()` 在 `erasePersistentDomain()` **之前**多一步
   `codexInstaller.disconnect(ifContentsEqual: store.contents)`（`try?`，D-n）。
 
+**驗收必含：解除 `#if AURA_CODEX_PENDING_T10`**（同 T05 的理由與要求：報告附解除前／後的
+`#expect` 數與測試函式數，只准上升；殘留由 CX44 把關）。
+
 **gates**：**CX24**（五段）、CX25、CX26、**CX31**、**CX35**（前提：`pathRejection == nil`）、
 **CX39 `codexReconnectNeverDisconnectsWhenPathIsRejected`**（注入 `.connectedStalePath` ＋
 `translocated: true` → 送 `.connectCodex` → **`disconnect` 呼叫次數 0**、檔案仍在、
@@ -497,8 +544,13 @@ Claude 的鍵、或新程式碼順手 `removePersistentDomain`——**全是 r4 
 
 ## T12 整合 ＋ DoD
 
+**本 task 新增一條 gate**：**CX44 `noPendingFlagRemains`**——來源掃描，`Tests/` 不得殘留
+`AURA_CODEX_PENDING`（比照既有 `noStrayLiteralOutsideAllowlist`／CX30 的形狀，
+**含暫存目錄正向對照**證明掃描沒壞）。理由：T05／T10 的驗收已經要求解除，但那靠人記得；
+有這條就不靠人記得。**mutation**：在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` → CX44 必須紅。
+
 跑 DoD 帳本全表：`swift test` 全綠（含**修好** `everyFixtureModelIsMapped`）且連跑 3 次 0 flake、
-gate mutation 帳（**43 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增、單檔行數、執行檔增量、
+gate mutation 帳（**44 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增、單檔行數、執行檔增量、
 `reprobeCodex()` 成本、啟動時間增幅、`claude plugin validate --strict`、`verify-install.sh`、
 `verify-uninstall.sh`、**`plugin/hooks/hooks.json` 的 git diff 必須為空**、
 `~/.codex/config.toml` 自動化側位元組不變。產出實機清單 ①–⑧。Tier 1 → integrator 綠後派 persona-tester。

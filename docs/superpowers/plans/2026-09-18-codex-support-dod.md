@@ -1,6 +1,6 @@
 # DoD 帳本 · `change/codex-support`（T12）
 
-spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r5**）§7 為門檻來源；
+spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r6**）§7 為門檻來源；
 證據層 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 基準取自 `change/codex-support` 分支點（`c131c30`，＝ `main` ＋ 探針文件），量測時用
 `git worktree add <temp> <基準> --detach` 取乾淨副本，**不動共享工作目錄**。
@@ -9,7 +9,7 @@ spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r5**）§7 
 門檻不得在量完之後往下調——miss 就記 known gap（本專案已有兩次前例：+292 KB、+746 KB，
 都是如實記錄不調門檻）。
 
-**gate 編號**：本 change 新增的一律 `CX<n>`（**43 條**；CX37 拆成 a／b）；既有 gate 一律寫測試函式名。
+**gate 編號**：本 change 新增的一律 `CX<n>`（**44 條**；CX37 拆成 a／b）；既有 gate 一律寫測試函式名。
 
 **起點不是全綠**：`FixtureCodeAnchorTests.everyFixtureModelIsMapped` **目前是紅的**——
 round4 fixture 進 repo 之後，`Jargon.model("gpt-5.5")` 原字回傳（實測輸出：
@@ -35,9 +35,9 @@ DoD #1 的「全綠」以「修好它之後」為準。
 
 | # | 項目 | 門檻 | 量法 | 實測 | 判定 |
 |---|---|---|---|---|---|
-| 1 | 測試全綠 | 連跑 **3 次** 0 flake，**含修好 `everyFixtureModelIsMapped`**；每次存全量 log | `swift test` ×3 | | |
+| 1 | 測試全綠 | 連跑 **3 次** 0 flake，**含修好 `everyFixtureModelIsMapped`**、**且 `AURA_CODEX_PENDING_T05`／`_T10` 兩個旗標都已解除**（T05／T10 各自的驗收要附解除前／後的 `#expect` 與測試函式數，**只准上升**）；每次存全量 log | `swift test` ×3 ＋ CX44 | | |
 | 2 | 新增測試數 | `#expect` 淨增 **≥ 180**（基準 1652）；新增測試函式 **≥ 65**。r4 是 170／62，**r5 增量＝CX42 約 +5、Jargon 三列 +3、CX37 拆 a／b +2**（`grep -c '#expect'` 數的是**原始碼出現次數**，迴圈只算一次——20／780 條序列不會讓這個數字暴增） | 前後 `grep -rho '#expect' Tests \| wc -l`；`swift test` 的 tests 計數 | | |
-| 3 | gate mutation 帳 | **43 條**（CX1–CX42，CX37 拆 a／b）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**） | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | | |
+| 3 | gate mutation 帳 | **44 條**（CX1–CX44，CX37 拆 a／b）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**） | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | | |
 | 4 | **Claude 側零回歸**（紅線） | `git diff <基準>..HEAD -- plugin/hooks/hooks.json` **完全為空**；`handledEvents` 的 19 個名字一字未動 | `git diff` ＋ 逐行看 `EventMapping.swift` 的 diff | | |
 | 5 | **Claude 狀態檔位元組不變** | round1／1b／2／3 跑 merge，序列化後**不含 `agent` 鍵** | CX9 | | |
 | 6a | **`config.toml` 零變動（自動化側）** | `swift test` ×3 全程位元組完全不變 | 開工前存副本，跑完 `diff` | | |
@@ -70,7 +70,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | P3 | 不懂「信任」提示的 vibe coding 使用者 | 按下接上之後，知道「還要在 Codex 裡按一次同意」才會生效 | **≥ 5** |
 | P4 | 兩個都用的人 | 同專案同時跑時兩列分得出來；**兩側都接上時兩邊的燈都真的會動**（R-8） | **≥ 5** |
 
-## Gate mutation 帳（43 條；T12 彙整，✓現場 = 抽驗重跑）
+## Gate mutation 帳（44 條；T12 彙整，✓現場 = 抽驗重跑）
 
 | Gate | 位置 | Mutation | 指名測試 | 秒數 | 來源 task |
 |---|---|---|---|---|---|
@@ -86,7 +86,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | CX10 | `EndToEndWiredGateTests` | `main.swift` 忘了傳 agent | `codexStateFileCarriesAgent` | | T05 |
 | CX11 | `AgentSnapshotCodableTests` | `agent` 改成非 Optional | `legacySnapshotWithoutAgentDecodes` | | T05 |
 | CX12 | `AgentSnapshotCodableTests` | `agent` 改成 `Agent?`（enum） | `unknownAgentFallsBackWithoutFailingDecode` | | T05 |
-| CX13 | `Round4FixtureTests` | `Stop` 改成 `.noChange` | `round4FixtureParsesAndMatchesProbeTable` | | T05 |
+| CX13 | `Round4FixtureTests` | ① `Stop` 改成 `.noChange` ② **從 fixture 抽掉某個事件的一個欄位**（例如 `SessionStart` 的 `model`）→ **欄位層那半必須紅** | `round4FixtureParsesAndMatchesProbeTable`（事件層 ＋ **欄位層**兩層反向斷言） | | T05／T01 |
 | **CX14** | `CodexPathScopeTests` | connect 順手寫 `hooks.json.bak` | `codexInstallerTouchesOnlyHooksJSON` | | T06 |
 | **CX15** | `CodexInstallerClobberTests` | 拿掉 `O_EXCL` | `codexConnectRefusesEveryOccupiedShape`（**報告寫明哪一格紅：symlink→`config.toml`**） | | T06 · **抽驗必做** |
 | CX16 | `CodexInstallerTests` | 少寫最後一個 byte | `codexConnectWritesGeneratorBytes` | | T06 |
@@ -117,6 +117,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | **CX40** | `CodexStateTests` ＋ `CodexWiringSmokeTests` | 拿掉 `codexSnippet` 的條件（無條件給 snippet） | `codexSnippetIsWithheldWhenPathWillVanish`（**乘積表**，`.mustMoveToApplications` 整行 nil） | | T10 |
 | **CX41** | `JargonCodexModelTests` | ① Codex 分支回傳 raw（**既有 `everyFixtureModelIsMapped` 也必須紅**，兩條都記） ② 把 `o3` 改成 `O3` ③ **把 Codex 分支移到既有演算法之後 → `gpt-5` 那列必須紅** | `jargonModelCoversCodexNaming`（釘死的輸入→輸出表**九列**，含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]`；既有九列輸出完全不變） | | T05 |
 | **CX42** | `CodexCredentialSequenceTests` | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` | `bothSidesNeverDisturbEachOthersCredentials`（**20 條**長度 ≤ 2 序列，fake ＋ 注入 suite、零 spawn；另一側鍵位元組不變 ＋ 鍵集合**差集**斷言） | | T10 |
+| **CX44** | 全 repo 掃描 | 在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` | `noPendingFlagRemains`（`Tests/` 不得殘留 `AURA_CODEX_PENDING`；**含暫存目錄正向對照**） | | T12 |
 
 **額外必記的三筆（不是新 gate，是回歸證人）**
 1. T01 的 `DirectoryTreeSnapshot` 抽取之後，**當場重跑既有 `installerTouchesOnlyAllowedPaths`
