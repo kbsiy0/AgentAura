@@ -11,6 +11,9 @@
     <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <!-- menu bar app：不要 dock icon、不要主視窗 -->
+    <!-- 檔名不含副檔名，是 CFBundleIconFile 的規定。.icns 由 scripts/make-icns.sh
+         從 scripts/app-icon.swift 產生，不進版控——真相是畫它的那段程式碼。 -->
+    <key>CFBundleIconFile</key><string>AgentAura</string>
     <key>LSUIElement</key><true/>
     <!-- T13（persona 附帶發現）：沒有這個鍵，標準「關於」面板不會有版權行。
          README §授權目前是「尚未決定（開源時確定）」，這裡照實寫，不瞎掰授權名字

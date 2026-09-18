@@ -38,16 +38,27 @@ info "app, Applications alias, background"
 step "Creating the disk image"
 hdiutil create -quiet -srcfolder "$STAGE" -volname "$VOL" -fs HFS+ \
     -format UDRW -ov "$RW"
+# Detach anything already mounted under this name first. Otherwise macOS mounts the new
+# image as "AgentAura 1" and the AppleScript below, which addresses the disk *by name*,
+# silently styles the stale volume instead. The build then reports "layout not applied" —
+# which is true but for a reason that looks nothing like the cause.
+for stale in /Volumes/"$VOL"*; do
+    [ -d "$stale" ] && hdiutil detach "$stale" -quiet 2>/dev/null || true
+done
+
 MOUNT=$(hdiutil attach "$RW" -nobrowse -noautoopen | grep -o '/Volumes/.*' | head -1)
 [ -n "$MOUNT" ] || die "Couldn't mount the working image."
+# Use the name macOS actually gave it, never the name we asked for.
+VOLNAME=$(basename "$MOUNT")
 info "mounted at $MOUNT"
+[ "$VOLNAME" = "$VOL" ] || info "note: mounted as \"$VOLNAME\", addressing that"
 
 step "Setting the window layout"
 # `|| true` on purpose: a missing Automation permission must not fail the build. The DMG is
 # usable either way, and the next line reports which outcome you got.
 osascript <<APPLESCRIPT >/dev/null 2>&1 || true
 tell application "Finder"
-    tell disk "$VOL"
+    tell disk "$VOLNAME"
         open
         set current view of container window to icon view
         set toolbar visible of container window to false

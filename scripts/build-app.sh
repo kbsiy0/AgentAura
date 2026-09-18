@@ -39,6 +39,12 @@ if [ ${#help_docs[@]} -eq 0 ]; then
 fi
 cp "${help_docs[@]}" "$APP/Contents/Resources/"
 
+# App icon。**每次建置都重新產生**，不從版控拿：真相是 scripts/app-icon.swift 那段程式碼，
+# 而不是某次有人手動匯出的檔案。每個尺寸都在該尺寸原生繪製（16pt 用簡化版，不是把 1024
+# 縮下來），理由見 scripts/make-icns.sh。
+./scripts/make-icns.sh >/dev/null
+cp Resources/AgentAura.icns "$APP/Contents/Resources/AgentAura.icns"
+
 echo "==> 複製 plugin/ 進 bundle（D-g）"
 cp -R plugin "$APP/Contents/Resources/plugin"
 
@@ -46,6 +52,12 @@ echo "==> 驗證"
 lipo -archs "$APP/Contents/MacOS/AgentAuraApp"
 /usr/libexec/PlistBuddy -c "Print :LSUIElement" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist"
+
+# icon 接線：宣告的檔名必須真的存在於 bundle 裡。少了這一條，Info.plist 指向一個不存在的
+# 檔案時 Finder 只會安靜地顯示預設圖示——看起來像「icon 沒做」，不像「接線斷了」。
+icon_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$APP/Contents/Info.plist")
+test -f "$APP/Contents/Resources/$icon_name.icns" \
+  || { echo "!! Info.plist 指定 icon 為 $icon_name，但 $APP/Contents/Resources/$icon_name.icns 不存在" >&2; exit 1; }
 test -x "$APP/Contents/MacOS/AgentAuraApp"
 # cp -R 在 macOS 上會保留權限位元，但這裡實測確認而非假設：
 # 複製之後的可執行位元若掉了，這一行必須讓腳本非零退出，而不是留下一個
