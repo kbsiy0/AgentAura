@@ -130,8 +130,11 @@ struct CodexSectionViewTests {
 
     @Test(".blockedByBundlePath(.mustMoveToApplications)：解釋 ＋ 出路，不給 snippet／複製按鈕")
     func blockedMustMoveShowsExplanationWithoutSnippet() {
+        // 負向斷言必須餵**正向輸入**：這裡刻意給 model 一份真的 snippet。若餵 nil，
+        // 「不得畫出 snippet」在任何實作下都成立（T09 review M1：把 view 的這個分支改成會畫
+        // snippet，全套件紅 0 條）。D-s 的 view 層守衛就是這一格——決策層那半在 CX40（T10）。
         let m = Self.model(codex: .blockedByBundlePath(.mustMoveToApplications),
-                           codexSnippet: nil, codexPathRejection: .mustMoveToApplications)
+                           codexSnippet: Self.realSnippet, codexPathRejection: .mustMoveToApplications)
         let text = Self.dumped(m)
         #expect(text.contains(L10nCodex.blockedPathExplanation.text(.traditionalChinese)))
         #expect(text.contains(InstallerFailure.mustMoveToApplicationsMessage(.traditionalChinese)))

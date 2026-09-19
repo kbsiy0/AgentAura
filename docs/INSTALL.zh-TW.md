@@ -276,6 +276,13 @@ echo '{"hook_event_name":"Stop","session_id":"t1"}' | ./plugin/bin/aura-hook; ec
 沒有錯誤、沒有訊息，Codex 自己的輸出裡什麼都不會出現。如果你不記得看過信任提示，
 開一個新的 Codex session 留意看看。
 
+**Codex：指令失敗了，但燈沒有變紅**
+
+這是預期行為，不是 bug。Codex 的 hook 不會回報 tool 失敗——沒有 `PostToolUseFailure`、
+沒有 `StopFailure`，tool 的結果只是一段純文字、沒有 exit code。所以只用 Codex 的 session，
+AgentAura 沒有任何東西可以拿來點亮錯誤燈；失敗的指令看起來跟其他跑完的指令一樣。
+另外三顆燈（執行中、等你、已完成）跟 Claude Code 一樣正常。
+
 **Codex：想確認它有沒有真的讀到這個檔**
 
 `timeout` 設成 3 秒時，Codex 不會抱怨——短到不會觸發任何警告，所以沒有直接的訊號可看。

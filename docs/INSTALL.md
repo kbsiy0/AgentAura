@@ -270,6 +270,14 @@ Check whether Codex has actually asked you to trust the hook yet. An untrusted h
 **completely silently** — no error, no message, nothing in Codex's own output at all. If you
 don't remember seeing the trust prompt, start a new Codex session and watch for it.
 
+### Codex: a command failed but the light never turned red
+
+That's expected, not a bug. Codex's hooks don't report tool failures — there is no
+`PostToolUseFailure` or `StopFailure` event, and a tool's result arrives as plain text with no
+exit code. AgentAura therefore has nothing to turn the error light on with for a Codex-only
+session; a failed command looks like any other finished command. The other three lights
+(working, waiting, done) work the same way they do for Claude Code.
+
 ### Codex: is it actually reading the hooks file?
 
 There's no visible confirmation that Codex parsed `~/.codex/hooks.json` when the timeout is 3
