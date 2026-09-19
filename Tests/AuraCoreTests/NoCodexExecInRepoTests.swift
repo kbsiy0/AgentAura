@@ -63,6 +63,10 @@ struct NoCodexExecInRepoTests {
         var allHits: [URL] = []
         for root in roots {
             let (scanned, hits) = try Self.scan(under: root)
+            // 逐 root 防空轉：`Tests/` 的幾百個 .swift 會把 `.github/` 的零檔完全蓋掉——
+            // 副檔名清單少了 `yml`、或 workflow 被搬走改名，全體計數照樣過關，gate 就安靜地
+            // 退回只守兩個目錄（T11c review：口徑比宣稱的窄，結果與「乾淨」長得一模一樣）。
+            #expect(scanned > 0, "\(root.lastPathComponent)/ 底下掃到 0 個檔 —— 這個 root 在空跑")
             totalScanned += scanned
             allHits += hits
         }
