@@ -42,7 +42,7 @@ struct OptionsDividerGroupingPixelTests {
         PanelModel.make(icon: .empty, sessions: [], palette: .default,
                         install: .connected(owner: .external, verified: .unknown), version: "1.0",
                         optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil,
-                        systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
+                        systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     @Test("worst-case：production OptionsSectionView（分組）vs 每列都隔開的對照組，像素明顯不同")

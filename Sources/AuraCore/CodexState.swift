@@ -39,8 +39,10 @@ public enum CodexState: Equatable, Sendable {
 
     /// 每個 `CodexStateKind` 的**全部**代表值。`.blockedByBundlePath` 這一格
     /// = `RejectionKind.allCases.flatMap(Rejection.samples).map(CodexState.blockedByBundlePath)`
-    /// （T04 已備好下層），不是單一代表值——同 `PanelAction.samples` 的既有理由：單一代表值
-    /// 時「某個 Rejection 漏了」照樣全綠。窮盡 switch，**不得有 `default`**——理由與 `kind`
+    /// （T04 已備好下層），不是單一代表值——**這條兩層鏈的第一個消費者是 CX36（T09）；
+    /// 在它落地前，兩個 Rejection 樣本在 `rows` 層零鑑別力**（不要把未來式寫成現在式：
+    /// 目前只有 CX20／CX21 讀到 `CodexStateKind` 這一層，還沒有任何 gate 走到
+    /// `Rejection.samples` 逐一鑑別）。窮盡 switch，**不得有 `default`**——理由與 `kind`
     /// 逐字相同：新 case 忘了補這裡，編譯器擋下來；`default: []` 會讓這條定義域推導鏈
     /// 靜默失效。
     public static func samples(_ kind: CodexStateKind) -> [CodexState] {

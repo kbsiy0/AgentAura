@@ -100,6 +100,15 @@ public struct PanelModel: Equatable, Sendable {
     /// `PanelModel` 一樣只是帶著走。`nil` 時面板卡片改顯示「先把 App 移到『應用程式』」
     /// 那句（見 `CodexSectionView`），不是省略整塊。
     public let codexSnippet: String?
+    /// T08b（T07 review 回頭補的裂縫，R-9）：`CodexHookPathCheck.rejection(...)` 的行程常數
+    /// （D-t），橫跨 `.connectedStalePath`（要不要給「重新接上」按鈕）與 `.occupiedByOther`
+    /// （snippet 要不要被扣住，見 `codexSnippet`）兩個 case，不是任何一個 `CodexState`
+    /// case 自己的欄位——`CodexState.swift` 的 doc comment 已經寫明這件事，這裡只是把
+    /// 那個外部輸入原封不動帶到 `OptionsMenuModel.rows(codex:codexPathRejection:)`。
+    /// `OptionsSectionView.rows` 是唯一生產消費點——忘了從這裡讀（改用字面 `nil`），
+    /// 就是「重新接上」按鈕永遠不出現的那個 tested≠wired 坑，見
+    /// `OptionsMenuModelRowsCallSiteSourceScanTests`。
+    public let codexPathRejection: CodexHookPathCheck.Rejection?
 
     /// `rows`／`title` 借用既有的 `PanelViewModel`（已測過的純函式）；`palette` 直接帶入、
     /// `legend` 經 `LegendModel.items(for:)` 組裝、`isDefaultPalette` = `palette.isDefault`。
@@ -111,7 +120,8 @@ public struct PanelModel: Equatable, Sendable {
                             install: InstallState, version: String, optionsExpanded: Bool,
                             launchAtLogin: Bool?, externalTargetPath: String?, banner: PanelBanner?,
                             systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
-                            language: Language, codex: CodexState, codexSnippet: String?, now: Date = Date()) -> PanelModel {
+                            language: Language, codex: CodexState, codexSnippet: String?,
+                            codexPathRejection: CodexHookPathCheck.Rejection?, now: Date = Date()) -> PanelModel {
         PanelModel(title: title(for: icon, install: install, language: language),
                   rows: PanelViewModel.rows(from: sessions, now: now, language: language),
                   palette: palette,
@@ -120,7 +130,8 @@ public struct PanelModel: Equatable, Sendable {
                   install: install, version: version, optionsExpanded: optionsExpanded,
                   launchAtLogin: launchAtLogin, externalTargetPath: externalTargetPath, banner: banner,
                   systemReduceMotion: systemReduceMotion, userReduceMotion: userReduceMotion, iconPlate: iconPlate,
-                  iconShape: iconShape, language: language, codex: codex, codexSnippet: codexSnippet)
+                  iconShape: iconShape, language: language, codex: codex, codexSnippet: codexSnippet,
+                  codexPathRejection: codexPathRejection)
     }
 
     /// T11 commit2（S0-2）：非 `connected` 時面板標題改用 `install.healthLabel`——與

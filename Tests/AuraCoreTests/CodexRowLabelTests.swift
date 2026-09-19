@@ -4,9 +4,9 @@ import Foundation
 
 /// codex-support T08（CX22 model 半，spec §6.3／design r9 §3）：`PanelRow.agentLabel`
 /// 的推導本身已由 `AgentThreadingTests`（T05）四段證明過——這裡補的是「透過
-/// `PanelModel.make(...)` 這個唯一建構入口」那一段：新增的 `codex`／`codexSnippet`
-/// 欄位不干擾既有 rows 推導，且兩個新欄位透傳不失真（同一個 sample 傳進去、原封不動
-/// 讀得出來）。
+/// `PanelModel.make(...)` 這個唯一建構入口」那一段：新增的 `codex`／`codexSnippet`／
+/// `codexPathRejection`（T08b，T07 review 回頭補的裂縫）三個欄位不干擾既有 rows 推導，
+/// 且三個新欄位透傳不失真（同一個 sample 傳進去、原封不動讀得出來）。
 ///
 /// 期望值一律寫字面 `"Codex"`，**不拿 `Agent.codex.label` 跟自己比**（gate 哲學：生產
 /// 常數不能自己當自己的裁判，同 T04 review 的陷阱——`agentFlag` 改壞後拿產生器輸出跟
@@ -26,13 +26,14 @@ struct CodexRowLabelTests {
                     liveness: .alive(pid: 1), updatedAt: Date())
     }
 
-    static func model(sessions: [SessionState], codex: CodexState, codexSnippet: String?) -> PanelModel {
+    static func model(sessions: [SessionState], codex: CodexState, codexSnippet: String?,
+                      codexPathRejection: CodexHookPathCheck.Rejection? = nil) -> PanelModel {
         PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                         install: .notConnected, version: "1.0", optionsExpanded: false,
                         launchAtLogin: nil, externalTargetPath: nil, banner: nil,
                         systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
                         iconShape: .ledStrip, language: .traditionalChinese,
-                        codex: codex, codexSnippet: codexSnippet)
+                        codex: codex, codexSnippet: codexSnippet, codexPathRejection: codexPathRejection)
     }
 
     @Test("PanelModel.make 帶 codex 狀態不干擾既有 rows 推導：.codex 顯示字面 \"Codex\"，.claude 不顯示")
@@ -64,5 +65,22 @@ struct CodexRowLabelTests {
         #expect(Self.model(sessions: [], codex: .occupiedByOther, codexSnippet: nil).codexSnippet == nil)
         let snippet = "hook snippet literal"
         #expect(Self.model(sessions: [], codex: .occupiedByOther, codexSnippet: snippet).codexSnippet == snippet)
+    }
+
+    /// T08b：`codexPathRejection` 是橫跨 `.connectedStalePath`／`.occupiedByOther` 的行程常數
+    /// （D-t），不是任何 `CodexState` case 自己的欄位——這裡逐 `RejectionKind` 代表值
+    /// （含 `nil`）驗證它跟 `codex`／`codexSnippet` 一樣透過 `PanelModel.make` 原封不動。
+    @Test("codexPathRejection 透傳：nil 與每個 RejectionKind 代表值都原封不動讀得出來")
+    func codexPathRejectionPassesThroughVerbatim() {
+        #expect(Self.model(sessions: [], codex: .connectedStalePath, codexSnippet: nil,
+                           codexPathRejection: nil).codexPathRejection == nil)
+        for kind in CodexHookPathCheck.RejectionKind.allCases {
+            for sample in CodexHookPathCheck.Rejection.samples(kind) {
+                let model = Self.model(sessions: [], codex: .connectedStalePath, codexSnippet: nil,
+                                       codexPathRejection: sample)
+                #expect(model.codexPathRejection == sample,
+                        "\(kind) 的代表值透過 PanelModel.make 後失真：\(String(describing: model.codexPathRejection))")
+            }
+        }
     }
 }

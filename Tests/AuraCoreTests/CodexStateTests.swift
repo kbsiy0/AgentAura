@@ -17,7 +17,7 @@ struct CodexStateTests {
     /// 隨手湊的 `Data("A".utf8)`：這樣才驗到「兩份*合法產生器輸出*但路徑不同」這個真實情境
     /// （app 搬家），不是「兩個任意不同的位元組序列」這種弱化版本。
     static let contentsAtOldPath = CodexHooksJSON.json(hookBinaryPath: "/Applications/AgentAura.app/Contents/Resources/bin/aura-hook")
-    static let contentsAtNewPath = CodexHooksJSON.json(hookBinaryPath: "/Applications/AgentAura (2).app/Contents/Resources/bin/aura-hook")
+    static let contentsAtNewPath = CodexHooksJSON.json(hookBinaryPath: "/Applications/AgentAura-2.app/Contents/Resources/bin/aura-hook")
     static let unrelatedContents = Data("這是別人的合法 JSON，不是我們寫的".utf8)
     static let sampleRejection = CodexHookPathCheck.Rejection.mustMoveToApplications
 

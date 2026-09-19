@@ -16,15 +16,17 @@ struct OptionsSectionView: View {
     let onAction: (PanelAction) -> Void
 
     private var rows: [OptionsRow] {
-        // T07 暫時 stub——`PanelModel` 還沒有 `codex`／`codexPathRejection` 欄位（T08 才加），
-        // 這裡先硬編 `.unavailable`／`nil`，跟現在的實際行為一致（Codex 功能還沒有任何畫面）。
-        // T08 必須換成 model.codex／model.codexPathRejection。
+        // T08b（T07 review 回頭補的裂縫）：這裡曾經暫時硬編 `.unavailable`／`nil`
+        // （`PanelModel` 那時還沒有這兩個欄位）——那個 stub 忘了在本 task 換掉的話，
+        // 是靜默失效：`.unavailable` 正好是所有既有測試期待的值，854 條全綠而 Codex
+        // 的 Options 列永遠不出現。改讀 `model.codex`／`model.codexPathRejection`——
+        // 唯一生產呼叫點，見 `OptionsMenuModelRowsCallSiteSourceScanTests`（守住不能再退回字面）。
         OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                               isDefaultPalette: model.isDefaultPalette,
                               systemReduceMotion: model.systemReduceMotion, userReduceMotion: model.userReduceMotion,
                               iconPlate: model.iconPlate, iconShape: model.iconShape,
                               palette: model.palette, language: model.language,
-                              codex: .unavailable, codexPathRejection: nil)
+                              codex: model.codex, codexPathRejection: model.codexPathRejection)
     }
 
     var body: some View {
@@ -148,8 +150,8 @@ private struct OptionsRowIconView: View {
         case .dismissBanner: "xmark"
         case .replaceExternalMount: "arrow.2.squarepath"
         case .setLanguage: "globe"
-        // T07 暫時 stub（team-lead 裁決）——三個 Codex kind 給暫定 icon 只是讓這個窮盡
-        // switch 編得過，不是真的設計決定。T09 會覆寫成正式圖示。
+        // T07 暫時 stub（team-lead 裁決，AURA_CODEX_PENDING_T09）——三個 Codex kind 給暫定
+        // icon 只是讓這個窮盡 switch 編得過，不是真的設計決定。T09 會覆寫成正式圖示。
         case .connectCodex, .disconnectCodex, .copyCodexSnippet: "terminal"
         }
     }

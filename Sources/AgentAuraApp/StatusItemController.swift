@@ -113,7 +113,7 @@ final class StatusItemController: IconRendering {
                                  launchAtLogin: nil, externalTargetPath: nil, banner: nil,
                                  systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
                                  iconShape: .ledStrip, language: .english,
-                                 codex: .unavailable, codexSnippet: nil))
+                                 codex: .unavailable, codexSnippet: nil, codexPathRejection: nil))
     }
 
     /// 首次建 `NSHostingController` 並設 `sizingOptions = [.preferredContentSize]`
