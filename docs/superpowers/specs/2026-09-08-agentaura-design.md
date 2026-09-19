@@ -550,12 +550,6 @@ protocol LivenessProber  { func isAlive(pid: pid_t, startedAt: time_t) -> Bool }
 
 `AuraCore` 不 import AppKit —— **此約束由測試強制，不靠自律**。
 
-> **2026-09-18 更新（change `codex-support`，D-u）：** 去工程師化這條線也要認得 Codex——
-> `Jargon.model` 新增 Codex 家族的模型命名分支，**排在既有 Claude 家族演算法之前**呼叫，
-> 判不出來一律沿用既有的「原樣回傳」（既有六條規則一行不動）。理由：`gpt-5` 是唯一能
-> 區分「新分支在前」與「在後」的輸入——放在既有演算法之後會被既有規則先攔截、輸出變成
-> `Gpt 5`，跟刻意要的 Codex 命名不一致。CX41 釘住九列輸入→輸出的對照表。
-
 ### 3.5 pid liveness 與 pid 回收
 
 `kill(pid, 0)` 只證明「某個 process 存在」，不證明是原本那個 —— pid 會被系統回收。

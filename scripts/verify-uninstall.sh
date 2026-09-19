@@ -13,12 +13,17 @@
 # CODEX_HOME：**不是給使用者的介面**，只給測試注入用（同 AGENTAURA_ROOT 的既有先例）——
 # 一般使用者不需要，也不應該設這個環境變數。
 set -uo pipefail
+usage() { echo "用法：$0 [App 路徑] [--only <1-7>]（--only 要帶 1 到 7 的項次）" >&2; }
 APP="/Applications/AgentAura.app"
 ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --only)
-      ONLY="${2:-}"
+      # M1（spec-reviewer 實測）：`$# < 2` 時裸 `shift 2` 在 bash 底下**不動** `$#`
+      # 也不中止（腳本只有 `-uo pipefail`，沒有 `-e`）——`--only` 忘了帶數字會讓這個
+      # `while` 永遠成立，腳本卡死、零輸出。先確認至少還有一個值可以吃才 shift。
+      [ $# -ge 2 ] || { usage; exit 2; }
+      ONLY="$2"
       shift 2
       ;;
     --only=*)
@@ -31,6 +36,16 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+# M1：`should_run()` 是純字串比對，`--only 77`／`--only 0`／`--only seven` 這類無效項次
+# 對誰都比不中，會讓每一項都跳過——`FAIL` 因此停在初始值 0，最後印出「完整移除驗收
+# PASS」。**一項都沒檢查，結論卻是通過**，直接違反這支腳本自己在第 4 項寫下的道理
+# （「無法驗證不等於驗證通過」）。收到 `--only` 就必須是 1–7 之一，否則當成用法錯誤。
+if [ -n "$ONLY" ]; then
+  case "$ONLY" in
+    [1-7]) ;;
+    *) usage; exit 2 ;;
+  esac
+fi
 should_run() { [ -z "$ONLY" ] || [ "$ONLY" = "$1" ]; }
 # 從 Info.plist 推導，不手抄一份（手抄的清單自己會 drift——本專案的老教訓）。
 PLIST="$(cd "$(dirname "$0")/.." && pwd)/Resources/Info.plist"

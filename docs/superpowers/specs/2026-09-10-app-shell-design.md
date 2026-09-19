@@ -574,6 +574,17 @@ join 原字串——`Jargon` 可以 100% 正確而面板照樣印 `claude-opus-5
 同時 `PanelViewModel.detail` 的英文字改中文：`N subagents` → `N 個子任務`、
 `N tool 失敗` → `N 次工具失敗`。圖例提示行改「八顆燈一起代表全部 session · 點色點改顏色」。
 
+> **2026-09-18 更新（change `codex-support`，D-u）：** 這條文案映射也要認得 Codex——
+> `Jargon.model` 新增 Codex 家族的模型命名分支，**排在既有 Claude 家族演算法之前**呼叫，
+> 判不出來一律沿用既有的「原樣回傳」（既有六條規則一行不動）。理由：`gpt-5` 是唯一能
+> 區分「新分支在前」與「在後」的輸入——放在既有演算法之後會被既有規則先攔截、輸出變成
+> `Gpt 5`，跟刻意要的 Codex 命名不一致。CX41（見
+> `docs/superpowers/specs/2026-09-18-codex-support-design.md` §4.9）釘住九列輸入→輸出的
+> 對照表。**T11c 更正**：這段原本被寫進 `2026-09-08-agentaura-design.md` §3.4「介面縫」的
+> 末尾——兩份 spec 都有一個叫「§3.4」的章節，但那份文件的 §3.4 講的是 `EventSource`／
+> `IconRendering` 協定，跟 `Jargon` 無關；`Jargon.swift` 檔頭的麵包屑（「面板文案去工程師化
+> （M-7，D-c，spec §3.4）」）指的其實是**這一份**（M-7／D-c 與這裡的章節標題逐字相同）。
+
 ---
 
 ## 4. 核心技術

@@ -42,6 +42,35 @@ struct VerifyUninstallScriptCodexTests {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// T11c（M1，spec-reviewer 實測）：跑任意 `--only` 引數組合，**有界等待**——macOS 沒有
+    /// `timeout` 命令，CLAUDE.md 既有慣例是自己寫 `cmd & pid=$!; (sleep N; kill -9 $pid) & wait`
+    /// 那套 shell 慣用法；這裡是同一個道理的 Swift 版：輪詢 `process.isRunning`，逾時就送
+    /// `SIGKILL`，不讓一條會 hang 的腳本吊死整個測試套件。逾時本身也是一種可觀察結果
+    /// （`timedOut == true`），不是靜默吞掉。
+    static func runBounded(arguments: [String], boundSeconds: Double = 3) throws
+        -> (output: String, exitCode: Int32, timedOut: Bool) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [Self.scriptURL().path] + arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+
+        let deadline = Date().addingTimeInterval(boundSeconds)
+        while process.isRunning && Date() < deadline {
+            usleep(20_000)
+        }
+        var timedOut = false
+        if process.isRunning {
+            timedOut = true
+            kill(process.processIdentifier, SIGKILL)
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (String(decoding: data, as: UTF8.self), process.terminationStatus, timedOut)
+    }
+
     /// 第 7 項那一段輸出——從含 `"== 7."` 的那一行到下一個 `"=="` 開頭的行之前（或檔尾）。
     /// 解析失敗（腳本輸出裡完全沒有這個區塊）大聲丟錯，不是安靜回空字串。
     static func item7Block(_ output: String) throws -> String {
@@ -90,5 +119,31 @@ struct VerifyUninstallScriptCodexTests {
             #expect(!output.contains("== 1."), "--only 7 不該印出其他項目：\n\(output)")
             #expect(output.contains("== 7."), "--only 7 至少要印出第 7 項：\n\(output)")
         }
+    }
+
+    /// T11c（M1）：`--only` **缺值**（後面沒帶數字）——修好之前 `shift 2` 在 `$# < 2` 時
+    /// 不動 `$#`，`while [ $# -gt 0 ]` 因此永遠成立，腳本卡死、零輸出。修好之後必須在
+    /// 有界時間內以非零 exit code 結束（用法錯誤，不是「什麼都沒檢查就算過」）。
+    @Test("--only 缺值 → 有界時間內非零退出，不 hang")
+    func onlyWithMissingValueExitsBoundedAndNonZero() throws {
+        let result = try Self.runBounded(arguments: ["--only"])
+        #expect(!result.timedOut, "--only 缺值不該讓腳本 hang 住（3 秒內沒結束），實際輸出：\n\(result.output)")
+        #expect(result.exitCode != 0, "--only 缺值應該是用法錯誤，exit code 應非 0，實際 \(result.exitCode)")
+    }
+
+    /// T11c（M1）：`--only 77`／`--only 0`／`--only seven` 這類無效項次——修好之前
+    /// `should_run()` 純字串比對對不上就整項跳過，最後 `FAIL` 仍是 0，印出「完整移除驗收
+    /// PASS」；等於「一項都沒檢查，結論卻是通過」，直接違反腳本第 4 項自己寫的
+    /// 「無法驗證不等於驗證通過」。修好之後必須非零退出，且輸出**不得**含「PASS」。
+    @Test("無效的 --only 值 → 非零退出，輸出不含 PASS（不得『沒檢查就算過』）",
+          arguments: ["77", "0", "seven"])
+    func onlyWithInvalidValueExitsNonZeroWithoutClaimingPass(invalidValue: String) throws {
+        let result = try Self.runBounded(arguments: ["--only", invalidValue])
+        #expect(!result.timedOut, "--only \(invalidValue) 不該讓腳本 hang 住，實際輸出：\n\(result.output)")
+        #expect(result.exitCode != 0, "--only \(invalidValue) 應該是用法錯誤，exit code 應非 0，實際 \(result.exitCode)")
+        #expect(!result.output.contains("PASS"), """
+            --only \(invalidValue) 一項都沒檢查，不該印出「PASS」，實際輸出：
+            \(result.output)
+            """)
     }
 }

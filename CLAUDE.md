@@ -101,7 +101,7 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 - **`Installer` 只准碰 `<claudeHome>/skills/agentaura`（必要時加 `<claudeHome>/skills/`），判定一律以 `realpath` 解析後為準；`~/.claude` 不存在時拒絕接上、不得建立它**（spec D-h —— `skills` 自己可能是 symlink；gate `installerTouchesOnlyAllowedPaths`）。
 - **`aura-hook --agent` 收到未知值或缺值一律落回 `.claude`，且全程靜默、`exit 0`**（codex-support D-d/D-b —— 只支援一種寫法時，手寫成另一種會靜默標成 claude；`agentArgumentParsing`／`auraHookStaysSilentForEveryAgentArgument` 守）。
 - **`CodexInstaller` 只准碰 `<codexHome>/hooks.json`；只在不存在時寫、只在內容逐位元組相符時刪；絕不碰 `<codexHome>/config.toml`**（codex-support D-i/D-j —— gate `codexInstallerTouchesOnlyHooksJSON`／`codexDisconnectOnlyRemovesOurBytes`）。
-- **對任一側（Claude／Codex）的安裝操作（connect／disconnect／reconnect／完整移除）不得改動另一側的任何位元組**（codex-support R-8 —— gate `bothSidesNeverDisturbEachOthersFiles`／`...OnProductionPath`／`bothSidesNeverDisturbEachOthersCredentials`）。
+- **對任一側（Claude／Codex）的安裝操作（connect／disconnect／reconnect／完整移除）不得改動另一側的任何位元組**（codex-support R-8 —— 檔案半見 gate `bothSidesNeverDisturbEachOthersFiles`／`...OnProductionPath`；憑證半的 gate 排在 T10，CLAUDE.md 不提前列入還不存在的名字）。
 
 ## Agent 在終端機裡的界線（2026-09-14 事故）
 
