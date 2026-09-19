@@ -142,12 +142,6 @@ extension AppDelegate {
         refreshPanel()
     }
 
-    /// B2：Amphetamine 的 Feedback & Support 對應——走既有注入的 `openURL`（測試斷言拿到
-    /// 正確的 URL，不得真的開瀏覽器，spec §6.4）。
-    func reportIssue() {
-        openURL(ProjectLinks.newIssue)
-    }
-
     /// `store.set` 先 `onChange`（driver.setPalette + refreshPanel 立刻反映）再落盤。
     /// 搬自 `AppDelegate.swift`（T32，為 composition root 的新增欄位騰行數，同 T16／T26
     /// 把 key／preference／load／perform 都放在這個檔案的既有慣例）。
@@ -168,33 +162,4 @@ extension AppDelegate {
         refreshPanel()
     }
 
-    /// `NSWorkspace` 的呼叫走注入的 `openURL` 閉包（測試斷言「真的拿那個 URL 去開」，
-    /// 不是真的開瀏覽器）。`help.html` 的實際內容是 T09 的工作；T30（i18n）改成依
-    /// `self.language` 選檔——bundle 內找不到對應語言的檔案時安全地什麼都不做。
-    func openHelp() {
-        guard let url = Self.helpURL(for: language) else { return }
-        openURL(url)
-    }
-
-    /// T30（i18n）：檔名規則——`help-<Language.rawValue>.html`（`rawValue` 已被
-    /// `LanguageTests.rawValuesArePinned` 釘死為 `"english"`／`"traditionalChinese"`）。
-    /// 純函式、不摸 `Bundle`，`scripts/build-app.sh` 的 `Resources/help-*.html` glob
-    /// 各自從同一條命名規則推導要複製／要找哪些檔，不手抄「有哪些語言」這份清單——
-    /// 哪天 `Language` 真的加第三個 case，兩邊都不必改，只要多放一個對應檔名的資源檔。
-    nonisolated static func helpResourceName(for language: Language) -> String {
-        "help-\(language.rawValue)"
-    }
-
-    /// E3（/simplify 波次2，struct#E2）：`??` 右邊原本只拼路徑、不驗存在性——只要
-    /// `Bundle.main.resourceURL != nil`（app bundle 與 `swift test` 皆成立）就必定非 nil，
-    /// 上面 `openHelp` 那句「找不到就什麼都不做」的 fail-soft guard 因此在生產路徑上恆真、
-    /// 從未真的擋下任何東西（CLAUDE.md「八族空轉的守衛」）。補一次 `fileExists` 讓 guard
-    /// 真的有牙齒——不改變其餘行為：找得到（多數情況）回同一個 URL，只是現在真的驗過。
-    private static func helpURL(for language: Language) -> URL? {
-        let name = helpResourceName(for: language)
-        if let url = Bundle.main.url(forResource: name, withExtension: "html") { return url }
-        guard let fallback = Bundle.main.resourceURL?.appendingPathComponent("\(name).html"),
-              FileManager.default.fileExists(atPath: fallback.path) else { return nil }
-        return fallback
-    }
 }
