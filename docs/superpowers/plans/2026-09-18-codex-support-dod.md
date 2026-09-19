@@ -1,6 +1,6 @@
 # DoD 帳本 · `change/codex-support`（T12）
 
-spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r11**）§7 為門檻來源；
+spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r12**）§7 為門檻來源；
 證據層 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 基準取自 `change/codex-support` 分支點（`c131c30`，＝ `main` ＋ 探針文件），量測時用
 `git worktree add <temp> <基準> --detach` 取乾淨副本，**不動共享工作目錄**。
@@ -109,12 +109,12 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | **CX33** | `CodexHookPathCheckTests` | ① 一律回 `.unsupportedCharacter(" ")` ② 優先序對調 | `codexPathCheckNamesTheOffendingCharacter`（定義域從 `unsupportedCharacters` 推導） | | T04 |
 | **CX34** | `CodexStateTests` | `from` 忽略 `currentExpectedContents` | `codexStalePathIsDetectedAndOffersReconnect` | | T07 |
 | **CX35** | `CodexWiringSmokeTests` | stale 時直接 `connect`（不先 disconnect） | `stalePathReconnectDisconnectsBeforeConnecting`（**前提：`pathRejection == nil`**） | | T10 |
-| **CX36** | `CodexSectionRenderTests` | ① 錯誤文案不插字元（籠統句） ② **被拒時仍畫「重新接上」按鈕** | `codexSectionRendersEveryState`（六態 ＋ 兩種 Rejection） | | T09 |
+| **CX36** | `CodexSectionRenderTests` | ① 錯誤文案不插字元（籠統句） ② **被拒時仍畫「重新接上」按鈕** ③ **把 `.mustMoveToApplications` 分支改成會畫 snippet → 必須紅**（T09 review M1：輸入改成真 snippet 之前，這個 mutation 紅 0 條） | `codexSectionRendersEveryState`（六態 ＋ 兩種 Rejection；`.mustMoveToApplications` 那格**必須餵真的 `codexSnippet`**） | | T09 |
 | **CX37a** | `CodexCoexistenceSequenceTests` | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime（**CX37a 與 CX37b 都必須紅**，兩條都記） | `bothSidesNeverDisturbEachOthersFiles`（**780 條全跑**，`connectClaude` 走 `guardWriteTarget()` ＋ `atomicReplace()`，零 spawn） | | T06 |
 | **CX37b** | `CodexCoexistenceSequenceTests` | 同 CX37a | `bothSidesNeverDisturbEachOthersFilesOnProductionPath`（長度 ≤ 2 共 30 條，完整 `connect`，11 次真 spawn） | | T06 |
 | **CX38** | `EndToEndWiredGateTests`（或拆出的 `EndToEndDualAgentTests`） | `--agent` 解析改成一律回 `.claude` | `oneBinaryServesBothAgentsInOneRoot`（兩個方向各跑一次） | | T05 |
 | **CX39** | `CodexWiringSmokeTests` | **把 R-9 的 guard 移到 `disconnect` 之後** | `codexReconnectNeverDisconnectsWhenPathIsRejected`（`disconnect` 次數 0、檔案仍在） | | T10 · **抽驗必做** |
-| **CX40** | `CodexStateTests` ＋ `CodexWiringSmokeTests` | 拿掉 `codexSnippet` 的條件（無條件給 snippet） | `codexSnippetIsWithheldWhenPathWillVanish`（**乘積表**，`.mustMoveToApplications` 整行 nil） | | T10 |
+| **CX40** | `CodexStateTests` ＋ `CodexWiringSmokeTests` | **讓 `reprobeCodex` 在 `.mustMoveToApplications` 時仍然給 snippet**（＝拿掉 `codexSnippet` 的條件） | `codexSnippetIsWithheldWhenPathWillVanish`（**乘積表**，`.mustMoveToApplications` 整行 nil）。**與 CX36③ 是同一條不變式的兩層**（決策層／view 層），**D-s 在兩者落地前零強制力** | | T10 |
 | **CX41** | `JargonCodexModelTests` | ① Codex 分支回傳 raw（**既有 `everyFixtureModelIsMapped` 也必須紅**，兩條都記） ② 把 `o3` 改成 `O3` ③ **把 Codex 分支移到既有演算法之後 → `gpt-5` 那列必須紅** | `jargonModelCoversCodexNaming`（釘死的輸入→輸出表**九列**，含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]`；既有九列輸出完全不變） | | T05 |
 | **CX42** | `CodexCredentialSequenceTests` | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` | `bothSidesNeverDisturbEachOthersCredentials`（**20 條**長度 ≤ 2 序列，fake ＋ 注入 suite、零 spawn；另一側鍵位元組不變 ＋ 鍵集合**差集**斷言） | | T10 |
 | **CX44** | 全 repo 掃描 | 在 **`Sources/` 與 `Tests/` 各留一個** `AURA_CODEX_PENDING_T08`（**兩處都要紅**） | `noPendingFlagRemains`（**`Sources/` ＋ `Tests/`** 都不得殘留 `AURA_CODEX_PENDING`；**含暫存目錄正向對照**） | | T12 |
@@ -141,6 +141,7 @@ DoD #2 要求**每個 task 的報告附該 commit 的絕對值**，這裡是彙�
 | **T05 交付（T01–T05 已 merge）** | `ad174e7` | **1792** | **828 tests / 1 issue** |
 | **T07 交付** | `fc4f218` | **1880** | **875 tests / 4 issues**（1 條 T10 pending ＋ **3 條因 T07 的 stub 而誠實紅**） |
 | **T08b／T11 交付** | `08140a6` | **1911** | **893 tests / 4 issues**（同上組成：1 條 T10 pending ＋ 3 條 stub 誠實紅） |
+| **T09 交付** | `d3e954e` | **1959** | **915 tests / 4 issues**（同上組成） |
 
 **T07 交付時的 4 個紅**：`codexConnectChainIsWired`（pending T10）＋ 三條因 T07 的 stub 而誠實紅的
 既有 gate（`panelActionsAreWired` 對三個新 kind）——**後三條不算基準紅**，它們是 tested≠wired 守衛

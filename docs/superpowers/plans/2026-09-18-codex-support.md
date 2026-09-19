@@ -1,9 +1,9 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r11**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r12**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 r11 的 spec。
+> 節號引用一律指 r12 的 spec。
 > **gate 編號**：本 change 新增的一律 `CX<n>`（共 **46** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
 
 ## 0. 給每個 implementer 的共同規則
@@ -32,6 +32,14 @@
   `switch` 的 `break` 靠既有 gate 誠實紅、窮盡 switch 的暫定值靠「動 view 時一定看到」，
   而 `OptionsSectionView` 硬編 `.unavailable` **既不紅也不在必經路徑上**。
   **只有可 grep 的標記能一次全包**，CX44 因此掃 **`Sources/` ＋ `Tests/`**，不必記得有幾個、在哪裡。
+- **負向斷言必須餵正向輸入**（T09 review M1）：斷言「**X 不得出現**」時，輸入必須是
+  **若實作錯了 X 就會出現**的那組值——否則那條斷言在任何實作下都成立。
+  實例：`.mustMoveToApplications` 那格餵 `codexSnippet: nil` 再斷言「不得畫 snippet」，
+  reviewer 把 view 改成會畫 snippet，**紅 0 條**。改成餵真的 snippet 之後，那條斷言才真正在問
+  「**給了你 snippet，你還是不准畫出來嗎**」（也才符合 S0-1(ii)：view 是執行層，要自己擋，
+  不能只信路由層）。**mutation 必附「把禁令拿掉 → 紅」**，否則不算守住。
+  這是本 change 第**三**族「全綠倖存者」——前兩族是「拿生產常數跟自己比」（`timeout`／`agentFlag`）
+  與「掃描器口徑比宣稱的窄」（CX46 的跨行寫法）。
 - **gate 不得拿生產常數跟自己比**（T04 review M1／M2，**同一個陷阱已經出現兩次**：`timeout` 與 `agentFlag`）：
   `#expect(產生器輸出 == "...\(CodexHooksJSON.agentFlag)")` 這種寫法，常數被改壞時兩邊一起變、**斷言恆真**
   ——實測把 `agentFlag` 改成 `"--agent codexx"`，全量 808 條測試**零新紅**。**期望值一律寫字面**；
@@ -497,6 +505,9 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
   - `.unavailable`／`.connected` → 不畫。
   按鈕**必須用 `.borderless`**（離屏渲染下 `.bordered` 會被包進 `_FocusRingView` 而走訪不到）。
 - 新增按鈕會動到既有離屏測試的**位置索引斷言**——逐一檢查 `FooterPixelTests`／`OptionsExpandTests`，
+  **清查結果要以表列進報告**（哪個檔、哪條測試、靠不靠索引定位、結論），
+  **不接受「沒紅所以應該沒事」那種推論**（T09 review m2）——離屏讀不到 `.title` 也讀不到
+  `accessibilityIdentifier`，這條檢查是 CLAUDE.md gate 哲學第 5 條直接寫下來的，值得留下紀錄。
   報告列出檢查結果。
 
 **gates**：CX22 像素半、**CX23**、**CX36 `codexSectionRendersEveryState`**（六態 ＋ 兩種 Rejection
@@ -566,6 +577,11 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
     .appendingPathComponent(".codex")`（**不得用 `environment["HOME"]`**）。
 - 剪貼簿走注入縫 `writeToPasteboard: @MainActor (String) -> Void`。
 - 接上成功的 banner 必須**同時**含「下一個 Codex session 起生效」與「Codex 會問你信任」（D-m）。
+- **順手清掉一個死分支**（T09 review m3）：`CodexSectionView.swift` 的 `Agent.codex.label ?? "Codex"`
+  ——`label` 對 `.codex` 恆為 `"Codex"`，`??` 右側永遠不執行，而它**複製了那個它想避免重複的字面**。
+  哪天 `label` 的語意變了（例如改成只在多 agent 並存時才給值），這個 fallback 會**靜默**把舊字面補回去。
+  同 D-r 對 `default:` 的態度。**二擇一**：① 加一條 pin test 釘住 `Agent.codex.label == "Codex"`（字面）
+  並把 view 改成 `!`；② 給 `Agent` 一個不帶 Optional 的 `displayName` 讓型別說話。
 - **驗收必含：補上 `CLAUDE.md` 第三條 invariant（R-8）的第三個 gate 名**
   `bothSidesNeverDisturbEachOthersCredentials`——T11 刻意只列了已存在的兩個（CX37a／CX37b），
   因為 CX42 排在本 task；交付後回去補，那條 invariant 才完整（T11 review m2）。
@@ -586,6 +602,9 @@ banner 是 `.mustMoveToApplications` 那句）、**CX40 `codexSnippetIsWithheldW
 它的 gate 落在同一個 task**（就是本 task）。也就是說，在 CX40 寫出來之前，「`.occupiedByOther`
 ＋ translocated 時不給 snippet」這件事沒有任何東西擋著；它正是 r3 M1 指出的那扇側門。
 **先寫 CX40（RED）再寫實作**，不要反過來。
+**CX40 的 mutation 措辭**：「讓 `reprobeCodex` 在 `.mustMoveToApplications` 時**仍然給 snippet**
+→ CX40 必須紅」（T09 review m1）。view 層那一半的守衛由 CX36 的第③格 mutation 負責，
+兩層要一起看——**D-s 在這兩者落地之前零強制力**。
 
 其餘 gates：
 **CX42 `bothSidesNeverDisturbEachOthersCredentials`**（見下）、
@@ -664,6 +683,11 @@ Claude 的鍵、或新程式碼順手 `removePersistentDomain`——**全是 r4 
 ---
 
 ## T12 整合 ＋ DoD
+
+**本 task 要補兩份清查**：① **位置索引斷言的清查表**（T09 若未附，在這裡補齊：哪個檔、哪條測試、
+靠不靠索引定位、結論）；② `docs/INSTALL.md` 的「Codex: the light never moves」那一節**補一句
+「Codex 沒有 error 燈」的交叉引用**（T11 review m4：那節標題就叫「燈不會動」，正是「我跑失敗了
+燈卻沒變紅」的使用者會查的地方，而它目前只解釋了信任提示；help 兩個語言版本都已有明講）。
 
 **本 task 新增一條 gate**：**CX44 `noPendingFlagRemains`**——來源掃描，**`Sources/` ＋ `Tests/`** 都不得殘留
 `AURA_CODEX_PENDING`（比照既有 `noStrayLiteralOutsideAllowlist`／CX30 的形狀，

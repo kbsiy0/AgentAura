@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r11（2026-09-19，折入 T11／T08 review；不送審）
+revision: r12（2026-09-19，折入 T09 review；不送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -68,7 +68,7 @@ Codex CLI 0.155.0 讀 `~/.codex/hooks.json`，結構與 Claude Code 相同（F1�
 | D-p | `~/.codex` 自己是 symlink 時**不拒絕**，但寫入必須落在 `realpath` 底下 | 同既有 `ClaudeHomeSkillsSymlinkFixture` 的形狀 |
 | D-q | 只在 `regularFile` **且 ≤ 64 KiB** 時才讀內容 | 我們的檔 ~2 KB；超過的不可能是我們寫的 |
 | D-r | `CodexState` 帶 associated value 故**不能 `CaseIterable`**；配平行的 `CodexStateKind` ＋ `samples(_:)`。**r4 再往下一層**：`Rejection` 也配 `RejectionKind: CaseIterable` ＋ `Rejection.samples(_:)`，`CodexState.samples(.blockedByBundlePath)` 由它推導（r3 m1）。**兩層的 `switch` 都不得有 `default`**（r3 m2） | 既有 `PanelActionKind` 的 doc comment 逐字寫著這個理由。`default: []` 是一個看起來很無害的「防禦性」寫法，卻能讓整條推導鏈靜默失效——所以要寫成禁令，不是慣例 |
-| D-s | `.blockedByBundlePath` 的兩種 Rejection **出路不同**：`.unsupportedCharacter` 給 snippet ＋「複製」；`.mustMoveToApplications` **不給 snippet**，只給「把 App 移到『應用程式』」的指示。**R-10 讓這條也適用於 `.occupiedByOther`** | translocated 的路徑是隨機臨時掛載點、下次開機就消失，把它交給使用者複製貼上等於發一張明天就過期的票 |
+| D-s（**強制力註記**：這條在 T09 review M1 的修正（view 層負向斷言改餵真 snippet）**與** T10 的 CX40 落地**之前，在整個 codebase 裡零強制力**——兩層都實作了、兩層都沒有 gate） | `.blockedByBundlePath` 的兩種 Rejection **出路不同**：`.unsupportedCharacter` 給 snippet ＋「複製」；`.mustMoveToApplications` **不給 snippet**，只給「把 App 移到『應用程式』」的指示。**R-10 讓這條也適用於 `.occupiedByOther`** | translocated 的路徑是隨機臨時掛載點、下次開機就消失，把它交給使用者複製貼上等於發一張明天就過期的票 |
 | **D-t** | `translocated`／`inDownloads`／`pathRejection`／`currentExpectedContents` 四個**行程常數**在 `applicationDidFinishLaunching` 算一次存成欄位；`reprobeCodex()` 只重做檔案系統那一段 | 四者都是 `Bundle.main.bundleURL` 的純函式，在行程生命週期內不會變。r3 讓每次 `onOpen` 都重算一次 `SecTranslocateIsTranslocatedURL`（Security 框架呼叫）＋ 兩次 `resolvingSymlinksInPath` ＋ 產 12 個事件的 JSON——面板開啟延遲是這個專案量過、在意過的東西（`Installer.probe()` 的 128 µs 分解寫在生產碼註解裡）（r3 m3） |
 | **D-u** | `Jargon.model` 要認得 Codex 的模型命名；**保留既有 Claude 家族演算法不動**，新分支排在它之前，判不出來一律沿用既有的「原樣回傳」 | fixture 進 repo 之後，既有 gate `FixtureCodeAnchorTests.everyFixtureModelIsMapped` **已經紅**（`Jargon.model("gpt-5.5")` 原字回傳）。那是本 change 必須修好的既有 gate，不是弱化對象。見 §4.9 |
 
@@ -615,7 +615,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX33 `codexPathCheckNamesTheOffendingCharacter`** | AuraCore | 六個字元逐格（定義域從集合推導）；帶**第一個**命中的字元；translocated 優先；乾淨路徑 nil | ① 一律回 `.unsupportedCharacter(" ")` ② 優先序對調 |
 | **CX34 `codexStalePathIsDetectedAndOffersReconnect`** | AuraCore | 磁碟 == 憑證 != 現在預期 → `.connectedStalePath`（三份內容都用真產生器輸出、兩個不同路徑）。**fixture 的兩條路徑都不得含 `unsupportedCharacters` 的字元**（例如 `/Applications/AgentAura-2.app`，不要 `AgentAura (2).app`——含空白的路徑在生產中會先落到 `.blockedByBundlePath`，那是一個不可能發生的搬家情境，T07 review m4） | `from` 忽略 `currentExpectedContents` |
 | **CX35 `stalePathReconnectDisconnectsBeforeConnecting`** | App | **（前提：`pathRejection == nil`）** `.connectedStalePath` 下送 `.connectCodex` → 呼叫順序是 `disconnect` → `connect`；`.notConnected` 下只有 `connect` | 直接 `connect`（不先 disconnect） |
-| **CX36 `codexSectionRendersEveryState`** | App（離屏） | 六態 ＋ 兩種 Rejection 各渲一次：預期元素在（按鈕／snippet 區塊／指名字元的文案）；`.unavailable` 不畫任何東西 | ① 錯誤文案不插字元（籠統句） ② 被拒時仍畫「重新接上」按鈕 |
+| **CX36 `codexSectionRendersEveryState`** | App（離屏） | 六態 ＋ 兩種 Rejection 各渲一次：預期元素在（按鈕／snippet 區塊／指名字元的文案）；`.unavailable` 不畫任何東西。**`.mustMoveToApplications` 那格的輸入必須帶真的 `codexSnippet`**（不是 nil）——否則「不得畫 snippet」在任何實作下都成立（T09 review M1；見 plan §0「負向斷言必須餵正向輸入」） | ① 錯誤文案不插字元（籠統句） ② 被拒時仍畫「重新接上」按鈕 ③ **把 `.mustMoveToApplications` 分支改成會畫 snippet（`if let snippet = model.codexSnippet { … }`）→ 必須紅**（T09 review 實測：在輸入改成真 snippet 之前，這個 mutation 紅 0 條） |
 | **CX37a `bothSidesNeverDisturbEachOthersFiles`** | AuraHookFile | R-8 不變式 1（檔案半）：**程式推導**全部長度 ≤ 4 的操作序列（**780 條，全跑**），`connectClaude` 走 `guardWriteTarget()` ＋ `atomicReplace()`（零 spawn，等價理由見 §4.8）；每步之後「另一側」整棵樹零差異；結束時若兩側皆 connected，兩側 `probe()` 皆 connected | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime |
 | **CX37b `bothSidesNeverDisturbEachOthersFilesOnProductionPath`** | AuraHookFile | 同上不變式，但 `connectClaude` 走**完整** `connect(force:translocated:inDownloads:)`（含 spawn，注入小 `verificationTimeout`）；長度 ≤ 2 共 **30 條**、**11 次真 spawn**、走 `SpawnGate`。接住 CX37a 跳過 exec 驗證可能漏掉的東西 | 同 CX37a（兩條都必須紅） |
 | **CX38 `oneBinaryServesBothAgentsInOneRoot`** | E2E（真 spawn） | R-8 不變式 2：同一顆 `aura-hook`，Claude payload（round1，無參數）與 Codex payload（round4，`--agent codex`）寫進**同一個** `AGENTAURA_ROOT`；兩個 snapshot 的 `agent`／activity 各自正確；**反序再跑一次**。**「互不覆蓋」在 doc comment 標成結構性結論**（id 空間不交集），不是被測性質 | `--agent` 解析改成一律回 `.claude` |
@@ -749,6 +749,21 @@ scripts/verify-uninstall.sh                        改（第 7 項 ＋ CODEX_HOM
 | `Resources/help-*.html` 兩份 | 新增「Codex」段（CX28 強制涵蓋**每一個**新的 Options 列標題，含「重新接上 Codex」） |
 
 ## 9. Persona Impact
+
+### 9.0 persona-tester 開工前必看的三件事（T09 review 附）
+
+1. **同一張畫面上可能出現兩張「還沒接上」的卡片，而 translocated 時兩張會講逐字相同的一句話。**
+   T09 的自主判斷 (c) 重用了 `InstallerFailure.mustMoveToApplicationsMessage`（泛用「App」措辭）——
+   那是對的（成因與出路本來就跟 Codex 無關，另寫一句只會讓同一件事有兩種說法），
+   但 translocated 時 Claude 卡與 Codex 卡**同時**顯示，使用者會在同一張畫面上看到逐字相同的句子兩次。
+   **P1 要判的是「30 秒內知道該按哪個」，外加「讀起來像不像重複印刷的 bug」**——這是 spec 沒有預見的一格。
+2. **有兩句話是產品的誠實底線，不是文案偏好，改不得。** D-m 的 banner 必須**同時**講「下一個 Codex
+   session 起生效」與「Codex 會問你一次是否信任」（F5：偵測不到信任狀態，所以不能寫「已生效」）；
+   `.blockedByBundlePath(.mustMoveToApplications)` 必須**不給** snippet（D-s）。
+   persona 若覺得囉唆而建議精簡，**請先讀 §10-3 與 D-s**——它們是被四輪 review 推出來的。
+3. **Codex 的燈永遠不會變紅，這是平台限制不是 bug**（F2／F4，§10-2）。兩個語言的 help 都有明講，
+   但 `docs/INSTALL.md` 的「Codex: the light never moves」那一節只講了信任提示（T11 review m4，T12 補）。
+   **扣分要分清楚是「產品做不到」（已知、不可改）還是「畫面沒講清楚」（可改，而且 INSTALL 那節正是該補的地方）。**
 
 - **只用 Codex 的人**：Claude 側是 `.notConnected`（大版說明），Codex 的提示在它下面（R-3 單行）。
   persona 要回答「兩個東西疊在同一張畫面上時，第一次看得懂要按哪個嗎」。
