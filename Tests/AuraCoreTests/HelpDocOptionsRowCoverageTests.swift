@@ -18,14 +18,26 @@ struct HelpDocOptionsRowCoverageTests {
     /// `connected(_, .unknown)` 前提、非預設色盤讓 `resetColors` 不被跳過）——與
     /// `OptionsMenuModelTests.everyGroupIsReachable` 同樣的手法，不必窮盡全部組合，
     /// 這裡只需要「至少一次看到每一列」。
+    ///
+    /// T11（CX28）：對 `CodexStateKind.allCases` 取聯集（`.blockedByBundlePath` 再展開
+    /// `RejectionKind.allCases` 的每一種代表值），並讓 `codexPathRejection` 分別跑 nil／
+    /// 非 nil 兩邊——唯一只在 `.connectedStalePath` ＋ `pathRejection == nil` 才會出現的
+    /// 「重新接上 Codex」只有這個組合踩得到（見 `OptionsMenuModel+Codex.swift` 的
+    /// `codexRows`）。取代 T07 留下的單一 `.unavailable` 呼叫（那裡的註解明講這是 T11 的工作）。
     static func allRows(language: Language) -> [OptionsRow] {
-        OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .unknown),
-                              launchAtLogin: true, isDefaultPalette: false,
-                              systemReduceMotion: false, userReduceMotion: false,
-                              iconPlate: true, iconShape: .ledStrip, palette: .default, language: language,
-                              // T07：CX28（help 文件涵蓋每個 CodexStateKind）是 T11 的工作，
-                              // 這裡先傳 .unavailable 讓呼叫點編得過，不擴大這條 gate 的範圍。
-                              codex: .unavailable, codexPathRejection: nil)
+        let pathRejections: [CodexHookPathCheck.Rejection?] =
+            [nil] + CodexHookPathCheck.RejectionKind.allCases.flatMap(CodexHookPathCheck.Rejection.samples)
+        return CodexStateKind.allCases.flatMap { kind in
+            CodexState.samples(kind).flatMap { state in
+                pathRejections.map { rejection in
+                    OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .unknown),
+                                          launchAtLogin: true, isDefaultPalette: false,
+                                          systemReduceMotion: false, userReduceMotion: false,
+                                          iconPlate: true, iconShape: .ledStrip, palette: .default,
+                                          language: language, codex: state, codexPathRejection: rejection)
+                }
+            }
+        }.flatMap { $0 }
     }
 
     /// 去掉純裝飾性的尾綴（「…」／「 ⌘Q」）——help 文件不必逐字複製選單列的標點符號，
@@ -82,6 +94,22 @@ struct HelpDocOptionsRowCoverageTests {
         let missing = Self.missingKeywords(in: withoutReduceMotion, language: language)
         #expect(missing.contains(reduceMotionKeyword), """
             拿掉「\(reduceMotionKeyword)」字面之後，\(Self.helpFileName(for: language)) 的
+            missingKeywords 應該抓到它，實際 \(missing)
+            """)
+    }
+
+    /// T11（CX28）正向對照：三個 `L10nCodex` 標題（含只在 `.connectedStalePath` ＋
+    /// `pathRejection == nil` 才出現的「重新接上 Codex」）逐一拿掉字面後都要被抓到——
+    /// 不手寫清單，直接迭代 `L10nCodex` 這個型別本身，往後加第四個 case 這裡自動多驗一個。
+    @Test("正向對照：只刪掉其中一個 Codex 列標題，missingKeywords 也要抓到（CX28 的 mutation ②）",
+          arguments: [L10nCodex.connectRow, .reconnectRow, .disconnectMountRow], Language.allCases)
+    func scanCatchesRealCodexOmission(codexRow: L10nCodex, language: Language) throws {
+        let text = try Self.helpText(for: language)
+        let keyword = Self.coreKeyword(codexRow.text(language))
+        let withoutIt = text.replacingOccurrences(of: keyword, with: "")
+        let missing = Self.missingKeywords(in: withoutIt, language: language)
+        #expect(missing.contains(keyword), """
+            拿掉「\(keyword)」字面之後，\(Self.helpFileName(for: language)) 的
             missingKeywords 應該抓到它，實際 \(missing)
             """)
     }

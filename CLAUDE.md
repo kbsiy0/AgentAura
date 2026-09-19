@@ -26,6 +26,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > 實機清單 13 條：9 條通過、⑥ 右鍵**觀察中**（重現不出來）、①②④ 需全新安裝環境。
 > 重啟指標：`docs/superpowers/specs/2026-09-08-agentaura-design.md` §8 里程碑表。
 > PR／branch 的 merge 狀態屬易腐事實，**不記本檔**，用 `gh pr list --state all` 現場查。
+> **Codex 支援**（change `codex-support`，2026-09-18 起）：同一顆 `aura-hook` 加
+> `--agent codex`，讓 Codex CLI 也能接上同一套燈號／面板機制，兩側互不干擾
+> （R-8：對任一側的安裝操作都不得改動另一側任何位元組）。設計與證據見
+> `docs/superpowers/specs/2026-09-18-codex-support-design.md`、
+> `docs/2026-09-18-codex-hook-probe.md`。Codex 沒有 `error` 訊號來源、也無法偵測信任
+> 狀態——這兩條是平台限制，列為 known gap，不硬推。
 
 ## Tech Stack
 
@@ -65,6 +71,7 @@ swift build --build-tests                    # 只編不跑
 ./scripts/build-app.sh                       # → build/AgentAura.app
 ./scripts/verify-install.sh                  # 實機驗收（會跑一個真的 claude -p session）
 claude plugin validate --strict ./plugin     # 平台契約，warning 視為 error
+./scripts/verify-uninstall.sh --only 7       # 單獨驗 Codex hook 殘留（CX27，判準看那一行 ✓／✗，不是 exit code）
 ```
 
 **陷阱（都實際踩過）：**
@@ -92,6 +99,9 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 - **`Sources/AuraCore/` 不得載入 Foundation 閉包以外的任何 module**（`fc46545` —— 白名單基準而非黑名單）。
 - **單檔上限：`Sources/` 200 行、`Tests/` 300 行**（`IsolationTests.fileLengthLimit` 從磁碟推導）。
 - **`Installer` 只准碰 `<claudeHome>/skills/agentaura`（必要時加 `<claudeHome>/skills/`），判定一律以 `realpath` 解析後為準；`~/.claude` 不存在時拒絕接上、不得建立它**（spec D-h —— `skills` 自己可能是 symlink；gate `installerTouchesOnlyAllowedPaths`）。
+- **`aura-hook --agent` 收到未知值或缺值一律落回 `.claude`，且全程靜默、`exit 0`**（codex-support D-d/D-b —— 只支援一種寫法時，手寫成另一種會靜默標成 claude；`agentArgumentParsing`／`auraHookStaysSilentForEveryAgentArgument` 守）。
+- **`CodexInstaller` 只准碰 `<codexHome>/hooks.json`；只在不存在時寫、只在內容逐位元組相符時刪；絕不碰 `<codexHome>/config.toml`**（codex-support D-i/D-j —— gate `codexInstallerTouchesOnlyHooksJSON`／`codexDisconnectOnlyRemovesOurBytes`）。
+- **對任一側（Claude／Codex）的安裝操作（connect／disconnect／reconnect／完整移除）不得改動另一側的任何位元組**（codex-support R-8 —— gate `bothSidesNeverDisturbEachOthersFiles`／`...OnProductionPath`／`bothSidesNeverDisturbEachOthersCredentials`）。
 
 ## Agent 在終端機裡的界線（2026-09-14 事故）
 
@@ -132,8 +142,9 @@ SDD 流程框架（agent 職責、Tier 判定、Gate 分層、N-round checkpoint
 **Tier 1 觸發（動到以下任一檔案即派 persona-tester）：**
 `Sources/AgentAuraApp/**`、`Sources/AuraCore/` 的 `IconAppearance.swift`、`AnimationSchedule.swift`、
 `PanelViewModel.swift`、`LegendModel.swift`、`InstallState.swift`、`PanelAction.swift`、
-`OptionsMenuModel.swift`、`Jargon.swift`、`IconPalette.swift`、
-`Sources/AuraHookFile/Installer.swift`、`plugin/hooks/hooks.json`
+`OptionsMenuModel.swift`、`Jargon.swift`、`IconPalette.swift`、`CodexState.swift`、
+`CodexHooksJSON.swift`、`Sources/AuraHookFile/Installer.swift`、
+`Sources/AuraHookFile/CodexInstaller.swift`、`plugin/hooks/hooks.json`
 
 ## 易腐事實
 

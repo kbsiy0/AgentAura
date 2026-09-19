@@ -30,6 +30,10 @@ terminal tabs.
 AgentAura puts one light in your menu bar for all of your sessions. Click it and you get a
 panel listing each session on its own. You glance up instead of hunting.
 
+It also understands OpenAI's Codex CLI, the same way — one light, one panel, for both. Codex
+sessions get a "Codex" label in the panel, but Codex has no error signal of its own to report,
+so that light never turns on for a Codex-only session.
+
 ## One rule: only what needs you moves
 
 An indicator that animates all the time is just a second thing competing for your attention.
@@ -163,7 +167,9 @@ Fair questions to ask about anything that watches you work. Short answers first.
 
 - **It never connects to the internet.** No telemetry, no update check, no crash reports.
 - **It writes two things:** session state in `~/.agentaura/`, and one symlink at
-  `~/.claude/skills/agentaura`.
+  `~/.claude/skills/agentaura`. If you connect Codex too, it writes a third:
+  `~/.codex/hooks.json`, only if that file didn't already exist, and only deletes it again
+  after comparing its contents byte-for-byte.
 - **It never touches `~/.claude/settings.json`.** Not one byte, ever.
 - **It doesn't read your work.** Not your transcripts, not your prompts, not your code.
 - **It runs one binary:** `aura-hook`, to check the hook actually works. It clears that

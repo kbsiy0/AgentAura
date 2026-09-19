@@ -132,6 +132,14 @@ app 啟動掃一次目錄即得正確現況。整個設計因此塌縮成很小�
 由當次事件直接覆寫的欄位，與由 `aura-hook` 在 `flock` 下 read-merge-write 帶過來的**累積欄位**
 （`main_*` / `sub_*` / `turn_started_at` / `subagents` / `tool_failures`）分開。
 
+> **2026-09-18 更新（change `codex-support`，D-a／D-c）：** 新增 `agent` 欄位——磁碟上是
+> `String?`（不是 enum；`Codable` 對未知 rawValue 的 enum 是整包解碼失敗，未來多一種
+> agent 會讓舊版 app 讀到的那個 session 從面板整個消失，同 `outstanding_subagents` 的
+> 既有理由）。`nil` 代表 `claude`；Codex session 才寫 `"agent":"codex"`。**`.claude` 不寫
+> 這個鍵**（D-c）：Claude 側的狀態檔位元組與改動前完全相同（CX9）。未知值一律落回
+> `.claude` 且不顯示標籤（D-b：保守失敗，寧可少一個標籤，不可把 Codex 的列標成 Claude
+> 的）。舊版沒有這個鍵的檔案仍解得開且視為 `.claude`（向下相容，CX11）。
+
 ### 2.1.1 依實測 payload 的校正（2026-09-06 錄製，33 個真實事件）
 
 前一版此表建立在文件推測上。實測後修正如下 —— 見 §10。
@@ -211,6 +219,15 @@ enum Activity: Int, Comparable {
 `MessageDisplay` 刻意**不註冊** —— 它在助理訊息串流時持續觸發，量級不適合當狀態訊號。
 `TeammateIdle` 待觀察：使用者的 settings 有 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`，
 可能真的會觸發，屆時再依實測決定映射。
+
+> **2026-09-18 更新（change `codex-support`，D-e）：** 新增 `Interrupt → idle`——Codex 獨有
+> 事件（F2 探針量到，Claude Code 沒有這個事件名），中斷整輪對談時觸發。**這一條映射刻意
+> 走獨立常數 `codexOnlyEvents`／`codexEvents`，不併進 `handledEvents`**：`handledEvents`
+> 是 Claude 側 `plugin/hooks/hooks.json` 雙向等式 gate 的來源，而 Claude Code 對
+> hooks.json 是**全有全無**解析——把 `Interrupt` 加進 `handledEvents` 會讓 Claude 側整份
+> hook 設定被拒絕，AgentAura 對 Claude 使用者完全停止運作，症狀是「什麼都沒發生」
+> （CX2／CX5 是唯一守衛）。**這裡的 `Interrupt` 事件跟 payload 欄位 `is_interrupt` 是兩件
+> 事**：前者中斷整輪對談，後者中斷一個 tool——兩者的文件互相點名，不要混淆。
 
 ### 2.2.1 `Notification` 的 12 種型別
 
@@ -481,6 +498,22 @@ Plugin 自帶 `hooks/hooks.json`，以 `~/.claude/skills/agentaura` 的 skills-d
 - 所有 hook 皆 `"async": true`（fire-and-forget，agent 不等待）
 - command 路徑用 `${CLAUDE_PLUGIN_ROOT}` 或指向 app bundle 內的 `aura-hook`
 
+> **2026-09-18 更新（change `codex-support`，L4／R-5）：** 第二個入口——Codex 讀
+> `~/.codex/hooks.json`（同一顆 `aura-hook` 二進位加 `--agent codex`）。「接上 Codex」
+> **只在 `~/.codex/` 存在時顯示**；按下去**只在 `~/.codex/hooks.json` 不存在時寫入**
+> （`O_CREAT|O_EXCL`，一個原子動作），寫入時記下內容；斷開**只在內容與記下的相符時刪除**
+> （逐位元組比對，CX17）。檔案已存在且不是我們寫的 → 不動它，顯示可複製的 snippet。
+> **絕不碰 `~/.codex/config.toml`**（CX14：整棵樹差異恰為 `{hooks.json}`）。bundle 路徑
+> translocated／在 `~/Downloads`／含特定字元時不寫，改畫解釋（`CodexHookPathCheck`，R-5）。
+> UI 必須明講「Codex 會在下次啟動時問你一次是否信任這個 hook」——這件事**偵測不到**
+> （F5：未信任的 hook 在 Codex 下靜默跳過，零訊息），只能先講清楚。
+>
+> **R-8 不變式（兩側互不干擾、最終都要成功）**：對任一側做 connect／disconnect／
+> reconnect／完整移除的**任意操作序列**，另一側的檔案位元組與安裝狀態不變（CX37a／
+> CX37b 檔案、CX42 憑證）；兩側都接上時，兩側都真的能運作——同一顆 `aura-hook` 同時
+> 服務兩個上游，事件各自寫到 `~/.agentaura/sessions/` 且互不覆蓋、`agent` 各自正確
+> （CX38）。細節見 `docs/superpowers/specs/2026-09-18-codex-support-design.md` §4.4／§4.8。
+
 ### 3.3 aura-hook：為何 read-merge-write
 
 面板需顯示「本輪已跑多久」、「subagent 數量」、「tool 失敗次數」——三者皆為累積量，
@@ -517,11 +550,25 @@ protocol LivenessProber  { func isAlive(pid: pid_t, startedAt: time_t) -> Bool }
 
 `AuraCore` 不 import AppKit —— **此約束由測試強制，不靠自律**。
 
+> **2026-09-18 更新（change `codex-support`，D-u）：** 去工程師化這條線也要認得 Codex——
+> `Jargon.model` 新增 Codex 家族的模型命名分支，**排在既有 Claude 家族演算法之前**呼叫，
+> 判不出來一律沿用既有的「原樣回傳」（既有六條規則一行不動）。理由：`gpt-5` 是唯一能
+> 區分「新分支在前」與「在後」的輸入——放在既有演算法之後會被既有規則先攔截、輸出變成
+> `Gpt 5`，跟刻意要的 Codex 命名不一致。CX41 釘住九列輸入→輸出的對照表。
+
 ### 3.5 pid liveness 與 pid 回收
 
 `kill(pid, 0)` 只證明「某個 process 存在」，不證明是原本那個 —— pid 會被系統回收。
 故 `aura-hook` 記錄 `pid_started_at`（`proc_pidinfo` 的 `pbi_start_tvsec`），
 app 比對 pid **與**啟動時戳，兩者皆符才算活著。
+
+> **2026-09-18 更新（change `codex-support`，F15）：** Codex 的 hook 父行程在 session 內
+> pid 穩定——五個 session、24 筆事件，每個 session 內所有事件的 `$PPID` 完全相同，判活
+> 前提對 Codex 成立。**範圍限定，不是細節**：這五個 session **全部跑在 `codex exec`**，
+> 產品要服務的是互動 TUI（F10）——exec 模式的行程結構不保證等於 TUI 模式的，互動 TUI
+> 有可能由常駐 app 行程 fork 出 session，那樣父行程會跨 session 存活。`SessionEnd`
+> **之後**那個 pid 是否真的結束**未觀測**（實務後果有限：判活第一個 guard 就是
+> `!terminated`）。留給實機驗收：跑一個真的互動 Codex session，記 `ps -o ppid=,comm=`。
 
 輪詢間隔 5s。
 
@@ -591,6 +638,11 @@ registry 中所有 `acknowledged == false` 的 session 一律標為已確認**�
 `.semitransient` 切 app 都會發 `didCloseNotification`，`object` 就是那顆 popover、在 main thread（所以
 `MainActor.assumeIsolated` 安全）、在淡出動畫結束後（>0.4s）才到。**不發**的兩條：process 直接結束、positioning
 window 被抽掉——只造成尾巴留到下次開關面板（狀態檔仍在），方向 fail-safe。
+
+> **2026-09-18 更新（change `codex-support`，D-l）：** 非 Claude 的 session 在列的**第一行**
+> 帶 agent 標籤（「Codex」，不另起一行——列高 43／59pt 不變，由 `RowHeightDerivationTests`
+> 從真實 view 推導）；`.claude` 不顯示標籤（D-b）。**聚合燈不分 agent**，兩個上游共用同一顆
+> 聚合燈，還是一顆（L2）。
 
 ### 3.8 安裝可逆性與自我健檢（R6）
 
@@ -837,6 +889,8 @@ M0 的產出是 `Tests/Fixtures/real-payloads/*.json`，M1 的所有 fixture 由
 | Claude Code hook API 未來變更 | 解析失效 | 未知 event 不改變 activity；`schema` 版本欄位；M0 fixture 可重錄 |
 | menu bar 8 顆 LED 在遠距辨識度不足 | 產品核心價值受損 | **已升級為 M4 的明確 gate**（R5）：A/B 兩形態並行原型 + persona-tester 打分決定，不預先鎖定。前一個同類專案 前一個專案 即失敗於形態選擇 |
 | 常態動畫導致使用者關掉 app | 產品被棄用（前一個專案 的實際結局之一） | R4 注意力預算：只有 waiting／error 會動；重繪率列入 DoD（§7） |
+| **（2026-09-18，change `codex-support`）Codex 沒有 `error` 狀態的來源** | Codex-only session 永遠不會亮紅燈 | 列為 known gap，不硬推（F2／F4：探針從未量到對應事件）；文件與面板都不假裝有這個能力 |
+| **（2026-09-18，change `codex-support`）無法偵測 Codex 是否已信任這個 hook** | 使用者可能以為已生效，其實 hook 被靜默跳過 | F5 平台限制，UI 只能講清楚「下次啟動會問你一次」，不能宣稱已生效；`docs/INSTALL.md` troubleshooting 給替代驗證步驟（暫時調高 timeout 看 clamping 警告） |
 
 ---
 

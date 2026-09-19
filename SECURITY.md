@@ -18,7 +18,7 @@ AgentAura is a local menu bar app plus a Claude Code plugin. It makes no network
 Its privileges are the ones your user account already has — it is **not sandboxed** and ships
 no entitlements, because it has to write inside `~/.claude` and `~/.agentaura`.
 
-Three things are worth understanding before you install it.
+Four things are worth understanding before you install it.
 
 **1. Installing the plugin means Claude Code will execute `aura-hook`.** It runs on 19 hook
 events, for the lifetime of the mount. That is how the tool works; there is no version of it
@@ -48,6 +48,13 @@ working directory, the current tool name, and the first part of the assistant's 
 Files are `0600` inside a `0700` directory, re-tightened on every write. They are deleted when
 you uninstall.
 
+**4. If you also use Codex, the same "Connect" model applies to `.codex/hooks.json`.** Clicking
+**Connect Codex** writes `~/.codex/hooks.json` — but only if that file doesn't already exist.
+It never touches `~/.codex/config.toml`. If you already have your own `hooks.json`, AgentAura
+leaves it untouched and shows a snippet to add by hand instead. Removing the mount only deletes
+the entry it wrote itself, verified byte-for-byte before deletion — never a file that turned out
+to be someone else's.
+
 ## Boundaries that are enforced by tests
 
 These are not just intentions. Each has a test, and each test has a recorded mutation showing
@@ -66,6 +73,12 @@ it fails when the behaviour is removed.
   directory rather than a symlink.
 - **`aura-hook` always exits 0 and prints nothing.** An observability tool must not interfere
   with the agent it observes.
+- **`~/.codex/config.toml` is never touched.** A test drives every connect/disconnect/reconnect
+  sequence against `~/.codex` and asserts the file's bytes never change; the only path that ever
+  differs is `.codex/hooks.json`.
+- **Connecting to Claude Code and to Codex never disturb each other.** Every short sequence of
+  operations on one side — connect, disconnect, reconnect, full removal — is driven against the
+  other side's files and stored credentials, and both are asserted unchanged afterward.
 
 ## Known weaknesses
 
