@@ -43,4 +43,10 @@ protocol IconRendering: AnyObject {
     func setIconPlate(_ shows: Bool)
     /// T32：換選單列 icon 造型——同 `setIconPlate` 的理由，`AppDelegate` 不綁死型別。
     func setIconShape(_ shape: IconShape)
+    /// 這個 renderer 有沒有資格把**真的**系統面板（`NSColorPanel.shared`）叫到螢幕上。
+    /// 真的選單列圖示 ⇒ `true`；測試的 spy 沒有圖示、沒有視窗 ⇒ `false`。`AppDelegate`
+    /// 在 `applicationDidFinishLaunching` 用它設定 `ColorPickerCoordinator.presentsPanel`，
+    /// 讓所有走真實接線的測試（38 個 `AppDelegate(root:…)` 建構點）一次被涵蓋，
+    /// 不必每條測試自己記得關——2026-09-19 實機回報：全量測試每跑一次色板就閃一次。
+    var presentsSystemPanels: Bool { get }
 }
