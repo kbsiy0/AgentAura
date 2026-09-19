@@ -47,6 +47,9 @@ public enum L10nRegistry {
         for c in L10nIconShape.allCases {
             out.append(("L10nIconShape.\(c)", byLanguage(c)))
         }
+        for c in L10nCodex.allCases {
+            out.append(("L10nCodex.\(c)", byLanguage(c)))
+        }
         return out
     }
 

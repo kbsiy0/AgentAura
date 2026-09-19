@@ -75,6 +75,10 @@ extension AppDelegate {
                                           self.iconPlate) { [weak self] chosen in
                     self?.performSetIconShape(chosen)
                 }
+            case .connectCodex, .disconnectCodex, .copyCodexSnippet:
+                // T10 接線前的暫時 stub——T10 必須以真實作取代；此處 break 會讓
+                // panelActionsAreWired 對這三個 kind 紅，那是正確的。
+                break
             }
         }
     }

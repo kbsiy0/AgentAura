@@ -9,7 +9,8 @@ struct OptionsMenuModelLanguageTests {
     private static func languageRow(_ language: Language) -> OptionsRow {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
                                          systemReduceMotion: false, userReduceMotion: false,
-                                         iconPlate: true, iconShape: .ledStrip, palette: .default, language: language)
+                                         iconPlate: true, iconShape: .ledStrip, palette: .default, language: language,
+                                         codex: .unavailable, codexPathRejection: nil)
         return rows.first { $0.action.kind == .setLanguage }!
     }
 
@@ -30,7 +31,8 @@ struct OptionsMenuModelLanguageTests {
     func alwaysPresentAcrossInstallStates() {
         for install in InstallStateAllCases.all() {
             let rows = OptionsMenuModel.rows(install: install, launchAtLogin: nil, isDefaultPalette: true,
-                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                             codex: .unavailable, codexPathRejection: nil)
             #expect(rows.contains { $0.action.kind == .setLanguage }, "install=\(install) 缺語言列")
         }
     }

@@ -37,16 +37,19 @@ public struct OptionsRow: Equatable, Sendable, Identifiable {
 }
 
 /// r7 的裁決（派 T06 前自查發現 r5 的 `nonMenuKinds` 與 §4.3 Options 列表互相矛盾）：
-/// `PanelActionKind` = 4 個非選單（`nonMenuKinds`，字面集合恰為這四個）＋其餘皆選單列
+/// `PanelActionKind` = 5 個非選單（`nonMenuKinds`，字面集合恰為這五個）＋其餘皆選單列
 /// （`rows(...)` 的聯集，由 `optionsRowsCoverEveryAction` 型別推導，不寫數字）。
 /// T12（B2／B5）：新增 `reportIssue`／`setReduceMotion` 都是選單列，不進 `nonMenuKinds`——
 /// 兩者都刻意需要在 Options 區被看見，不像 `replaceExternalMount` 需要 CTA 的脈絡。
+/// T07：`copyCodexSnippet` 併入這份非選單集合——同 `replaceExternalMount` 的既有理由，
+/// 它的觸發處是面板卡片內「複製」按鈕（R-10），不是 Options 選單列（D-k）。
 public enum OptionsMenuModel {
-    /// **字面集合，恰為這四個**（G10(a)：往裡面加東西就是紅）。這四個動作各自的觸發處在
+    /// **字面集合，恰為這五個**（G10(a)：往裡面加東西就是紅）。前四個動作各自的觸發處在
     /// 圖例色點／footer 的「Options ⌄」／banner 的關閉／CTA 副標，不住在 Options 選單列表裡——
     /// `replaceExternalMount` 尤其刻意：要顯示「現有掛載指向 X」的脈絡，不適合當一列裸選單項。
+    /// 第五個（T07）`copyCodexSnippet` 的觸發處是面板卡片內的「複製」按鈕，同一種理由。
     public static let nonMenuKinds: Set<PanelActionKind> = [
-        .pickColor, .toggleOptions, .dismissBanner, .replaceExternalMount,
+        .pickColor, .toggleOptions, .dismissBanner, .replaceExternalMount, .copyCodexSnippet,
     ]
 
     /// 依序、分五群（C1）：`.help`（說明）／`.settings`（開機自動啟動／減少動態／重設顏色）／
@@ -70,9 +73,14 @@ public enum OptionsMenuModel {
     /// 那種安全疑慮（見 `PanelModel.swift` doc comment），給預設值能讓既有 ~15 個呼叫點
     /// （只關心 kind／isDisabled／toggleValue，不關心語言）維持不變，符合 D-4「這輪受影響的
     /// 很少」——生產路徑（`OptionsSectionView`）明確傳 `model.language`，不吃這個預設值。
+    /// T07（R-9／R-10）：`codex`／`codexPathRejection` 兩個都不給預設值——照 spec §4.6，
+    /// `pathRejection` **不是** `CodexState.connectedStalePath` 的欄位（那個 case 本身不帶
+    /// payload，見 `CodexState.swift` 的 doc comment），是 `Bundle.main.bundleURL` 的行程常數
+    /// （D-t），呼叫端必須另外傳，這裡才能決定 `.connectedStalePath` 要出兩列還是一列（R-9）。
     public static func rows(install: InstallState, launchAtLogin: Bool?, isDefaultPalette: Bool,
                             systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
-                            palette: IconPalette, language: Language) -> [OptionsRow] {
+                            palette: IconPalette, language: Language, codex: CodexState,
+                            codexPathRejection: CodexHookPathCheck.Rejection?) -> [OptionsRow] {
         var rows: [OptionsRow] = []
 
         rows.append(OptionsRow(title: L10nOptionsMenuRows.help.text(language), action: .openHelp, isDisabled: false,
@@ -136,6 +144,9 @@ public enum OptionsMenuModel {
         }
         rows.append(OptionsRow(title: L10nOptionsMenuRows.disconnect.text(language), action: .disconnect, isDisabled: false,
                                toggleValue: nil, group: .mount))
+        // T07（CX20，R-9）：Codex 側的 .mount 列緊接在 Claude 側後面（同群、contiguous），
+        // 邏輯上先講完 Claude 那組再講 Codex 那組。
+        rows.append(contentsOf: codexRows(codex, pathRejection: codexPathRejection, language: language))
         // T24：與「移除掛載…」同群（.mount）、緊接在它後面——語意上都屬於「拆掉這個 App
         // 跟系統的關係」，差別只是範圍大小（掛載 vs 全部）。恆在、不因 install 狀態隱藏
         // （即使從沒接上過，登入項目／偏好設定仍可能存在，完整移除仍要能做）。

@@ -48,10 +48,14 @@ struct OptionsDividerGroupingPixelTests {
     @Test("worst-case：production OptionsSectionView（分組）vs 每列都隔開的對照組，像素明顯不同")
     func groupedDiffersFromAllDividers() throws {
         let model = Self.worstCaseModel()
+        // T07：PanelModel 還沒有 codex 欄位（T08 才加），這裡先傳 .unavailable/nil，
+        // 跟 OptionsSectionView 生產路徑現在的暫時 stub 一致。T08 落地後應該改成
+        // model.codex／model.codexPathRejection。
         let rows = OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                                          isDefaultPalette: model.isDefaultPalette,
                                          systemReduceMotion: model.systemReduceMotion,
-                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, iconShape: .ledStrip, palette: model.palette, language: .traditionalChinese)
+                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, iconShape: .ledStrip, palette: model.palette, language: .traditionalChinese,
+                                         codex: .unavailable, codexPathRejection: nil)
         #expect(rows.count >= 9, "worst-case 應該有夠多列（含 launchAtLogin／recheckHook）才有代表性，實際 \(rows.count)")
 
         let grouped = try render(OptionsSectionView(model: model, onAction: { _ in }), appearance: .aqua)

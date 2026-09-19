@@ -16,7 +16,8 @@ struct CodexOptionsRowTests {
     private static func iconPlateRow(_ iconPlate: Bool, palette: IconPalette = .default) -> OptionsRow {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: palette.isDefault,
                                          systemReduceMotion: false, userReduceMotion: false,
-                                         iconPlate: iconPlate, iconShape: .ledStrip, palette: palette, language: .traditionalChinese)
+                                         iconPlate: iconPlate, iconShape: .ledStrip, palette: palette, language: .traditionalChinese,
+                                         codex: .unavailable, codexPathRejection: nil)
         return rows.first { $0.action.kind == .setIconPlate }!
     }
 
@@ -86,7 +87,8 @@ struct CodexOptionsRowTests {
     private static func iconShapeRow(_ iconShape: IconShape) -> OptionsRow {
         OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true, systemReduceMotion: false,
                               userReduceMotion: false, iconPlate: true, iconShape: iconShape, palette: .default,
-                              language: .traditionalChinese).first { $0.action.kind == .pickIconShape }!
+                              language: .traditionalChinese, codex: .unavailable, codexPathRejection: nil)
+            .first { $0.action.kind == .pickIconShape }!
     }
 
     /// 七個造型都要走一遍（N7 同款精神）：一律 `.settings` 群、不 disabled、非 toggle
@@ -99,6 +101,56 @@ struct CodexOptionsRowTests {
                    "造型列應屬 .settings、不 disabled、非 toggle，實際 \(row)")
             #expect(row.subtitle == shape.displayName(.traditionalChinese), "subtitle 應是目前造型的雙語名稱")
             #expect(row.action == .pickIconShape(shape), "action 應該帶目前造型，實際 \(row.action)")
+        }
+    }
+
+    // MARK: - T07（CX20，spec §4.6 表，R-9）：Codex 在 .mount 群組的列數與 action
+
+    /// 只取 Codex 那兩個 action kind（`.connectCodex`／`.disconnectCodex`），保留出現順序——
+    /// 其餘參數固定成不影響 Codex 判斷的代表值（`install: .notConnected` 等），只變
+    /// `codex`／`codexPathRejection` 兩個維度，這條測試才問得到的問題。
+    private static func codexActionKinds(_ codex: CodexState, pathRejection: CodexHookPathCheck.Rejection?) -> [PanelActionKind] {
+        let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
+                                         systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
+                                         iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                         codex: codex, codexPathRejection: pathRejection)
+        return rows.filter { $0.action.kind == .connectCodex || $0.action.kind == .disconnectCodex }.map(\.action.kind)
+    }
+
+    @Test("(CX20) .unavailable／.occupiedByOther／.blockedByBundlePath（兩種 Rejection）零列")
+    func zeroRowStates() {
+        let states = [CodexState.unavailable, .occupiedByOther] + CodexState.samples(.blockedByBundlePath)
+        #expect(states.count >= 3, "定義域塌陷了嗎？零列狀態集合異常少")
+        for state in states {
+            let kinds = Self.codexActionKinds(state, pathRejection: nil)
+            #expect(kinds.isEmpty, "state=\(state) 應該零列，實際 \(kinds)")
+        }
+    }
+
+    @Test("(CX20) .notConnected 恰一列 .connectCodex")
+    func notConnectedHasOneConnectRow() {
+        #expect(Self.codexActionKinds(.notConnected, pathRejection: nil) == [.connectCodex])
+    }
+
+    @Test("(CX20) .connected 恰一列 .disconnectCodex")
+    func connectedHasOneDisconnectRow() {
+        #expect(Self.codexActionKinds(.connected, pathRejection: nil) == [.disconnectCodex])
+    }
+
+    /// R-9 的重點：被拒時**不給**「重新接上」按鈕（不是給了但 disabled）——那顆按鈕按下去
+    /// 會先 `disconnect` 一份還在運作的檔（CX39）。
+    @Test("(CX20，R-9) .connectedStalePath 依 pathRejection 分兩列（nil）／一列（非 nil，不給重新接上）")
+    func stalePathRowsDependOnPathRejection() {
+        #expect(Self.codexActionKinds(.connectedStalePath, pathRejection: nil) == [.connectCodex, .disconnectCodex], """
+            pathRejection == nil 應該給兩列：「重新接上」＋「移除掛載」
+            """)
+        let rejections = CodexHookPathCheck.RejectionKind.allCases.flatMap(CodexHookPathCheck.Rejection.samples)
+        #expect(!rejections.isEmpty, "Rejection.samples 定義域是空的——gate 不能空跑")
+        for rejection in rejections {
+            let kinds = Self.codexActionKinds(.connectedStalePath, pathRejection: rejection)
+            #expect(kinds == [.disconnectCodex], """
+                pathRejection=\(rejection) 被拒時只該給「移除掛載」，不給「重新接上」（R-9）——實際 \(kinds)
+                """)
         }
     }
 }

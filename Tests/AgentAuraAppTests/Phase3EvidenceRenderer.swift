@@ -77,10 +77,12 @@ struct Phase3EvidenceRenderer {
                                     optionsExpanded: true, launchAtLogin: true,
                                     externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
                                     systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+        // T07：PanelModel 還沒有 codex 欄位（T08 才加），先傳 .unavailable/nil。
         let rows = OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                                          isDefaultPalette: model.isDefaultPalette,
                                          systemReduceMotion: model.systemReduceMotion,
-                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, iconShape: .ledStrip, palette: model.palette, language: .traditionalChinese)
+                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, iconShape: .ledStrip, palette: model.palette, language: .traditionalChinese,
+                                         codex: .unavailable, codexPathRejection: nil)
 
         func renderView(_ view: some View, over background: NSColor, appearance: NSAppearance.Name) throws -> CGImage {
             let hosting = NSHostingView(rootView: view)

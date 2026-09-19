@@ -106,7 +106,6 @@ struct AppDelegatePanelActionsWiredTests {
                     for action in samples { rig.onAction(action) }
                     #expect(rig.spy.pinned.last == true, ".pickColor 應該把 popover 釘住（setPopoverPinned(true)）")
                 }
-
             case .resetColors:
                 try await withFreshRig { rig in
                     rig.delegate.applyColor(RGBA(r: 0.9, g: 0.1, b: 0.2, a: 1), for: .waiting)
@@ -232,6 +231,7 @@ struct AppDelegatePanelActionsWiredTests {
                 try await verifySetIconPlate(samples: samples)
             case .setLanguage: try await verifyLanguage(samples: samples)   // T26：body 在 +Language.swift
             case .pickIconShape: try await verifyIconShape(samples: samples)   // T32：body 在 +IconShape.swift
+            case .connectCodex, .disconnectCodex, .copyCodexSnippet: try await verifyCodexActionsAreStubbed(kind: kind, samples: samples)   // T07：body 在 +Codex.swift
             }
         }
     }

@@ -22,7 +22,10 @@ struct HelpDocOptionsRowCoverageTests {
         OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .unknown),
                               launchAtLogin: true, isDefaultPalette: false,
                               systemReduceMotion: false, userReduceMotion: false,
-                              iconPlate: true, iconShape: .ledStrip, palette: .default, language: language)
+                              iconPlate: true, iconShape: .ledStrip, palette: .default, language: language,
+                              // T07：CX28（help 文件涵蓋每個 CodexStateKind）是 T11 的工作，
+                              // 這裡先傳 .unavailable 讓呼叫點編得過，不擴大這條 gate 的範圍。
+                              codex: .unavailable, codexPathRejection: nil)
     }
 
     /// 去掉純裝飾性的尾綴（「…」／「 ⌘Q」）——help 文件不必逐字複製選單列的標點符號，

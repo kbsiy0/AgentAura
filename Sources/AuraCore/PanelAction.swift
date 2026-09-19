@@ -37,6 +37,19 @@ public enum PanelAction: Equatable, Sendable {
     /// 「送這個 action 就會把造型設成參數那個值」而誤用。對照組：
     /// `IconRendering.setIconShape(_:)` 那個 protocol 方法**是**真的 setter，名字不動。
     case pickIconShape(IconShape)
+    /// T07（R-6／D-k）：一鍵接上／重新接上 Codex。**重用同一個 case 服務兩種文案**
+    /// （`.notConnected` 的「接上 Codex」與 `.connectedStalePath` 的「重新接上 Codex」）——
+    /// 同 `.connect` 對 Claude 側的既有形狀，不為「重新接上」另開第四個 case（D-k：
+    /// 94 個呼叫點的 fan-out 因此不再長大）。`performConnectCodex()` 的路徑判定 guard
+    /// （R-9）必須在任何 `disconnect` 之前 return，這個 case 本身不帶任何 payload。
+    case connectCodex
+    /// T07：拆掉 Codex 這邊的掛載——呼叫端負責確認對話框（同 `.disconnect` 的既有形狀）。
+    case disconnectCodex
+    /// T07（R-10／D-s）：把 `CodexHooksJSON.snippet(...)` 複製到剪貼簿。**進 `nonMenuKinds`**
+    /// （不是 Options 選單列）——觸發處在面板卡片內的「複製」按鈕（`.occupiedByOther`／
+    /// `.blockedByBundlePath(.unsupportedCharacter)` 兩態才會出現該按鈕），同
+    /// `.replaceExternalMount` 需要 CTA 脈絡、不適合當一列裸選單項的既有理由。
+    case copyCodexSnippet
 
     /// 窮盡 switch：新增 case 這裡編不過，逼你同時補 `PanelActionKind`。
     public var kind: PanelActionKind {
@@ -59,6 +72,9 @@ public enum PanelAction: Equatable, Sendable {
         case .setIconPlate: .setIconPlate
         case .setLanguage: .setLanguage
         case .pickIconShape: .pickIconShape
+        case .connectCodex: .connectCodex
+        case .disconnectCodex: .disconnectCodex
+        case .copyCodexSnippet: .copyCodexSnippet
         }
     }
 }
@@ -70,6 +86,7 @@ public enum PanelActionKind: String, Sendable, CaseIterable {
     case uninstall
     case setLaunchAtLogin, recheckHook, openHelp, about, dismissBanner, quit
     case reportIssue, setReduceMotion, setIconPlate, setLanguage, pickIconShape
+    case connectCodex, disconnectCodex, copyCodexSnippet
 }
 
 extension PanelAction {
@@ -77,6 +94,9 @@ extension PanelAction {
     /// `setLaunchAtLogin → [true, false]`；`pickColor → Activity.customizable.map(pickColor)`
     /// （`customizable` 本身已從 `Activity.allCases` 推導）；其餘回單元素陣列。
     /// **動作總數由 `PanelActionKind.allCases.flatMap(samples)` 推導，這裡不寫數字**（R6）。
+    /// 窮盡 `switch`，**不得有 `default`**——理由同 `CodexState.samples(_:)`：新增一個
+    /// `PanelActionKind` case 忘了在這裡補齊，編譯器會擋下來；`default` 會讓這條定義域
+    /// 推導鏈靜默失效（r3 m2）。
     public static func samples(_ kind: PanelActionKind) -> [PanelAction] {
         switch kind {
         case .pickColor: Activity.customizable.map(PanelAction.pickColor)
@@ -97,6 +117,9 @@ extension PanelAction {
         case .setIconPlate: [.setIconPlate(true), .setIconPlate(false)]
         case .setLanguage: Language.allCases.map(PanelAction.setLanguage)
         case .pickIconShape: IconShape.allCases.map(PanelAction.pickIconShape)
+        case .connectCodex: [.connectCodex]
+        case .disconnectCodex: [.disconnectCodex]
+        case .copyCodexSnippet: [.copyCodexSnippet]
         }
     }
 }

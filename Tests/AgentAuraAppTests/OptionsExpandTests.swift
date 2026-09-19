@@ -76,9 +76,12 @@ struct OptionsExpandTests {
         let install = InstallState.connected(owner: .external, verified: .unknown)
         let launchAtLogin = true
         let systemReduceMotion = true
+        // T07：PanelModel 還沒有 codex 欄位（T08 才加），先傳 .unavailable/nil——這條 gate
+        // 驗的是「worst-case 高度不超過從 rowCount 推導的門檻」，Codex 目前零列不影響 worst-case。
         let rowCount = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin, isDefaultPalette: true,
                                              systemReduceMotion: systemReduceMotion, userReduceMotion: false,
-                                             iconPlate: false, iconShape: .ledStrip, palette: .default, language: .traditionalChinese).count
+                                             iconPlate: false, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                             codex: .unavailable, codexPathRejection: nil).count
         let worstCase = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: install, version: "1.0",
                                         optionsExpanded: true, launchAtLogin: launchAtLogin,

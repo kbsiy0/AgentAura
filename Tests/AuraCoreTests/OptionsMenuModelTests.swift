@@ -1,39 +1,50 @@
 import Testing
 import AuraCore
 
-/// `optionsRowsCoverEveryAction`（spec §6.3，r7，兩段）：
-/// (a) `nonMenuKinds` 恰好等於 r7 表那四個；
+/// `optionsRowsCoverEveryAction`（spec §6.3，r7，兩段；T07 擴充成五個非選單 kind，CX21）：
+/// (a) `nonMenuKinds` 恰好等於 r7 表那四個加上 T07 的 `copyCodexSnippet`；
 /// (b) 代表狀態集合的 `rows` 聯集涵蓋全部選單 Kind（`PanelActionKind.allCases` 扣掉
-///     `nonMenuKinds`，不寫數字），且任一單一狀態內同一 Kind 最多一次。
+///     `nonMenuKinds`，不寫數字），且任一單一狀態內同一 Kind 最多一次——T07 起代表狀態集合
+///     也要乘上 `CodexStateKind.allCases.flatMap(CodexState.samples)`（CX21），否則
+///     `.connectCodex`／`.disconnectCodex` 兩個新 kind 永遠進不了 `union`。
 @Suite("OptionsMenuModel.rows 涵蓋每個選單 Kind（optionsRowsCoverEveryAction，G10）")
 struct OptionsMenuModelTests {
 
-    @Test("(a) nonMenuKinds 恰好等於 {pickColor, toggleOptions, dismissBanner, replaceExternalMount}")
+    @Test("(a) nonMenuKinds 恰好等於 {pickColor, toggleOptions, dismissBanner, replaceExternalMount, copyCodexSnippet}")
     func nonMenuKindsIsExactlyThatLiteralSet() {
-        #expect(OptionsMenuModel.nonMenuKinds == [.pickColor, .toggleOptions, .dismissBanner, .replaceExternalMount], """
+        #expect(OptionsMenuModel.nonMenuKinds == [
+            .pickColor, .toggleOptions, .dismissBanner, .replaceExternalMount, .copyCodexSnippet,
+        ], """
             nonMenuKinds 目前是 \(OptionsMenuModel.nonMenuKinds)，
-            必須恰好等於 r7 表那四個——多了／少了都代表某個動作的守衛被靜默換了頻道（R5）
+            必須恰好等於 r7 表那四個加上 T07 的 copyCodexSnippet——多了／少了都代表某個動作的
+            守衛被靜默換了頻道（R5）
             """)
     }
 
     /// 代表狀態集合，由型別推導（不寫數字）：`InstallState` 用與 G8a 相同的乘積（`InstallStateAllCases`）、
     /// `launchAtLogin` 覆蓋三值（含 nil，才踩得到 setLaunchAtLogin 的隱藏分支）、
-    /// `isDefaultPalette` 覆蓋兩值。
+    /// `isDefaultPalette` 覆蓋兩值、（T07）`codex` 覆蓋 `CodexStateKind.allCases.flatMap(CodexState.samples)`。
+    /// `codexPathRejection` 固定 `nil`——`.connectCodex`／`.disconnectCodex` 兩個新 kind 光靠
+    /// `.notConnected`／`.connected` 兩態就已經進得了聯集，`pathRejection` 非 nil 那條分支
+    /// 是 CX20（`CodexOptionsRowTests`）的專屬職責，不是這條聯集覆蓋測試要驗的東西。
     @Test("(b) 各狀態 rows 聯集涵蓋全部選單 Kind，且任一單一狀態內同一 Kind 最多一次")
     func rowsUnionCoversEveryMenuKindWithoutDuplicates() {
         var union: Set<PanelActionKind> = []
         for install in InstallStateAllCases.all() {
             for launchAtLogin: Bool? in [true, false, nil] {
                 for isDefaultPalette in [true, false] {
-                    let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
-                                                     isDefaultPalette: isDefaultPalette,
-                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
-                    let kinds = rows.map(\.action.kind)
-                    #expect(Set(kinds).count == kinds.count, """
-                        install=\(install) launchAtLogin=\(String(describing: launchAtLogin)) \
-                        isDefaultPalette=\(isDefaultPalette) 的 rows 同一 Kind 出現超過一次：\(kinds)
-                        """)
-                    union.formUnion(kinds)
+                    for codex in CodexStateKind.allCases.flatMap(CodexState.samples) {
+                        let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
+                                                         isDefaultPalette: isDefaultPalette,
+                                                         systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                         codex: codex, codexPathRejection: nil)
+                        let kinds = rows.map(\.action.kind)
+                        #expect(Set(kinds).count == kinds.count, """
+                            install=\(install) launchAtLogin=\(String(describing: launchAtLogin)) \
+                            isDefaultPalette=\(isDefaultPalette) codex=\(codex) 的 rows 同一 Kind 出現超過一次：\(kinds)
+                            """)
+                        union.formUnion(kinds)
+                    }
                 }
             }
         }
@@ -47,7 +58,8 @@ struct OptionsMenuModelTests {
     @Test("setLaunchAtLogin 列在 launchAtLogin == nil 時整列隱藏")
     func launchAtLoginRowHiddenWhenUnsupported() {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: nil, isDefaultPalette: true,
-                                              systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                              systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                              codex: .unavailable, codexPathRejection: nil)
         #expect(!rows.contains { $0.action.kind == .setLaunchAtLogin })
     }
 
@@ -55,29 +67,34 @@ struct OptionsMenuModelTests {
     func recheckHookRowOnlyWhenVerificationUnknown() {
         let unknownRows = OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .unknown),
                                                 launchAtLogin: true, isDefaultPalette: true,
-                                                systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                                systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                codex: .unavailable, codexPathRejection: nil)
         #expect(unknownRows.contains { $0.action.kind == .recheckHook })
 
         let verifiedRows = OptionsMenuModel.rows(install: .connected(owner: .thisApp, verified: .verified),
                                                  launchAtLogin: true, isDefaultPalette: true,
-                                                 systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                                 systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                 codex: .unavailable, codexPathRejection: nil)
         #expect(!verifiedRows.contains { $0.action.kind == .recheckHook })
 
         let notConnectedRows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
-                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                     codex: .unavailable, codexPathRejection: nil)
         #expect(!notConnectedRows.contains { $0.action.kind == .recheckHook })
     }
 
     @Test("resetColors 列在 isDefaultPalette 時仍在，只是 disabled")
     func resetColorsRowDisabledNotHiddenWhenDefaultPalette() {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
-                                         systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                         systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                         codex: .unavailable, codexPathRejection: nil)
         let resetRow = rows.first { $0.action.kind == .resetColors }
         #expect(resetRow != nil, "resetColors 列不該因為 isDefaultPalette 而消失——只准 disabled")
         #expect(resetRow?.isDisabled == true)
 
         let nonDefaultRows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: false,
-                                                   systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                                   systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                   codex: .unavailable, codexPathRejection: nil)
         #expect(nonDefaultRows.first { $0.action.kind == .resetColors }?.isDisabled == false)
     }
 
@@ -92,7 +109,8 @@ struct OptionsMenuModelTests {
                 for isDefaultPalette in [true, false] {
                     let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
                                                      isDefaultPalette: isDefaultPalette,
-                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                                     systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                     codex: .unavailable, codexPathRejection: nil)
                     guard let first = rows.first else { continue }
                     #expect(first.toggleValue == nil, """
                         install=\(install) launchAtLogin=\(String(describing: launchAtLogin)) 的第一列是
@@ -107,7 +125,8 @@ struct OptionsMenuModelTests {
 
     private static func reduceMotionRow(system: Bool, user: Bool) -> OptionsRow {
         let rows = OptionsMenuModel.rows(install: .notConnected, launchAtLogin: true, isDefaultPalette: true,
-                                         systemReduceMotion: system, userReduceMotion: user, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                         systemReduceMotion: system, userReduceMotion: user, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                         codex: .unavailable, codexPathRejection: nil)
         return rows.first { $0.action.kind == .setReduceMotion }!
     }
 
@@ -179,7 +198,8 @@ struct OptionsMenuModelTests {
                     for systemReduceMotion in [true, false] {
                         let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
                                                          isDefaultPalette: isDefaultPalette,
-                                                         systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                                         systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                         codex: .unavailable, codexPathRejection: nil)
                         var collapsed: [OptionsRowGroup] = []
                         for row in rows where collapsed.last != row.group { collapsed.append(row.group) }
                         #expect(Set(collapsed).count == collapsed.count, """
@@ -199,7 +219,8 @@ struct OptionsMenuModelTests {
         for install in InstallStateAllCases.all() {
             for launchAtLogin: Bool? in [true, false, nil] {
                 let rows = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin,
-                                                 isDefaultPalette: true, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese)
+                                                 isDefaultPalette: true, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                                 codex: .unavailable, codexPathRejection: nil)
                 seen.formUnion(rows.map(\.group))
             }
         }

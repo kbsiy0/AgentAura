@@ -16,11 +16,15 @@ struct OptionsSectionView: View {
     let onAction: (PanelAction) -> Void
 
     private var rows: [OptionsRow] {
+        // T07 暫時 stub——`PanelModel` 還沒有 `codex`／`codexPathRejection` 欄位（T08 才加），
+        // 這裡先硬編 `.unavailable`／`nil`，跟現在的實際行為一致（Codex 功能還沒有任何畫面）。
+        // T08 必須換成 model.codex／model.codexPathRejection。
         OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                               isDefaultPalette: model.isDefaultPalette,
                               systemReduceMotion: model.systemReduceMotion, userReduceMotion: model.userReduceMotion,
                               iconPlate: model.iconPlate, iconShape: model.iconShape,
-                              palette: model.palette, language: model.language)
+                              palette: model.palette, language: model.language,
+                              codex: .unavailable, codexPathRejection: nil)
     }
 
     var body: some View {
@@ -144,6 +148,9 @@ private struct OptionsRowIconView: View {
         case .dismissBanner: "xmark"
         case .replaceExternalMount: "arrow.2.squarepath"
         case .setLanguage: "globe"
+        // T07 暫時 stub（team-lead 裁決）——三個 Codex kind 給暫定 icon 只是讓這個窮盡
+        // switch 編得過，不是真的設計決定。T09 會覆寫成正式圖示。
+        case .connectCodex, .disconnectCodex, .copyCodexSnippet: "terminal"
         }
     }
 }
