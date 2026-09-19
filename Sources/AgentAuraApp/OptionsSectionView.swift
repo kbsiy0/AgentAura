@@ -150,9 +150,14 @@ private struct OptionsRowIconView: View {
         case .dismissBanner: "xmark"
         case .replaceExternalMount: "arrow.2.squarepath"
         case .setLanguage: "globe"
-        // T07 暫時 stub（team-lead 裁決，AURA_CODEX_PENDING_T09）——三個 Codex kind 給暫定
-        // icon 只是讓這個窮盡 switch 編得過，不是真的設計決定。T09 會覆寫成正式圖示。
-        case .connectCodex, .disconnectCodex, .copyCodexSnippet: "terminal"
+        // T09：以真實作取代 T07 的暫定 icon（三者皆 macOS 13 可用的 SF Symbol），
+        // 跟 Options 選單其他列（`.connect` 用 `arrow.triangle.2.circlepath`）刻意不同形狀：
+        // Codex 這兩個 action 不是「重試」，是「接上／拆掉」一條掛載——`link`／
+        // `link.badge.minus` 是更貼切的既有 SF Symbol 字面（A6：中文說明統一用「掛載」，
+        // 見 `TerminologyUnificationSourceScanTests`）。
+        case .connectCodex: "link"
+        case .disconnectCodex: "link.badge.minus"
+        case .copyCodexSnippet: "doc.on.doc"
         }
     }
 }
