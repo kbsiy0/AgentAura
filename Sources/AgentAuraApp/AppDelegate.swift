@@ -115,6 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status = makeRenderer()
         paletteStore = PaletteStore(defaults: defaults)
         colorCoordinator = ColorPickerCoordinator()
+        // 真圖示才准叫真色板；spy renderer 的測試行程裡 orderFront 只會落在開發者桌面上。
+        colorCoordinator.presentsPanel = status.presentsSystemPanels
         verificationStore = HookVerificationStore(defaults: defaults)
         loginItem = makeLoginItem()
         driver = AnimationDriver { [weak self] appearance, phase in

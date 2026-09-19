@@ -95,8 +95,8 @@ struct PaletteWiringSmokeTests {
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         // 行程級單例：不清會讓後面的測試收到這裡的 willClose／target（review-t01 I1）
         defer { delegate.colorCoordinator.detach(); NSColorPanel.shared.orderOut(nil) }
-        // 驗接線、不驗視窗：抑制 orderFront，否則真的系統色板會跳到開發者桌面上（見 (2) 的斷言）。
-        delegate.colorCoordinator.presentsPanel = false
+        // 不在這裡手動關 `presentsPanel`：抑制必須來自 AppDelegate 的接線
+        // （`status.presentsSystemPanels` → coordinator），(2) 的 isVisible 斷言守的就是那一跳。
 
         // (1) status.onAction 應該被接上（AppDelegate → coordinator.pick 的入口）。
         #expect(spy.onAction != nil, "AppDelegate 應該把 status.onAction 接到 coordinator.pick —— 目前是 nil")

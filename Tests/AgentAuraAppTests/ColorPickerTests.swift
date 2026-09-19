@@ -30,6 +30,15 @@ struct ColorPickerTests {
                 "ColorPickerCoordinator 的 presentsPanel 生產預設必須是 true——關掉它只准發生在測試裡")
     }
 
+    /// 接線的生產半：`AppDelegate` 用 `status.presentsSystemPanels` 設定 coordinator，
+    /// 所以真的選單列 renderer 必須回 `true`——否則使用者點圖例色板永遠不出現，而全套件
+    /// （全部用 `SpyRenderer`）照綠。
+    @Test("StatusItemController.presentsSystemPanels 為 true（真圖示 ⇒ 真面板）")
+    func realStatusItemPresentsSystemPanels() {
+        #expect(StatusItemController().presentsSystemPanels == true,
+                "真的選單列 renderer 必須允許系統面板顯示，否則生產環境點圖例沒有色板")
+    }
+
     @Test("sRGB NSColor 轉換 ≤ 1/255；pattern image 回 nil；pick 後三個旗標與色都對")
     func colorPanelConversion() throws {
         try withCoordinator { coordinator in
