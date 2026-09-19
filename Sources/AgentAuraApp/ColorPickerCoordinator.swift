@@ -16,6 +16,15 @@ final class ColorPickerCoordinator: NSObject {
     /// `AppDelegate.showAboutPanel` 的既有慣例，測試灌 spy，不真的彈／關色板 UI。
     var closeColorPanel: () -> Void = { NSColorPanel.shared.close() }
 
+    /// `pick` 要不要真的把系統色板 `orderFront` 到螢幕上。**生產恆為 `true`**
+    /// （`colorPanelPresentsByDefaultInProduction` 釘住）；只有走**真實 `AppDelegate` 接線**的
+    /// 測試會設成 `false`——那些測試要驗的是「點圖例有沒有接到 `pick`」，不是視窗本身，而
+    /// `NSColorPanel.shared` 是行程級真視窗：測試行程裡 `orderFront` 會把它丟到開發者的桌面上，
+    /// 每跑一次全量就閃一次（2026-09-19 實機回報，多個 worktree 並行時尤其擾人）。
+    /// 與 `pick(present:)` 的差別：參數是單次呼叫的意圖（生產呼叫端不傳，走預設 `true`），
+    /// 這個屬性是宿主層級的抑制——兩者皆真才顯示。
+    var presentsPanel = true
+
     override init() {
         super.init()
         // 觀察者的 closure 是 @Sendable，但我們指定 queue: .main，所以實際一定在
@@ -49,6 +58,7 @@ final class ColorPickerCoordinator: NSObject {
 
     func pick(_ activity: Activity, current: RGBA, anchor: CGRect?, present: Bool = true) {
         lastAnchor = anchor
+        let present = present && presentsPanel
         let panel = NSColorPanel.shared
         if present, !panel.isVisible { place(panel, anchor: anchor) }
         panel.setTarget(nil)
