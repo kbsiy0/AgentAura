@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r8（2026-09-18，折入 T04／T05 實作 review；不送審）
+revision: r9（2026-09-19，T07 依賴修正；不送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -674,7 +674,7 @@ Sources/aura-hook/main.swift                       改  +3
 Sources/AgentAuraApp/CodexHookStore.swift          新  ~45
 Sources/AgentAuraApp/CodexSectionView.swift        新  ~130（六態＋兩種 Rejection＋snippet 有無）
 Sources/AgentAuraApp/AppDelegate+Codex.swift       新  ~120（五個行程常數欄位＋前置 guard＋四個 perform）
-Sources/AgentAuraApp/AppDelegate+Links.swift       新  ~45（**純搬移**）
+Sources/AgentAuraApp/AppDelegate+Links.swift       新  ~45（**純搬移，r9 起落在 T07**）
 Sources/AgentAuraApp/AppDelegate+PanelActions.swift 改 −45 +8
 Sources/AgentAuraApp/PanelView.swift               改  +8
 Sources/AgentAuraApp/Uninstaller.swift             改  +8
@@ -701,7 +701,7 @@ scripts/verify-uninstall.sh                        改（第 7 項 ＋ CODEX_HOM
 
 | 檔案 | 現況行數 | 上限 | 要加什麼 | 處置 |
 |---|---|---|---|---|
-| `Sources/AgentAuraApp/AppDelegate+PanelActions.swift` | **200** | 200 | 三個新 case ＋ `refreshPanel` 帶 codex | T10 第一步預先搬移 |
+| `Sources/AgentAuraApp/AppDelegate+PanelActions.swift` | **200** | 200 | 三個新 case（**T07**，它的 `switch action` 窮盡無 `default`）＋ `refreshPanel` 帶 codex（T10） | **T07 第一步 (b)** 預先搬移到 `AppDelegate+Links.swift`（r9：原排 T10，但加 case 與讓它編得過必須在同一個 task） |
 | `Tests/AuraCoreTests/OptionsMenuModelTests.swift` | **300** | 300 | CX20／CX21 ＋ `rows(` 新參數 | T07 第一步拆 `CodexOptionsRowTests.swift` |
 | `Tests/AgentAuraAppTests/AppDelegatePanelActionsWiredTests.swift` | **300** | 300 | `panelActionsAreWired` 涵蓋 3 個新 kind | T10 第一步拆 `AppDelegateCodexWiredTests.swift` |
 | `Tests/AuraCoreTests/MergeRulesTests.swift` | 294 | 300 | `merge(` 新參數（1 處） | 餘裕 6 行 |

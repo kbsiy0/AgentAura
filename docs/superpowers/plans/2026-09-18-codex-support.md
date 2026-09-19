@@ -1,9 +1,9 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r8**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r9**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 r8 的 spec。
+> 節號引用一律指 r9 的 spec。
 > **gate 編號**：本 change 新增的一律 `CX<n>`（共 **45** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
 
 ## 0. 給每個 implementer 的共同規則
@@ -22,6 +22,11 @@
 - **swift-testing**（`import Testing` / `@Test` / `#expect`），不是 XCTest。
 - **禁止**：`--amend` 已 push 的 commit、`--no-verify`、`git reset --hard|checkout .|clean -f`、
   `fatalError`、在測試裡碰真的 `~/.codex`／`~/.claude`、**在任何地方跑 `codex exec`**（F12）。
+- **套件必須維持可編譯**（T07 實測撞到）：上游型別**加 case** 時，**同一個 task** 要讓下游的窮盡
+  `switch` 至少以 stub 編得過，**不得把編譯失敗留給後面的 task**。Swift 的窮盡 switch 對新 case 是
+  **整個套件的連鎖編譯失敗**，不是「某條測試變紅」——後者可以排進下一個 task，前者會讓那之後的
+  每一個 task 都無法開工、也無法量基準紅燈。stub 要標明「**由 T<n> 以真實作取代**」，
+  並把「因 stub 而誠實變紅的既有 gate」列進該 task 的預期紅燈（見 T07）。
 - **gate 不得拿生產常數跟自己比**（T04 review M1／M2，**同一個陷阱已經出現兩次**：`timeout` 與 `agentFlag`）：
   `#expect(產生器輸出 == "...\(CodexHooksJSON.agentFlag)")` 這種寫法，常數被改壞時兩邊一起變、**斷言恆真**
   ——實測把 `agentFlag` 改成 `"--agent codexx"`，全量 808 條測試**零新紅**。**期望值一律寫字面**；
@@ -79,10 +84,10 @@
 | T04 | `CodexHooksJSON`（逐字 F14）＋ `CodexHookPathCheck`（含 `RejectionKind`） | §4.3、§4.4 前半 | T03 | CX6、CX33 |
 | T05 | `agent` 貫穿四段 ＋ `aura-hook` 接線 ＋ **`Jargon.model` Codex 命名** ＋ **雙 agent 端到端** | §3、§4.1、§4.7、§4.9、§4.8 | T02 | CX8–CX13、**CX38**、**CX41** |
 | T06 | `CodexInstaller`（含路徑 guard）＋ **兩側檔案序列不變式** | §4.4、§4.8 | T04 | CX14–CX18、CX32、**CX37a／CX37b** |
-| T07 | `CodexState`（六態）＋ `PanelAction` ＋ `OptionsMenuModel` | §3、§4.6 | T06 | CX19、CX20、CX21、CX34 |
+| T07 | `CodexState`（六態）＋ `PanelAction` ＋ `OptionsMenuModel` ＋ **`AppDelegate+Links.swift` 純搬移** ＋ **兩個下游 switch 的 stub** | §3、§4.6 | T06 | CX19、CX20、CX21、CX34 |
 | T08 | `PanelModel` 欄位 ＋ 61 個呼叫點（機械） | §4.6 | T07 | CX22（model 半） |
 | T09 | View 層 ＋ `L10nCodex` | §4.6 | T08 | CX22（像素半）、CX23、**CX36** |
-| T10 | `AppDelegate` 接線 ＋ `CodexHookStore` ＋ `Uninstaller` ＋ **兩側憑證序列不變式** | §4.5、§4.6、§4.8、§6.2 | T06、T09 | CX24–CX26、CX31、CX35、**CX39**、**CX40**、**CX42** |
+| T10 | `AppDelegate` 接線（**以真實作取代 T07 的 stub**）＋ `CodexHookStore` ＋ `Uninstaller` ＋ **兩側憑證序列不變式** | §4.5、§4.6、§4.8、§6.2 | T06、T09 | CX24–CX26、CX31、CX35、**CX39**、**CX40**、**CX42** ＋ 既有 `panelActionsAreWired` **轉綠** |
 | T11 | scripts ／ 文件 ／ 正典回寫 | §8.2 | T07 | CX27–CX30 |
 | T12 | 整合 ＋ DoD 量測 | DoD 帳本全表 | 全部 | — |
 
@@ -93,7 +98,8 @@ wave 1: T01                       （單獨，擋住所有人）
 wave 2: T02 ∥ T03                 （兩個不同 AuraCore 檔，無交集）
 wave 3: T04（需 T03）∥ T05（需 T02）
 wave 4: T06（需 T04）
-wave 5: T07（需 T06）
+wave 5: T07（需 T06；**動到 Sources/AgentAuraApp/ 兩個檔**——`AppDelegate+Links.swift` 純搬移
+        ＋ `AppDelegate+PanelActions.swift`／`OptionsSectionView.swift` 的 stub。Tier 1 不變）
 wave 6: T08（需 T07）∥ T11（需 T07 的列標題；只動 scripts/ 與 docs/，與 T08 零交集）
 wave 7: T09（需 T08）
 wave 8: T10（需 T06、T09）
@@ -385,9 +391,26 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
 
 ## T07 `CodexState`（六態）＋ `PanelAction` ＋ `OptionsMenuModel`
 
-**第一步（純搬移，獨立 commit）**：`OptionsMenuModelTests.swift` **恰好 300 行**，
+**第一步 (a)（純搬移，獨立 commit）**：`OptionsMenuModelTests.swift` **恰好 300 行**，
 新增 `CodexOptionsRowTests.swift` 承接 codex 斷言。**零行為變更**：`#expect` 總數不變、
 被搬動的測試函式名一字不改。
+
+**第一步 (b)（純搬移，獨立 commit；原本排在 T10，r9 提前到這裡）**：
+`Sources/AgentAuraApp/AppDelegate+PanelActions.swift` **恰好 200 行**，把 `openHelp`／
+`helpResourceName`／`helpURL`／`reportIssue`（約 45 行含註解）搬到 `AppDelegate+Links.swift`。
+**零行為變更**：`swift test` 全綠、`#expect(` 總數不變、既有 `HelpResourceNameTests` 一字不改。
+**為什麼提前**：本 task 給 `PanelAction`／`PanelActionKind` 加三個 case，而
+`AppDelegate+PanelActions.swift:18` 的 `switch action` 是**窮盡、無 `default`** 的——
+不在同一個 task 裡讓它編得過，T08 之後的每一個 task 都開不了工（§0 的「套件必須維持可編譯」）。
+那個檔剛好在 200 行上限，所以得先騰出空間才加得了 case。
+
+**第一步 (c)（兩個下游 switch 的最小 stub，可與第二步同一個 commit）**：
+- `AppDelegate+PanelActions.swift` 的 `switch action`：三個新 case 各給 `break`。
+- `OptionsSectionView.swift` 的 `OptionsRowIconView.systemName(for:)`：三個新 case 各給暫定 icon。
+兩處都要標明「**T10／T09 必須以真實作取代**」。
+**預期紅燈分兩類**（報告要分開列）：① 本 task 自己的 gate 骨架（CX19／CX20／CX21／CX34）；
+② **因 stub 而誠實變紅的既有 gate**——`panelActionsAreWired` 對三個新 kind 會紅到 T10 接線為止。
+②**不算基準紅**，也**不准**為了讓它綠而弱化它：那是 tested≠wired 守衛正在做它該做的事。
 
 **第二步**：
 - `CodexState` 六態（含 `.blockedByBundlePath(Rejection)`、`.connectedStalePath`）；
@@ -439,6 +462,8 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
   至少涵蓋：六態說明句、**兩種 `Rejection` 的文案**（`.unsupportedCharacter` 要能把字元插進句子）、
   **`.connectedStalePath` 的兩句**（有／無 `pathRejection`）、**snippet 被扣住時的那句**（R-10）、
   「重新接上 Codex」列標題、七個 `CodexFailure` 的 banner 文案。產品名「Codex」走 `Agent.label`。
+- **以真實作取代 T07 的 stub**：`OptionsSectionView.swift` 的 `OptionsRowIconView.systemName(for:)`
+  三個新 case 在 T07 是暫定 icon（§0「套件必須維持可編譯」），本 task 換成正式的。
 - **列標籤放在既有的第一行 `HStack`**，不另起一行（D-l）。
 - `CodexSectionView` 依 §4.6 表分支（六態 ＋ 兩種 Rejection ＋ snippet 有無）：
   - `.notConnected` → 單行提示 ＋ 按鈕（R-3），**不吃 `InstallState`**。
@@ -467,15 +492,19 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
 
 ## T10 `AppDelegate` 接線 ＋ `CodexHookStore` ＋ `Uninstaller`
 
-**第一步（兩個純搬移，獨立 commit）**：
-1. `AppDelegate+PanelActions.swift` **恰好 200 行**，把 `openHelp`／`helpResourceName`／`helpURL`／
-   `reportIssue`（約 45 行含註解）搬到 `AppDelegate+Links.swift`。
-2. `AppDelegatePanelActionsWiredTests.swift` **恰好 300 行**，新增 `AppDelegateCodexWiredTests.swift`。
-**兩者都零行為變更**：`swift test` 全綠、`#expect` 總數不變、既有 `HelpResourceNameTests` 一字不改。
+**第一步（純搬移，獨立 commit）**：`AppDelegatePanelActionsWiredTests.swift` **恰好 300 行**，
+新增 `AppDelegateCodexWiredTests.swift`。**零行為變更**：`swift test` 綠（除既有 pending 紅）、
+`#expect(` 總數不變。
+（**原本的第一步 (1)** ——`AppDelegate+Links.swift` 的純搬移——**已於 r9 提前到 T07**，
+理由見 T07 第一步 (b)：那個檔的窮盡 `switch` 必須與加 case 在同一個 task 裡編得過。）
 
 **第二步**：
 - `CodexHookStore`（`@MainActor` ＋ 注入 `UserDefaults`）：key `AgentAuraCodexHookContents`，
   值＝寫出去的 JSON 文字；`contents: Data?`／`write(_ bytes: Data)`／`clear()`。**不算 hash**。
+- **以真實作取代 T07 的 stub**：`AppDelegate+PanelActions.swift` 的 `switch action` 三個新 case
+  在 T07 是 `break`（§0「套件必須維持可編譯」），本 task 換成真的接線。
+  **驗收必含：既有 `panelActionsAreWired` 對三個新 kind 從紅轉綠**——它從 T07 起就誠實地紅著，
+  那是 tested≠wired 守衛在等這一刻；報告要附轉綠前後的輸出。
 - `AppDelegate+Codex.swift`：
   - **五個行程常數欄位（D-t）**，在 `applicationDidFinishLaunching` 算**一次**：
     `translocated`／`inDownloads`／`pathRejection`／`currentExpectedContents`／`codexSnippet`
