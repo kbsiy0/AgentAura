@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r9（2026-09-19，T07 依賴修正；不送審）
+revision: r10（2026-09-19，折入 T07 review：pathRejection 裁決、stub 標記、CX46；不送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -11,7 +11,7 @@ revision: r9（2026-09-19，T07 依賴修正；不送審）
 > 正典 `2026-09-08-agentaura-design.md` 為權威；本 change 對正典的修訂在 §8.2。
 > 證據層是 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 > **任何關於 Codex 行為的斷言都標了 F 編號；沒有 F 編號的一律寫成「待驗」，不得當事實用。**
-> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **45** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫
+> gate 編號慣例：**本 change 新增的 gate 一律 `CX<n>`**（共 **46** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫
 > 測試函式名（例如 `installerTouchesOnlyAllowedPaths`），**不寫 `G<n>`**。
 
 ## 0. 背景與裁決
@@ -124,8 +124,8 @@ reprobeCodex()：只重做 installer.probe() ──▶ CodexState.from(obs, reco
 | `CodexInstaller` | AuraHookFile | 新 | `Sendable`；兩個 `URL`；`probe()`／`connect(json:translocated:inDownloads:) throws -> Data`／`disconnect(ifContentsEqual:) throws`。**只碰 `<codexHome>/hooks.json`** |
 | `CodexHookStore` | App | 新 | `@MainActor` ＋ 注入 `UserDefaults`；key `AgentAuraCodexHookContents`；`Data` 進、`Data` 出，round-trip 有 gate（CX31） |
 | `PanelAction` / `PanelActionKind` | AuraCore | 改 | `+ .connectCodex`／`.disconnectCodex`／`.copyCodexSnippet`。**不新增第四個**。`samples` 的 doc comment 補「**不得有 `default`**」（r3 m2 順手補既有註解） |
-| `OptionsMenuModel` | AuraCore | 改 | `rows(...)` 多吃 `codex: CodexState`；列數依 §4.6；`nonMenuKinds` 加 `.copyCodexSnippet` |
-| `PanelModel` | AuraCore | 改 | `+ codex: CodexState`、`+ codexSnippet: String?`；`make(...)` 新參數**不給預設值** |
+| `OptionsMenuModel` | AuraCore | 改 | `rows(...)` 多吃**兩個**參數 `codex: CodexState` ＋ **`codexPathRejection: Rejection?`**（後者不進 case 的 payload，理由見 §3）；列數依 §4.6；`nonMenuKinds` 加 `.copyCodexSnippet` |
+| `PanelModel` | AuraCore | 改 | **三個**新欄位：`+ codex: CodexState`、`+ codexSnippet: String?`、**`+ codexPathRejection: CodexHookPathCheck.Rejection?`**；`make(...)` 新參數**不給預設值** |
 | `PanelRow` | AuraCore | 改 | `+ agentLabel: String?` |
 | `SessionSnapshot` / `MergeRules` / `SessionReducer` / `SessionState` | AuraCore | 改 | `agent: String?` 一路帶到 `SessionState.agent: Agent`；`merge(...)` 多一個 `agent:`（無預設值） |
 | `CodexSectionView` | App | 新 | 六態 ＋ 兩種 Rejection 的分支（§4.6 表）。**不吃 `InstallState`** |
@@ -206,6 +206,18 @@ public enum CodexStateKind: String, Sendable, CaseIterable {
     case unavailable, notConnected, connected, connectedStalePath, occupiedByOther, blockedByBundlePath
 }
 ```
+
+**`pathRejection` 不進任何 case 的 payload**（T07 review 的主管問題 4 裁決）——它是**橫跨**
+`.connectedStalePath` 與 `.occupiedByOther` 的 **UI 輸入**：`rows(codex:codexPathRejection:)` 另傳一個參數，
+`PanelModel` 也因此有**三個**新欄位（`codex`／`codexSnippet`／`codexPathRejection`）。
+**區分原則**：只有 **`.blockedByBundlePath(Rejection)` 的 payload 是構成性的**——判定表第 6 列的
+成立條件**就是**它非 nil；`pathRejection` 對第 2／3 列是**附帶的**（判定表寫「任意」，`from(...)`
+走到 `.connectedStalePath` 根本不看它）。把附帶資料塞進 payload 有三個具體代價：
+① `Equatable` 被污染——`.connectedStalePath(nil) != .connectedStalePath(.mustMoveToApplications)`，
+但那是**同一個世界狀態**（磁碟==憑證≠現在預期），而 CX19／CX34 都靠 `Equatable` 比對；
+② `samples` 膨脹成 `[nil] + 全部 Rejection`，把每一條聯集 gate 的定義域放大，其中多數在行為上相同；
+③ **R-10 要求 `.occupiedByOther` 在 `pathRejection == .mustMoveToApplications` 時不給 snippet**，
+若只放進 `.connectedStalePath` 的 payload，`.occupiedByOther` 仍得另外拿一次 → 兩套機制並存。
 
 **兩層 `samples` 的 `switch` 都不得有 `default`**（D-r／r3 m2）——那正是這兩個平行 Kind 型別
 存在的**唯一**理由：新增一個 case 時編譯器會擋下來。加一個 `default: []` 看起來像防禦性寫法，
@@ -344,7 +356,9 @@ public enum CodexStateKind: String, Sendable, CaseIterable {
 
 ### 4.6 面板、Options 與「重新接上」的時機（R-9 ＋ R-10）
 
-| `CodexState`（含 `pathRejection`） | 面板 | snippet | Options（`.mount` 群組） |
+**這張表吃兩個輸入**：`CodexState` **與** `pathRejection`（後者不是 state 的 payload，見 §3 的區分原則）。
+
+| `CodexState` ＋ `pathRejection` | 面板 | snippet | Options（`.mount` 群組） |
 |---|---|---|---|
 | `.unavailable` | **什麼都不畫**（D-j） | — | 零列 |
 | `.notConnected` | 單行提示 ＋ 按鈕（R-3，一律如此） | — | 恰一列「接上 Codex」（`.connectCodex`） |
@@ -562,7 +576,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
   `environment["HOME"]`）；`codexConnectChainIsWired`（五段，CX24）；
   `codexRowsReachTheView`（`.unavailable` 時 `preferredContentSize` 與零 Codex 狀態完全相同）。
 
-### 6.3 Gate 表（新增一律 `CX<n>`，共 **45** 條；CX37 拆成 a／b；既有 gate 寫測試函式名）
+### 6.3 Gate 表（新增一律 `CX<n>`，共 **46** 條；CX37 拆成 a／b；既有 gate 寫測試函式名）
 
 | Gate | 層 | 守什麼 | Mutation（→ 指名測試 ≤60s 變紅） |
 |---|---|---|---|
@@ -599,7 +613,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX31 `codexHookStoreRoundTripsBytes`** | App | `write(bytes)` → `contents == bytes` **逐位元組**；輸入用**真正的產生器輸出** | 在 `write` 裡加 `trimmingCharacters` |
 | **CX32 `codexConnectRefusesBlockedBundlePath`** | AuraHookFile | translocated／inDownloads／含空白各一 → throw 對應 `CodexFailure`，**且整棵樹零差異** | 拿掉 `connect` 第一行的 guard |
 | **CX33 `codexPathCheckNamesTheOffendingCharacter`** | AuraCore | 六個字元逐格（定義域從集合推導）；帶**第一個**命中的字元；translocated 優先；乾淨路徑 nil | ① 一律回 `.unsupportedCharacter(" ")` ② 優先序對調 |
-| **CX34 `codexStalePathIsDetectedAndOffersReconnect`** | AuraCore | 磁碟 == 憑證 != 現在預期 → `.connectedStalePath`（三份內容都用真產生器輸出、兩個不同路徑） | `from` 忽略 `currentExpectedContents` |
+| **CX34 `codexStalePathIsDetectedAndOffersReconnect`** | AuraCore | 磁碟 == 憑證 != 現在預期 → `.connectedStalePath`（三份內容都用真產生器輸出、兩個不同路徑）。**fixture 的兩條路徑都不得含 `unsupportedCharacters` 的字元**（例如 `/Applications/AgentAura-2.app`，不要 `AgentAura (2).app`——含空白的路徑在生產中會先落到 `.blockedByBundlePath`，那是一個不可能發生的搬家情境，T07 review m4） | `from` 忽略 `currentExpectedContents` |
 | **CX35 `stalePathReconnectDisconnectsBeforeConnecting`** | App | **（前提：`pathRejection == nil`）** `.connectedStalePath` 下送 `.connectCodex` → 呼叫順序是 `disconnect` → `connect`；`.notConnected` 下只有 `connect` | 直接 `connect`（不先 disconnect） |
 | **CX36 `codexSectionRendersEveryState`** | App（離屏） | 六態 ＋ 兩種 Rejection 各渲一次：預期元素在（按鈕／snippet 區塊／指名字元的文案）；`.unavailable` 不畫任何東西 | ① 錯誤文案不插字元（籠統句） ② 被拒時仍畫「重新接上」按鈕 |
 | **CX37a `bothSidesNeverDisturbEachOthersFiles`** | AuraHookFile | R-8 不變式 1（檔案半）：**程式推導**全部長度 ≤ 4 的操作序列（**780 條，全跑**），`connectClaude` 走 `guardWriteTarget()` ＋ `atomicReplace()`（零 spawn，等價理由見 §4.8）；每步之後「另一側」整棵樹零差異；結束時若兩側皆 connected，兩側 `probe()` 皆 connected | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime |
@@ -609,7 +623,8 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX40 `codexSnippetIsWithheldWhenPathWillVanish`** | AuraCore ＋ App | **乘積表**：定義域 `CodexStateKind.allCases × [nil, .mustMoveToApplications, .unsupportedCharacter(" ")]`，斷言 `.mustMoveToApplications` **整行** `codexSnippet == nil`（含 `.occupiedByOther`）；`.unsupportedCharacter` 整行非 nil | 拿掉 `codexSnippet` 的條件 |
 | **CX41 `jargonModelCoversCodexNaming`** | AuraCore | §4.9 的**釘死輸入→輸出表九列**（含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]` 與 `o` 系列維持小寫）；既有九列反例輸出**完全不變** | ① Codex 分支回傳 raw ② 把 `o3` 改成 `O3` ③ **把 Codex 分支從既有演算法之前移到之後 → `gpt-5` 那列必須紅**（那是唯一能區分前置／後置的輸入） |
 | **CX42 `bothSidesNeverDisturbEachOthersCredentials`** | App | R-8 不變式 1（憑證半，r4 M3）：定義域 `{performConnect, performDisconnect, performConnectCodex, performDisconnectCodex}` 的**全部長度 ≤ 2 序列＝20 條**（程式推導，不手列）；fake installer／fake store ＋ 注入的 `UserDefaults` suite，全記憶體、**零 spawn**。每步之後斷言**另一側的鍵位元組完全不變**（Claude 側三個 `AgentAuraHook*` vs Codex 側 `AgentAuraCodexHookContents`），且該 suite **沒有其他鍵被新增或刪除**（用鍵集合的**差集**斷言，不逐鍵列舉——鍵清單會 drift） | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` |
-| **CX44 `noPendingFlagRemains`** | 全 repo 掃描 | `Tests/` 不得殘留 `AURA_CODEX_PENDING`（T01 用 `#if AURA_CODEX_PENDING_T05`／`_T10` 讓兩條 gate 骨架在依賴型別落地前仍可編譯；`Package.swift` 沒有任何 `-D`，所以那些分支**永不編譯、不做型別檢查**）。**＋暫存目錄正向對照**證明掃描沒壞（比照 CX30 的形狀） | 在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` |
+| **CX44 `noPendingFlagRemains`** | 全 repo 掃描 | **`Sources/` ＋ `Tests/`** 都不得殘留 `AURA_CODEX_PENDING`（T07 review M1：本 change 有**四個**「等下一個 task 替換」的 stub，分屬三種機制——`#if` 旗標會 `Issue.record` 而紅、`switch` 的 `break` 靠既有 gate 誠實紅、窮盡 switch 的暫定值靠「動 view 時一定看到」、而 `OptionsSectionView` 硬編 `.unavailable` **既不紅也不在必經路徑上**。**只有可 grep 的標記能一次全包**，所以四處一律貼 `AURA_CODEX_PENDING_T<nn>` 註解，掃描範圍含 `Sources/`）。**＋暫存目錄正向對照**證明掃描沒壞（比照 CX30 的形狀） | 在 `Sources/` 與 `Tests/` 各留一個 `AURA_CODEX_PENDING_T08`（兩處都要紅） |
+| **CX46 `optionsRowsCallSitePassesRealCodexState`** | AuraCore（來源掃描） | `Sources/` 不得出現字面 `codex: .unavailable` 或 `codexPathRejection: nil`——生產呼叫點必須傳**真的值**。比照既有 `L10nProductionCallSitesPassLanguageTests`（那條 gate 存在的理由與這裡一模一樣）。**為什麼需要它**：T07 在 `OptionsSectionView` 的生產渲染路徑硬編 `.unavailable`／`nil` 當 stub，而**那個 stub 的失效是靜默的**——`.unavailable` 正是目前所有測試期待的值，T08 忘了替換也沒有任何一條會紅，後果正是本 spec 花四輪在防的那類：使用者裝了 Codex、面板開了、Options 裡什麼都沒有，而全套測試綠（T07 review M1） | 把 view 那一行改回 `codex: .unavailable, codexPathRejection: nil` |
 | **CX45 `sessionStateProductionConstructionSitesPassAgent`** | AuraCore（來源掃描） | `Sources/` 底下 `SessionState(` 的出現次數**恰為 1**，且那一處包含 `agent:`。失敗訊息寫明「新增生產建構點時必須明傳 `agent`，**預設值只服務測試**」。（T05 review m1：預設值本身是對齊既有慣例、不是 tested≠wired——生產建構點恰一個且明傳，刪掉明傳會讓既有 gate 立刻紅；殘餘缺口只有「未來新增第二個生產建構點」這個方向，本 repo 已有同型 gate 可抄：`L10nProductionCallSitesPassLanguageTests`、`HookVerificationStoreSourceScanTests`） | 在 `Sources/` 加第二個 `SessionState(` 建構點且不傳 `agent:` |
 | 既有全部 gate | — | 繼續綠（尤其 `registeredEventsMatchHandledEvents`、`installerTouchesOnlyAllowedPaths`、`everyFixtureModelIsMapped`（**目前紅，本 change 必須修好**）、`fileLengthLimit`、`nonUITargetsLoadNoUIModules`、`noStrayLiteralOutsideAllowlist`、`panelModelMakeHasNoDefaults`、`RowHeightDerivationTests`、`FooterPositionStabilityTests`） | — |
 

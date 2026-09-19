@@ -1,10 +1,10 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r9**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r10**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 r9 的 spec。
-> **gate 編號**：本 change 新增的一律 `CX<n>`（共 **45** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
+> 節號引用一律指 r10 的 spec。
+> **gate 編號**：本 change 新增的一律 `CX<n>`（共 **46** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
 
 ## 0. 給每個 implementer 的共同規則
 
@@ -27,6 +27,11 @@
   **整個套件的連鎖編譯失敗**，不是「某條測試變紅」——後者可以排進下一個 task，前者會讓那之後的
   每一個 task 都無法開工、也無法量基準紅燈。stub 要標明「**由 T<n> 以真實作取代**」，
   並把「因 stub 而誠實變紅的既有 gate」列進該 task 的預期紅燈（見 T07）。
+  **所有等下一個 task 替換的 stub，一律在註解貼 `AURA_CODEX_PENDING_T<nn>`**（沿用既有字面）。
+  理由（T07 review M1）：本 change 的四個 stub 分屬三種機制——`#if` 旗標會 `Issue.record` 而紅、
+  `switch` 的 `break` 靠既有 gate 誠實紅、窮盡 switch 的暫定值靠「動 view 時一定看到」，
+  而 `OptionsSectionView` 硬編 `.unavailable` **既不紅也不在必經路徑上**。
+  **只有可 grep 的標記能一次全包**，CX44 因此掃 **`Sources/` ＋ `Tests/`**，不必記得有幾個、在哪裡。
 - **gate 不得拿生產常數跟自己比**（T04 review M1／M2，**同一個陷阱已經出現兩次**：`timeout` 與 `agentFlag`）：
   `#expect(產生器輸出 == "...\(CodexHooksJSON.agentFlag)")` 這種寫法，常數被改壞時兩邊一起變、**斷言恆真**
   ——實測把 `agentFlag` 改成 `"--agent codexx"`，全量 808 條測試**零新紅**。**期望值一律寫字面**；
@@ -442,17 +447,28 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
 
 ## T08 `PanelModel` 欄位 ＋ 呼叫點機械更新
 
-- `PanelModel` 加 `codex: CodexState`、`codexSnippet: String?`；`make(...)` 新參數**不給預設值**。
+- `PanelModel` 加**三個**欄位：`codex: CodexState`、`codexSnippet: String?`、
+  **`codexPathRejection: CodexHookPathCheck.Rejection?`**；`make(...)` 新參數**不給預設值**。
+  **第三個欄位是主管問題 4 的裁決**（spec §3）：`pathRejection` **不進任何 case 的 payload**，
+  它是橫跨 `.connectedStalePath` 與 `.occupiedByOther` 的 UI 輸入（R-10 給不給 snippet 也看它）。
+- **替換 T07 在 `OptionsSectionView` 留下的 stub**：那裡硬編 `codex: .unavailable, codexPathRejection: nil`
+  （貼著 `AURA_CODEX_PENDING_T08`），本 task 換成 `model.codex`／`model.codexPathRejection`。
+  **這個 stub 的失效是靜默的**——`.unavailable` 正是目前所有測試期待的值，忘了替換不會有任何一條紅，
+  後果是「使用者裝了 Codex、面板開了、Options 裡什麼都沒有，而全套測試綠」（T07 review M1）。
 - **61 個 `PanelModel.make(` 呼叫點、26 個檔**（動工時重新數一次並記在報告裡）。
   測試呼叫點一律傳 `.unavailable`／`nil`；生產呼叫點傳真實狀態。
 - 改完 `wc -l` 檢查那 26 個檔沒有越過 300 行（`PanelPixelTests` 275、`Phase2EvidenceRenderer` 194
   且有 15 個呼叫點最接近）。`PanelViewModelTests` 288 行，CX22 的 model 半寫不下就放
   `CodexRowLabelPixelTests`（不要刪既有註解騰空間）。
 
-**gates**：既有 `panelModelMakeHasNoDefaults` 繼續綠；CX22 的 model 半。
+**gates**：既有 `panelModelMakeHasNoDefaults` 繼續綠；CX22 的 model 半；
+**CX46 `optionsRowsCallSitePassesRealCodexState`**（新）——來源掃描，`Sources/` 不得出現字面
+`codex: .unavailable` 或 `codexPathRejection: nil`，比照既有 `L10nProductionCallSitesPassLanguageTests`
+（那條 gate 存在的理由與這裡一模一樣：生產呼叫點必須傳真的值，不能傳寫死的）。
 **test-edit scrutiny**：`#expect(` 淨數量**不得下降**；報告附改前／改後總數（基準 **1649**，量法見 DoD #2）。
 **mutation**：① `make` 忽略 `codex` → 由 T09／T10 的 gate 抓（本 task 先記）；
-② `agentLabel` 對 `.claude` 也給值 → CX22 紅。
+② `agentLabel` 對 `.claude` 也給值 → CX22 紅；
+③ **把 view 那一行改回 `codex: .unavailable, codexPathRejection: nil` → CX46 紅**。
 
 ---
 
@@ -481,7 +497,15 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
   報告列出檢查結果。
 
 **gates**：CX22 像素半、**CX23**、**CX36 `codexSectionRendersEveryState`**（六態 ＋ 兩種 Rejection
-各渲一次；`.unavailable` 不畫任何東西）、既有 `RowHeightDerivationTests`／
+各渲一次；`.unavailable` 不畫任何東西）。
+**CX36 的定義域必須走 `CodexState.samples(.blockedByBundlePath)`，不要直接迭代 `Rejection`**——
+它是**兩層 samples 鏈的第一個真正的消費者**（T07 review m1 實測：在 T09 之前把那兩個代表值改成
+單一值，全相關 suite **全綠**，因為兩個 Rejection 在 `rows` 層行為完全相同、都是零列，
+`kind` 又把它們收斂成同一個）。所以 **CX36 必須能分辨它們**：一個給 snippet ＋「複製」、一個不給（D-s）。
+**CX36 的定義域必須走 `CodexState.samples(.blockedByBundlePath)`，不要直接迭代 `Rejection`**——
+它是**兩層 samples 鏈的第一個真正的消費者**（T07 review m1 實測：在 T09 之前把那兩個代表值改成
+單一值，全相關 suite 全綠，因為兩個 Rejection 在 `rows` 層行為完全相同、都是零列，`kind` 又把它們
+收斂成同一個）。所以 CX36 **必須能分辨它們**：一個給 snippet ＋「複製」、一個不給（D-s）、既有 `RowHeightDerivationTests`／
 `FooterPositionStabilityTests`／`OptionsExpandTests` 繼續綠。
 **mutation**：① 標籤另起一行 → CX23 紅；② `CodexSectionView` 在 `.unavailable` 也畫 →
 `OptionsExpandTests` 的高度斷言紅（**特別確認**：沒紅代表「`.unavailable` 畫面零 diff」沒有守衛，
@@ -502,9 +526,16 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
 - `CodexHookStore`（`@MainActor` ＋ 注入 `UserDefaults`）：key `AgentAuraCodexHookContents`，
   值＝寫出去的 JSON 文字；`contents: Data?`／`write(_ bytes: Data)`／`clear()`。**不算 hash**。
 - **以真實作取代 T07 的 stub**：`AppDelegate+PanelActions.swift` 的 `switch action` 三個新 case
-  在 T07 是 `break`（§0「套件必須維持可編譯」），本 task 換成真的接線。
+  在 T07 是 `break`（§0「套件必須維持可編譯」，貼著 `AURA_CODEX_PENDING_T10`），本 task 換成真的接線。
   **驗收必含：既有 `panelActionsAreWired` 對三個新 kind 從紅轉綠**——它從 T07 起就誠實地紅著，
   那是 tested≠wired 守衛在等這一刻；報告要附轉綠前後的輸出。
+- **驗收必含：把 `verifyCodexActionsAreStubbed` 換成三個 kind 各自的「真副作用」斷言，並改名**
+  （T07 review m3）。T07 用 `banner != nil` 是當時唯一不弱化的選擇，但 T10 之後**任何** banner 都能
+  滿足它，函式名也會變成謊言。特別注意 **`.copyCodexSnippet` 的真實副作用是寫剪貼簿、不一定設 banner**
+  ——屆時的壓力會是「把斷言放寬成 `banner != nil`」，**那是弱化**；正確的動作是斷言對準剪貼簿注入縫。
+- **`AppDelegatePanelActionsWiredTests.swift` 現在是 300/300、零餘裕**（T07 是靠刪一行空行塞進新 case 的）。
+  本 task 動它時，**把一兩個既有 case 的驗證體也搬進 `+Codex.swift`，留出 20–30 行餘裕**；
+  **不准刪註解或空行擠**（那正是 r3 標過的形狀的輕量版）。
 - `AppDelegate+Codex.swift`：
   - **五個行程常數欄位（D-t）**，在 `applicationDidFinishLaunching` 算**一次**：
     `translocated`／`inDownloads`／`pathRejection`／`currentExpectedContents`／`codexSnippet`
@@ -592,13 +623,14 @@ Claude 的鍵、或新程式碼順手 `removePersistentDomain`——**全是 r4 
 
 ## T12 整合 ＋ DoD
 
-**本 task 新增一條 gate**：**CX44 `noPendingFlagRemains`**——來源掃描，`Tests/` 不得殘留
+**本 task 新增一條 gate**：**CX44 `noPendingFlagRemains`**——來源掃描，**`Sources/` ＋ `Tests/`** 都不得殘留
 `AURA_CODEX_PENDING`（比照既有 `noStrayLiteralOutsideAllowlist`／CX30 的形狀，
 **含暫存目錄正向對照**證明掃描沒壞）。理由：T05／T10 的驗收已經要求解除，但那靠人記得；
-有這條就不靠人記得。**mutation**：在 `Tests/` 留一個 `#if AURA_CODEX_PENDING_T05` → CX44 必須紅。
+有這條就不靠人記得。**mutation**：在 **`Sources/` 與 `Tests/` 各留一個** `AURA_CODEX_PENDING_T08` 標記 → **兩處都要紅**
+（只掃 `Tests/` 的話，T07 那四個 stub 裡有三個在 `Sources/`，掃不到）。
 
 跑 DoD 帳本全表：`swift test` 全綠（含**修好** `everyFixtureModelIsMapped`）且連跑 3 次 0 flake、
-gate mutation 帳（**45 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增（**逐檔列「估／實」兩欄**，
+gate mutation 帳（**46 條**，抽驗 5 筆現場重跑）、`Sources/` 淨增（**逐檔列「估／實」兩欄**，
 不是只看總數——T02 review m4：`Agent.swift` 估 60／實 80（+33%，多出來的是 review 要求的
 doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要看得見）、單檔行數、執行檔增量、
 `reprobeCodex()` 成本、啟動時間增幅、`claude plugin validate --strict`、`verify-install.sh`、
