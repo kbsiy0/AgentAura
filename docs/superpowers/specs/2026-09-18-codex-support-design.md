@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r10（2026-09-19，折入 T07 review：pathRejection 裁決、stub 標記、CX46；不送審）
+revision: r11（2026-09-19，折入 T11／T08 review；不送審）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -606,10 +606,10 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX24 `codexConnectChainIsWired`** | App | 五段：① 接線 ② fake 收到 `connect` ③ **憑證取回是同一串位元組** ④ banner 含兩個關鍵詞（從 `L10nCodex` 鍵推導）⑤ spy 記 `probe()` 次數，`onOpen` 後 ≥ 1 | ① 分支改 `break` ② banner 只留一句 ③ 拿掉 `onOpen` 的 `reprobeCodex()` |
 | CX25 `productionCodexHomeIsRealHome` | App ＋ 掃描 | §6.2 第二條 | 改成 `environment["HOME"]` |
 | CX26 `uninstallRemovesCodexBeforeErasingDefaults` | App | codex disconnect **早於** `removePersistentDomain` | 兩步對調 |
-| CX27 `verifyUninstallScriptDetectsOurCodexHooks` | script | 暫存 `CODEX_HOME` ＋ `--only 7`；**判準是那一行的 PASS/FAIL** | 拿掉腳本第 7 項 |
+| CX27 `verifyUninstallScriptDetectsOurCodexHooks` | script | 暫存 `CODEX_HOME` ＋ `--only 7`；**判準是那一行的 PASS/FAIL**。**外加兩格參數驗證**（T11 review M1 實測）：① **`--only`（缺值）在有界時間內以非零退出**（實測會**無限迴圈且零輸出**——`--only)` 分支無條件 `shift 2`，而 bash 在 `$# < 2` 時 `shift 2` 不改 `$#` 也不中止，腳本只有 `set -uo pipefail` 沒有 `-e`）；② **`--only 77` 以非零退出，且輸出不得含「PASS」**（實測 `--only 77`／`--only 0`／`--only seven` 都是**一項都沒跑、然後印「完整移除驗收 PASS」**）。理由：腳本**第 4 項自己**為了不把「問不到」誤當「通過」特地多寫了 `LOGIN_ASKED`，而 `--only` 這條路徑把同一個錯犯在**整支腳本的總結論**上——而它正是「移除乾淨是測試能力的前提」那條 invariant 的驗收工具 | ① 拿掉腳本第 7 項 ② **拿掉 `--only` 的值域檢查（`[1-7]`）→ ②那格必須紅** |
 | CX28 `helpDocsCoverCodexRows` | 文件 | `allRows` 對 `CodexStateKind.allCases` 取**聯集**，兩語言各守 | **只刪其中一個標題**也必須紅 |
-| CX29 `securityDocListsEveryPathWeWrite` | 文件 | `README.md`／`SECURITY.md` 含 `.codex/hooks.json`（字面來自生產常數） | 從 SECURITY.md 刪掉那一行 |
-| CX30 `noCodexExecInRepo` | 全 repo | `Tests/`／`scripts/` 不得出現 `codex exec`（＋正向對照） | 在腳本裡加一行 `codex exec` |
+| CX29 `securityDocListsEveryPathWeWrite` | 文件 | **三份文件都要含** `.codex/hooks.json`（字面來自生產常數）：`SECURITY.md`、`README.md`、**`README.zh-TW.md`**，寫成 `@Test(arguments: [...])` **參數化**而不是三條各寫一遍。T11 review m1 實測：把路徑從 SECURITY.md 與 README.md **兩邊都刪掉**，當時只紅 **1** 條——內容是有的，缺的是守衛 | 從**任一份**刪掉那一行都必須紅（三份各試一次） |
+| CX30 `noCodexExecInRepo` | 全 repo | **roots = `Tests/` ＋ `scripts/` ＋ `.github/`** 不得出現 `codex exec`（＋暫存目錄正向對照）。`.github/` 是新加的：repo 有 CI（`ci.yml`），**那裡的指令會真的被執行**，而 F12 的代價（改使用者的 `config.toml`）在 CI 上同樣成立。**`docs/` 刻意不納入**——F12 的證據文件必須**逐字**寫出那個指令名，掃它等於要求證據文件自我審查。**新增任何可執行面時 roots 要跟著加，而沒有測試會提醒你**（這是這條 gate 已知的人工維護點） | 在 `scripts/` 或 `.github/` 加一行 `codex exec` |
 | **CX31 `codexHookStoreRoundTripsBytes`** | App | `write(bytes)` → `contents == bytes` **逐位元組**；輸入用**真正的產生器輸出** | 在 `write` 裡加 `trimmingCharacters` |
 | **CX32 `codexConnectRefusesBlockedBundlePath`** | AuraHookFile | translocated／inDownloads／含空白各一 → throw 對應 `CodexFailure`，**且整棵樹零差異** | 拿掉 `connect` 第一行的 guard |
 | **CX33 `codexPathCheckNamesTheOffendingCharacter`** | AuraCore | 六個字元逐格（定義域從集合推導）；帶**第一個**命中的字元；translocated 優先；乾淨路徑 nil | ① 一律回 `.unsupportedCharacter(" ")` ② 優先序對調 |
@@ -624,14 +624,14 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX41 `jargonModelCoversCodexNaming`** | AuraCore | §4.9 的**釘死輸入→輸出表九列**（含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]` 與 `o` 系列維持小寫）；既有九列反例輸出**完全不變** | ① Codex 分支回傳 raw ② 把 `o3` 改成 `O3` ③ **把 Codex 分支從既有演算法之前移到之後 → `gpt-5` 那列必須紅**（那是唯一能區分前置／後置的輸入） |
 | **CX42 `bothSidesNeverDisturbEachOthersCredentials`** | App | R-8 不變式 1（憑證半，r4 M3）：定義域 `{performConnect, performDisconnect, performConnectCodex, performDisconnectCodex}` 的**全部長度 ≤ 2 序列＝20 條**（程式推導，不手列）；fake installer／fake store ＋ 注入的 `UserDefaults` suite，全記憶體、**零 spawn**。每步之後斷言**另一側的鍵位元組完全不變**（Claude 側三個 `AgentAuraHook*` vs Codex 側 `AgentAuraCodexHookContents`），且該 suite **沒有其他鍵被新增或刪除**（用鍵集合的**差集**斷言，不逐鍵列舉——鍵清單會 drift） | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` |
 | **CX44 `noPendingFlagRemains`** | 全 repo 掃描 | **`Sources/` ＋ `Tests/`** 都不得殘留 `AURA_CODEX_PENDING`（T07 review M1：本 change 有**四個**「等下一個 task 替換」的 stub，分屬三種機制——`#if` 旗標會 `Issue.record` 而紅、`switch` 的 `break` 靠既有 gate 誠實紅、窮盡 switch 的暫定值靠「動 view 時一定看到」、而 `OptionsSectionView` 硬編 `.unavailable` **既不紅也不在必經路徑上**。**只有可 grep 的標記能一次全包**，所以四處一律貼 `AURA_CODEX_PENDING_T<nn>` 註解，掃描範圍含 `Sources/`）。**＋暫存目錄正向對照**證明掃描沒壞（比照 CX30 的形狀） | 在 `Sources/` 與 `Tests/` 各留一個 `AURA_CODEX_PENDING_T08`（兩處都要紅） |
-| **CX46 `optionsRowsCallSitePassesRealCodexState`** | AuraCore（來源掃描） | `Sources/` 不得出現字面 `codex: .unavailable` 或 `codexPathRejection: nil`——生產呼叫點必須傳**真的值**。比照既有 `L10nProductionCallSitesPassLanguageTests`（那條 gate 存在的理由與這裡一模一樣）。**為什麼需要它**：T07 在 `OptionsSectionView` 的生產渲染路徑硬編 `.unavailable`／`nil` 當 stub，而**那個 stub 的失效是靜默的**——`.unavailable` 正是目前所有測試期待的值，T08 忘了替換也沒有任何一條會紅，後果正是本 spec 花四輪在防的那類：使用者裝了 Codex、面板開了、Options 裡什麼都沒有，而全套測試綠（T07 review M1） | 把 view 那一行改回 `codex: .unavailable, codexPathRejection: nil` |
+| **CX46 `optionsRowsCallSitePassesRealCodexState`** | AuraCore（來源掃描） | `Sources/` 不得出現字面 `codex: .unavailable` 或 `codexPathRejection: nil`——生產呼叫點必須傳**真的值**。比照既有 `L10nProductionCallSitesPassLanguageTests`（那條 gate 存在的理由與這裡一模一樣）。**為什麼需要它**：T07 在 `OptionsSectionView` 的生產渲染路徑硬編 `.unavailable`／`nil` 當 stub，而**那個 stub 的失效是靜默的**——`.unavailable` 正是目前所有測試期待的值，T08 忘了替換也沒有任何一條會紅，後果正是本 spec 花四輪在防的那類：使用者裝了 Codex、面板開了、Options 裡什麼都沒有，而全套測試綠（T07 review M1） **已知假陰性（寫進 gate 的 doc comment）**：① **跨行寫法掃不到**——`OptionsMenuModel` 換行再接 `.rows(` 時，單行比對看不見（T08 review m1 實測）；② 註解過濾有兩個缺口（block comment、行尾註解），**兩個缺口方向相反**（一個漏抓、一個誤抓），而誤抓那側**失敗得很大聲**（gate 紅在一個其實沒問題的地方，有人會去看）。CX24／CX35 的**行為斷言**才是這條路徑的主守衛，本條是便宜的第二道 | 把 view 那一行改回 `codex: .unavailable, codexPathRejection: nil` |
 | **CX45 `sessionStateProductionConstructionSitesPassAgent`** | AuraCore（來源掃描） | `Sources/` 底下 `SessionState(` 的出現次數**恰為 1**，且那一處包含 `agent:`。失敗訊息寫明「新增生產建構點時必須明傳 `agent`，**預設值只服務測試**」。（T05 review m1：預設值本身是對齊既有慣例、不是 tested≠wired——生產建構點恰一個且明傳，刪掉明傳會讓既有 gate 立刻紅；殘餘缺口只有「未來新增第二個生產建構點」這個方向，本 repo 已有同型 gate 可抄：`L10nProductionCallSitesPassLanguageTests`、`HookVerificationStoreSourceScanTests`） | 在 `Sources/` 加第二個 `SessionState(` 建構點且不傳 `agent:` |
 | 既有全部 gate | — | 繼續綠（尤其 `registeredEventsMatchHandledEvents`、`installerTouchesOnlyAllowedPaths`、`everyFixtureModelIsMapped`（**目前紅，本 change 必須修好**）、`fileLengthLimit`、`nonUITargetsLoadNoUIModules`、`noStrayLiteralOutsideAllowlist`、`panelModelMakeHasNoDefaults`、`RowHeightDerivationTests`、`FooterPositionStabilityTests`） | — |
 
 ### 6.4 test-edit scrutiny 預告（Lessons #3）
 1. `nonMenuKindsIsExactlyThatLiteralSet`：四個 → 五個（契約變更不是弱化）；
    **連帶**改 `OptionsMenuModel.swift` 逐字寫著「字面集合恰為這四個」的 doc comment。
-2. `PanelModel.make` 新增無預設值參數 → **61 個呼叫點（26 個檔）**。
+2. `PanelModel.make` 新增無預設值參數 → **63 個呼叫點（27 個檔）**（T08 實測；以括號配對量，`grep 'PanelModel\.make('` **抓不到隱式成員寫法** `spy.setPanel(.make(icon: …))`）。
 3. `MergeRules.merge` 新增 `agent:` → **7 個呼叫點**。
 4. `OptionsMenuModel.rows` 新增 `codex:` → **26 個呼叫點（10 個檔）**。
 4b. **`SessionState.init` 的 20 個測試建構點（19 個檔）——第四條 fan-out**（T05 review m4）。
@@ -641,7 +641,12 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
    的 doc comment 與 **CX45**（來源掃描，防的是「未來新增第二個生產建構點時忘了傳」）。
    **這條要記在帳上**——T08 做 `PanelModel.make` 那 61 處時，帳上三條與實際四條對不起來，
    而「有幾條 fan-out」正是 test-edit scrutiny 用來判斷「這批機械改動有沒有夾帶弱化」的基準。
-5. 上面 2／3／4 合計 94 個呼叫點（**4b 不計入**，它以預設值吸收）：**`#expect(` 淨數量不得下降**
+5. **無預設值參數的呼叫點計數不再是驗收條件**（T08 裁決 1）——**編譯器已經代答了**：
+   三個新參數都沒有預設值，所以「有沒有漏」由編譯通過證明，grep 的數字對它零貢獻。
+   而那個數字**已經連錯五次**（T02 差 3、T03 差 3、T04 差 1、T05d 差 51、T08 的隱式成員寫法漏抓）。
+   計數**只作報告資訊**，不作驗收。真正需要數字的是 `#expect(` 淨增（編譯器代答不了），
+   而它一律用**合併後 head 的絕對值**。
+5b. 上面 2／3／4 合計 96 個呼叫點（**4b 不計入**，它以預設值吸收）：**`#expect(` 淨數量不得下降**
    （基準 **1649**，量法見 DoD #2 的更正）。
 6. `HelpDocOptionsRowCoverageTests.allRows` 改成對 `CodexStateKind.allCases` 取聯集。
 7. `ClaudeHomeTreeSnapshot` 抽成共用 `DirectoryTreeSnapshot`（CX14／CX32／CX37a／CX37b 共用）——**純重構**，
@@ -712,7 +717,7 @@ Tests/AuraCoreTests/EndToEndWiredGateTests.swift   改（CX38 兩個方向；注
 scripts/verify-uninstall.sh                        改（第 7 項 ＋ CODEX_HOME ＋ --only ＋ 第 2 行註解）
 ```
 
-**單檔上限的七個風險點**：
+**單檔上限的八個風險點**：
 
 | 檔案 | 現況行數 | 上限 | 要加什麼 | 處置 |
 |---|---|---|---|---|
@@ -723,6 +728,7 @@ scripts/verify-uninstall.sh                        改（第 7 項 ＋ CODEX_HOM
 | `Tests/AuraCoreTests/PanelViewModelTests.swift` | 288 | 300 | CX22 的 model 半 | 餘裕 12 行；寫不下放 `CodexRowLabelPixelTests` |
 | `Tests/AuraCoreTests/EndToEndWiredGateTests.swift` | 149 | 300 | CX38 兩個方向 | 餘裕充足；超了就拆 `EndToEndDualAgentTests.swift` |
 | `Sources/AuraCore/CodexState.swift`（新） | — | 200 | 六態 ＋ Kind ＋ samples ＋ `CodexFailure` | 估 ~115；逼近 200 就把 `CodexFailure` 拆檔 |
+| **`Sources/AgentAuraApp/StatusItemController.swift`** | **200** | 200 | **本 change 預期不動它**——它的佔位 model 永遠是 `.unavailable`，不隨 Codex 狀態變（那是 popover 掛載前的必要佔位：`contentViewController == nil` 時 `NSPopover.show` 會丟 NSException 殺行程），`AppDelegate` 首次 `refreshPanel()` 就會覆蓋 | **寫觸發條件，不做預防性搬移**（T08 裁決 6）：**若** T09／T10 發現必須在這個檔加任何一行，**先停下來**做一次零行為變更的純搬移 commit（照 T07 `AppDelegate+Links.swift` 的形狀：`#expect(` 前後不變、被搬函式名一字不改），**不准刪註解或空行擠**。為沒人要碰的檔做預防性搬移是 churn，而純搬移本身也有風險（T07 兩次都撞到別的 gate） |
 
 ### 8.2 回寫（逐句）
 | 位置 | 改為 |
@@ -730,7 +736,7 @@ scripts/verify-uninstall.sh                        改（第 7 項 ＋ CODEX_HOM
 | 正典 §2.2 對照表 | 加 `Interrupt → idle`（Codex only，**不得**進 `handledEvents`）；點名它與 `is_interrupt` 是兩件事 |
 | 正典 §2.1 檔案契約 | 加 `agent`（Optional，nil = claude）與 D-a／D-c 的理由 |
 | 正典 §3.2 安裝機制 | 加「第二個入口：Codex 讀 `~/.codex/hooks.json`（F1、F14），只在不存在時寫、只在內容相符時刪、絕不碰 `config.toml`；bundle 路徑不合法時不寫、改畫解釋」**＋ R-8 的兩側互不干擾不變式** |
-| 正典 §3.4 去工程師化 | 加「`Jargon.model` 同時認得 Claude 家族與 Codex 家族的命名；判不出來一律原樣回傳」 |
+| **app-shell spec（`2026-09-10-app-shell-design.md`）§3.4 文案映射（M-7，D-c）** | 加「`Jargon.model` 同時認得 Claude 家族與 Codex 家族的命名；判不出來一律原樣回傳」。**不是正典的 §3.4**（T11 review m3／問題 6）：兩份 spec 撞章節號——正典的 §3.4 是別的主題，而 `Jargon.swift` 第 3 行的麵包屑指的是 app-shell 那一份。回寫要落在被指名的那份文件上，否則下一個人照麵包屑找過去會看不到 |
 | 正典 §3.5 pid liveness | 加「Codex 的 hook 父行程在 session 內 pid 穩定（F15，**exec 模式實測**），判活前提成立；互動 TUI 的行程結構與 `comm` 未辨識」 |
 | 正典 §3.7 面板內容 | 加「非 Claude 的 session 在列的第一行帶 agent 標籤；聚合燈不分 agent」 |
 | 正典 §9 開放風險 | 加「Codex 無 error 來源」「無法偵測信任狀態」兩條 |

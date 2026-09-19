@@ -1,9 +1,9 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r10**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r11**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 r10 的 spec。
+> 節號引用一律指 r11 的 spec。
 > **gate 編號**：本 change 新增的一律 `CX<n>`（共 **46** 條；CX37 拆成 a／b）；提到**既有** gate 一律寫測試函式名。
 
 ## 0. 給每個 implementer 的共同規則
@@ -90,7 +90,7 @@
 | T05 | `agent` 貫穿四段 ＋ `aura-hook` 接線 ＋ **`Jargon.model` Codex 命名** ＋ **雙 agent 端到端** | §3、§4.1、§4.7、§4.9、§4.8 | T02 | CX8–CX13、**CX38**、**CX41** |
 | T06 | `CodexInstaller`（含路徑 guard）＋ **兩側檔案序列不變式** | §4.4、§4.8 | T04 | CX14–CX18、CX32、**CX37a／CX37b** |
 | T07 | `CodexState`（六態）＋ `PanelAction` ＋ `OptionsMenuModel` ＋ **`AppDelegate+Links.swift` 純搬移** ＋ **兩個下游 switch 的 stub** | §3、§4.6 | T06 | CX19、CX20、CX21、CX34 |
-| T08 | `PanelModel` 欄位 ＋ 61 個呼叫點（機械） | §4.6 | T07 | CX22（model 半） |
+| T08 | `PanelModel` 欄位 ＋ 63 個呼叫點（機械） | §4.6 | T07 | CX22（model 半）、**CX46** |
 | T09 | View 層 ＋ `L10nCodex` | §4.6 | T08 | CX22（像素半）、CX23、**CX36** |
 | T10 | `AppDelegate` 接線（**以真實作取代 T07 的 stub**）＋ `CodexHookStore` ＋ `Uninstaller` ＋ **兩側憑證序列不變式** | §4.5、§4.6、§4.8、§6.2 | T06、T09 | CX24–CX26、CX31、CX35、**CX39**、**CX40**、**CX42** ＋ 既有 `panelActionsAreWired` **轉綠** |
 | T11 | scripts ／ 文件 ／ 正典回寫 | §8.2 | T07 | CX27–CX30 |
@@ -455,7 +455,10 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
   （貼著 `AURA_CODEX_PENDING_T08`），本 task 換成 `model.codex`／`model.codexPathRejection`。
   **這個 stub 的失效是靜默的**——`.unavailable` 正是目前所有測試期待的值，忘了替換不會有任何一條紅，
   後果是「使用者裝了 Codex、面板開了、Options 裡什麼都沒有，而全套測試綠」（T07 review M1）。
-- **61 個 `PanelModel.make(` 呼叫點、26 個檔**（動工時重新數一次並記在報告裡）。
+- **63 個 `PanelModel.make(` 呼叫點、27 個檔**（T08 實測；以**括號配對**量，`grep 'PanelModel\.make('`
+  **抓不到隱式成員寫法** `spy.setPanel(.make(icon: …))`）。**這個數字不是驗收條件**（T08 裁決 1）：
+  三個新參數都沒有預設值，**編譯通過就證明每個呼叫點都補齊了**；計數只作報告資訊。
+  （文字比對數呼叫點／斷言在本 change 已經連錯五次。）
   測試呼叫點一律傳 `.unavailable`／`nil`；生產呼叫點傳真實狀態。
 - 改完 `wc -l` 檢查那 26 個檔沒有越過 300 行（`PanelPixelTests` 275、`Phase2EvidenceRenderer` 194
   且有 15 個呼叫點最接近）。`PanelViewModelTests` 288 行，CX22 的 model 半寫不下就放
@@ -529,6 +532,14 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
   在 T07 是 `break`（§0「套件必須維持可編譯」，貼著 `AURA_CODEX_PENDING_T10`），本 task 換成真的接線。
   **驗收必含：既有 `panelActionsAreWired` 對三個新 kind 從紅轉綠**——它從 T07 起就誠實地紅著，
   那是 tested≠wired 守衛在等這一刻；報告要附轉綠前後的輸出。
+- **驗收必含：`refreshPanel()` 真的把 `codexState` 交出去**（T08 裁決 3，**取代**「掃 `PanelModel.make(`
+  生產呼叫點」那種文字 gate）：讓 `reprobeCodex()` 產出一個**非 `.unavailable`** 的狀態，然後斷言
+  `refreshPanel()` 交給 `status.setPanel` 的那個 `PanelModel` 的 **`codex` 等於 `codexState`**、
+  **`codexPathRejection` 等於行程常數**。併進 CX24 或 CX35 的段落（CX24 已有 spy 基礎設施）。
+  **為什麼不用文字掃描**：`make(` 與 `rows(` 的情況不對稱——`StatusItemController.swift` 的佔位 model
+  **永久且正確地**傳 `.unavailable`（popover 掛載前的必要佔位，`contentViewController == nil` 時
+  `NSPopover.show` 會丟 NSException 殺行程），文字掃描會對它誤報而需要 allowlist，
+  而這個 codebase 對 allowlist 的態度很清楚。行為斷言走真實路徑、對佔位 model 免疫、更難繞過。
 - **驗收必含：把 `verifyCodexActionsAreStubbed` 換成三個 kind 各自的「真副作用」斷言，並改名**
   （T07 review m3）。T07 用 `banner != nil` 是當時唯一不弱化的選擇，但 T10 之後**任何** banner 都能
   滿足它，函式名也會變成謊言。特別注意 **`.copyCodexSnippet` 的真實副作用是寫剪貼簿、不一定設 banner**
@@ -555,6 +566,9 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
     .appendingPathComponent(".codex")`（**不得用 `environment["HOME"]`**）。
 - 剪貼簿走注入縫 `writeToPasteboard: @MainActor (String) -> Void`。
 - 接上成功的 banner 必須**同時**含「下一個 Codex session 起生效」與「Codex 會問你信任」（D-m）。
+- **驗收必含：補上 `CLAUDE.md` 第三條 invariant（R-8）的第三個 gate 名**
+  `bothSidesNeverDisturbEachOthersCredentials`——T11 刻意只列了已存在的兩個（CX37a／CX37b），
+  因為 CX42 排在本 task；交付後回去補，那條 invariant 才完整（T11 review m2）。
 - `Uninstaller.run()` 在 `erasePersistentDomain()` **之前**多一步
   `codexInstaller.disconnect(ifContentsEqual: store.contents)`（`try?`，D-n）。
 
@@ -566,7 +580,14 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
 `translocated: true` → 送 `.connectCodex` → **`disconnect` 呼叫次數 0**、檔案仍在、
 banner 是 `.mustMoveToApplications` 那句）、**CX40 `codexSnippetIsWithheldWhenPathWillVanish`**
 （乘積表 `CodexStateKind.allCases × [nil, .mustMoveToApplications, .unsupportedCharacter(" ")]`，
-斷言 `.mustMoveToApplications` **整行** `codexSnippet == nil`，含 `.occupiedByOther`）、
+斷言 `.mustMoveToApplications` **整行** `codexSnippet == nil`，含 `.occupiedByOther`）。
+
+**⚠️ 注意：R-10（snippet 被扣住）目前在任何一層都還沒有守衛**——CX40 尚未存在，而**決策點與
+它的 gate 落在同一個 task**（就是本 task）。也就是說，在 CX40 寫出來之前，「`.occupiedByOther`
+＋ translocated 時不給 snippet」這件事沒有任何東西擋著；它正是 r3 M1 指出的那扇側門。
+**先寫 CX40（RED）再寫實作**，不要反過來。
+
+其餘 gates：
 **CX42 `bothSidesNeverDisturbEachOthersCredentials`**（見下）、
 既有 `panelActionsAreWired` 涵蓋三個新 kind。
 
@@ -612,12 +633,33 @@ Claude 的鍵、或新程式碼順手 `removePersistentDomain`——**全是 r4 
   含「重新接上 Codex」）。
 - `CLAUDE.md`：Project 狀態、Invariants（**三條**，含 R-8 的「對任一側的安裝操作不得改動另一側的
   任何位元組」）、Tier 1 清單（三個檔）。
-- 正典：§2.1／§2.2／§3.2／§3.4／§3.5／§3.7／§9 **七處**回寫（§3.4 是 `Jargon` 那條、
-  §3.5 要帶 F15 的**範圍限定**、§3.2 要帶 R-8 的不變式）。
+  **CLAUDE.md 的 Invariants 只准指名*已存在*的 gate**（T11 review m2）：它每個 session 都會被載入，
+  而本專案的紀律是「文件指名一個 gate 就是在宣稱它存在」。R-8 那條**本輪只列 CX37a／CX37b 兩個**；
+  第三個 `bothSidesNeverDisturbEachOthersCredentials`（CX42）**等 T10 交付後再補**
+  ——CLAUDE.md 是 invariant 清單，不是計畫表。
+- 正典：§2.1／§2.2／§3.2／§3.5／§3.7／§9 **六處**回寫（§3.5 要帶 F15 的**範圍限定**、
+  §3.2 要帶 R-8 的不變式）。
+- **`Jargon` 那條不在正典**：它要回寫的是 **app-shell spec（`2026-09-10-app-shell-design.md`）§3.4
+  文案映射（M-7，D-c）**——兩份 spec 撞章節號，而 `Jargon.swift` 第 3 行的麵包屑指的是 app-shell
+  那一份（T11 review m3）。回寫要落在被指名的那份文件上，否則照麵包屑找過去會看不到。
 
-**gates**：CX27（暫存 `CODEX_HOME` ＋ `--only 7`，**判準是那一行的 PASS/FAIL**）、CX28、CX29、CX30。
+**gates**：CX27（暫存 `CODEX_HOME` ＋ `--only 7`，**判準是那一行的 PASS/FAIL**；**外加兩格參數驗證**，
+見下）、CX28、**CX29（三份文件參數化）**、**CX30（roots 含 `.github/`）**。
+
+**`--only` 的參數驗證（T11 review M1，腳本要改、gate 要補兩格）**：
+- 實測 `--only 77`／`--only 0`／`--only seven`：**一項都沒跑，然後印「完整移除驗收 PASS」**
+  （`should_run()` 是純字串比對，對不上就全跳過，而最後那句 `echo PASS` 不在任何 `should_run` 裡）。
+- 實測 `--only`（缺值）：**無限迴圈、零輸出**（`--only)` 分支無條件 `shift 2`，bash 在 `$# < 2` 時
+  `shift 2` 不改 `$#` 也不中止，而腳本只有 `set -uo pipefail` 沒有 `-e`）。
+- **這直接違反腳本第 4 項自己寫下的原則**——那一項為了不把「問不到」誤當「通過」特地多寫了
+  `LOGIN_ASKED`，而 `--only` 把同一個錯犯在**整支腳本的總結論**上；它正是「移除乾淨是測試能力的
+  前提」那條 invariant 的驗收工具。
+- 修法：`while` 迴圈後加值域檢查（`[1-7]`，否則印用法並 `exit 2`），`--only)` 先確認有值。
+
 **mutation**：① 拿掉腳本第 7 項 → CX27 紅；② **只刪掉其中一個 Codex 列標題** → CX28 紅；
-③ 從 SECURITY.md 刪掉 `.codex/hooks.json` → CX29 紅；④ 腳本加一行 `codex exec` → CX30 紅。
+③ 從 **`SECURITY.md`／`README.md`／`README.zh-TW.md` 任一份**刪掉 `.codex/hooks.json` → CX29 紅
+（三份各試一次——T11 review m1 實測：兩邊都刪當時只紅 1 條）；④ 在 `scripts/` 或 **`.github/`**
+加一行 `codex exec` → CX30 紅；⑤ **拿掉 `--only` 的值域檢查 → CX27 的新格必須紅**。
 
 ---
 

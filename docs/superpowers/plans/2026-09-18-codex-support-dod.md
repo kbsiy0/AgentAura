@@ -1,6 +1,6 @@
 # DoD 帳本 · `change/codex-support`（T12）
 
-spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r10**）§7 為門檻來源；
+spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r11**）§7 為門檻來源；
 證據層 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 基準取自 `change/codex-support` 分支點（`c131c30`，＝ `main` ＋ 探針文件），量測時用
 `git worktree add <temp> <基準> --detach` 取乾淨副本，**不動共享工作目錄**。
@@ -25,7 +25,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | `Tests/` 的 `#expect(` 總數 | **1649**（176 個 `.swift`）。**2026-09-18 更正**（T02 review m3／T03 review m2）：原本用 `grep -rho '#expect'`（1652），改用 **`grep -rho '#expect(' Tests \| wc -l`**——差額恰好是三處**寫在 doc comment 裡的散文提及**（`SnapshotIOTests.swift:48`、`PanelViewModelTests.swift:136`、`InstallLayoutTests.swift:43`），那些不是斷言、不該算。兩種算法各自內部一致，沒有人算錯，但 DoD 與各 task 報告用了不同指令，T12 彙總時會出現對不上的總數 |
 | `build/AgentAura.app/Contents/MacOS/AgentAuraApp` | **3,140,864 bytes**（universal） |
 | `plugin/hooks/hooks.json` | 19 個事件；19 個 entry 中**只有 `Notification` 帶 `matcher`** |
-| 機械改動 fan-out | `PanelModel.make(` **61 處／26 檔**；`OptionsMenuModel.rows(` **26 處／10 檔**；`MergeRules.merge(` **7 處** |
+| 機械改動 fan-out | `PanelModel.make(` **63 處／27 檔**（T08 實測，括號配對；`grep` 抓不到隱式成員寫法）；`OptionsMenuModel.rows(` **26 處／10 檔**；`MergeRules.merge(` **7 處**。**這些數字不是驗收條件**（T08 裁決 1）——三個新參數無預設值，編譯通過即證明全部呼叫點已更新；計數只作報告資訊（文字比對數呼叫點在本 change 已連錯五次） |
 | 已在上限的檔 | `AppDelegate+PanelActions.swift` **200**／`OptionsMenuModelTests.swift` **300**／`AppDelegatePanelActionsWiredTests.swift` **300**（另 `MergeRulesTests` 294、`PanelViewModelTests` 288、`EndToEndWiredGateTests` 149） |
 | `round4-codex.ndjson` | 18 筆／4 個 session；`SessionStart` 4、`UserPromptSubmit` 4、`Stop` 4、`SessionEnd` 4、`PreToolUse` 1、`PostToolUse` 1；**零筆 `Interrupt`**。唯一 `model` = `gpt-5.5`；唯一 `permission_mode` = `bypassPermissions`（已在映射表）；**無 `effort`** |
 | 既有紅燈 | `everyFixtureModelIsMapped` 1 issue（見上） |
@@ -100,10 +100,10 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | **CX24** | `CodexWiringSmokeTests` | ① 分支改 `break` ② banner 只留一句 ③ 拿掉 `onOpen` 的 `reprobeCodex()` | `codexConnectChainIsWired`（五段；③ 紅在第五段；第③段比對**位元組**） | | T10 |
 | CX25 | `CodexWiringSmokeTests` ＋ 掃描 | `codexHome` 改成 `environment["HOME"]` | `productionCodexHomeIsRealHome` | | T10 |
 | CX26 | `UninstallerTests` | codex disconnect 與 `erasePersistentDomain` 對調 | `uninstallRemovesCodexBeforeErasingDefaults` | | T10 |
-| CX27 | script gate | 拿掉腳本第 7 項 | `verifyUninstallScriptDetectsOurCodexHooks`（**判準是 `--only 7` 那一行**） | | T11 |
+| CX27 | script gate | ① 拿掉腳本第 7 項 ② **拿掉 `--only` 的值域檢查（`[1-7]`）** | `verifyUninstallScriptDetectsOurCodexHooks`（**判準是 `--only 7` 那一行**；**外加兩格**：`--only`（缺值）在有界時間內非零退出、`--only 77` 非零退出且**輸出不含「PASS」**） | | T11 |
 | CX28 | `HelpDocOptionsRowCoverageTests` | **只刪掉其中一個 Codex 列標題** | `allRows` 對 `CodexStateKind.allCases` 取聯集後的兩語言各一條 | | T11 |
-| CX29 | 文件掃描 | 從 SECURITY.md 刪掉 `.codex/hooks.json` | `securityDocListsEveryPathWeWrite` | | T11 |
-| CX30 | 全 repo 掃描 | 腳本加一行 `codex exec` | `noCodexExecInRepo` | | T11 |
+| CX29 | 文件掃描 | 從 **`SECURITY.md`／`README.md`／`README.zh-TW.md` 任一份**刪掉 `.codex/hooks.json`（**三份各試一次**） | `securityDocListsEveryPathWeWrite`（`@Test(arguments:)` 參數化三份文件） | | T11 |
+| CX30 | 全 repo 掃描 | 在 `scripts/` 或 **`.github/`** 加一行 `codex exec` | `noCodexExecInRepo`（roots = `Tests/` ＋ `scripts/` ＋ **`.github/`**；`docs/` 刻意不納入——F12 的證據文件必須逐字寫指令名） | | T11 |
 | **CX31** | `CodexHookStoreTests` | 在 `write` 裡加 `trimmingCharacters` | `codexHookStoreRoundTripsBytes`（輸入用**真正的產生器輸出**，逐位元組） | | T10 |
 | **CX32** | `CodexInstallerClobberTests` | 拿掉 `connect` 第一行的 guard | `codexConnectRefusesBlockedBundlePath`（**且整棵樹零差異**） | | T06 · **抽驗必做** |
 | **CX33** | `CodexHookPathCheckTests` | ① 一律回 `.unsupportedCharacter(" ")` ② 優先序對調 | `codexPathCheckNamesTheOffendingCharacter`（定義域從 `unsupportedCharacters` 推導） | | T04 |
@@ -119,7 +119,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | **CX42** | `CodexCredentialSequenceTests` | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` | `bothSidesNeverDisturbEachOthersCredentials`（**20 條**長度 ≤ 2 序列，fake ＋ 注入 suite、零 spawn；另一側鍵位元組不變 ＋ 鍵集合**差集**斷言） | | T10 |
 | **CX44** | 全 repo 掃描 | 在 **`Sources/` 與 `Tests/` 各留一個** `AURA_CODEX_PENDING_T08`（**兩處都要紅**） | `noPendingFlagRemains`（**`Sources/` ＋ `Tests/`** 都不得殘留 `AURA_CODEX_PENDING`；**含暫存目錄正向對照**） | | T12 |
 | **CX45** | `SessionState` 來源掃描 | 在 `Sources/` 加第二個 `SessionState(` 建構點且不傳 `agent:` | `sessionStateProductionConstructionSitesPassAgent`（`Sources/` 的 `SessionState(` 恰 1 處且含 `agent:`） | | T05d |
-| **CX46** | `OptionsMenuModel` 呼叫點來源掃描 | 把 view 那一行改回 `codex: .unavailable, codexPathRejection: nil` | `optionsRowsCallSitePassesRealCodexState`（`Sources/` 不得出現那兩個字面；比照 `L10nProductionCallSitesPassLanguageTests`） | | T08 |
+| **CX46** | `OptionsMenuModel` 呼叫點來源掃描 | 把 view 那一行改回 `codex: .unavailable, codexPathRejection: nil` | `optionsRowsCallSitePassesRealCodexState`（`Sources/` 不得出現那兩個字面）。**已知假陰性**：跨行寫法掃不到、註解過濾兩個缺口——主守衛是 T10 的**行為斷言**，本條是便宜的第二道 | | T08 |
 
 **額外必記的三筆（不是新 gate，是回歸證人）**
 1. T01 的 `DirectoryTreeSnapshot` 抽取之後，**當場重跑既有 `installerTouchesOnlyAllowedPaths`
@@ -140,6 +140,7 @@ DoD #2 要求**每個 task 的報告附該 commit 的絕對值**，這裡是彙�
 | T04 交付 | `6da2ea6` | **1758** | — |
 | **T05 交付（T01–T05 已 merge）** | `ad174e7` | **1792** | **828 tests / 1 issue** |
 | **T07 交付** | `fc4f218` | **1880** | **875 tests / 4 issues**（1 條 T10 pending ＋ **3 條因 T07 的 stub 而誠實紅**） |
+| **T08b／T11 交付** | `08140a6` | **1911** | **893 tests / 4 issues**（同上組成：1 條 T10 pending ＋ 3 條 stub 誠實紅） |
 
 **T07 交付時的 4 個紅**：`codexConnectChainIsWired`（pending T10）＋ 三條因 T07 的 stub 而誠實紅的
 既有 gate（`panelActionsAreWired` 對三個新 kind）——**後三條不算基準紅**，它們是 tested≠wired 守衛
