@@ -7,7 +7,10 @@ public enum CodexFailure: Error, Equatable {
     /// `hooks.json` 已存在（任何型別：普通檔／目錄／symlink／斷鏈 symlink）——
     /// 四種佔用形狀實測**一律** `EEXIST`（D-i）。
     case alreadyExists
-    /// `open`／寫入失敗（權限、磁碟滿……），帶 errno。
+    /// `open`（建立）／寫入／`unlink`（刪除）失敗（權限、磁碟滿……），帶 errno。
+    /// **m4（spec-reviewer 2026-09-18）：涵蓋三種 syscall 失敗，文案不要寫死「寫入」**
+    /// ——`unlinkIfIdentityUnchanged(_:)` 的 `unlink` 失敗也重用這個 case，使用者
+    /// 實際遇到的情境可能是「移除掛載時」而不是「接上時」。
     case writeFailed(Int32)
     /// `disconnect` 判定「這不是我們寫的」：內容不符、`(dev,ino)` 換過、或型別不是
     /// 普通檔（symlink／目錄）——一律不刪。

@@ -4,8 +4,9 @@ import AuraCore
 /// spec `2026-09-18-codex-support-design.md` §4.4：Codex 側 `~/.codex/hooks.json` 的
 /// 一鍵接上／斷開。**只碰 `<codexHome>/hooks.json`**，絕不碰 `config.toml`（D-j／R-8）。
 ///
-/// **`Sendable`**——欄位只有兩個 `URL`，同 `Installer` 的既有理由：背景執行緒安全，
-/// 也不持有 `UserDefaults`（憑證 I/O 留在 app 層的 `CodexHookStore`，同 R1）。
+/// **`Sendable`**——欄位是兩個 `URL` ＋ 一個測試專用的寫入注入點（`writeBytes`，
+/// 同 `Installer.verificationTimeout` 的既有先例：生產永遠用預設值，注入只在測試發生）。
+/// 不持有 `UserDefaults`（憑證 I/O 留在 app 層的 `CodexHookStore`，同 R1）。
 public struct CodexInstaller: Sendable {
     /// `~/.codex`（生產）或注入的 temp 根（測試）。**可以自己是 symlink**（D-p）——
     /// 不拒絕，但寫入落在哪裡由 POSIX 路徑解析自然決定：`hooksJSONURL` 只是字面上
@@ -17,10 +18,18 @@ public struct CodexInstaller: Sendable {
     /// `codexHome.appendingPathComponent("hooks.json")`，在 `init` 算一次
     /// （同 `Installer.linkURL` 的既有理由：`connect`／`disconnect`／`probe` 都要用到）。
     public let hooksJSONURL: URL
+    /// M1（spec-reviewer 2026-09-18）：把「把位元組寫進已開啟的 fd」抽成可注入的點，
+    /// 只為了能在不真的耗盡磁碟配額的情況下測「寫入失敗時清殘檔」這條路徑；操作對象是
+    /// 裸 `Int32` fd 而不是 `FileHandle`（避免它不是 `Sendable` 牽連整個閉包型別）。
+    /// **生產路徑一律用預設值**——目前沒有任何生產呼叫點覆寫它。
+    let writeBytes: @Sendable (Int32, Data) throws -> Void
 
-    public init(codexHome: URL) {
+    public init(codexHome: URL,
+                writeBytes: @escaping @Sendable (Int32, Data) throws -> Void =
+                    { fd, data in try FileHandle(fileDescriptor: fd, closeOnDealloc: false).write(contentsOf: data) }) {
         self.codexHome = codexHome
         self.hooksJSONURL = codexHome.appendingPathComponent("hooks.json")
+        self.writeBytes = writeBytes
     }
 
     /// 生產組裝：真的 `~/.codex`。
@@ -60,18 +69,32 @@ public struct CodexInstaller: Sendable {
             throw code == EEXIST ? CodexFailure.alreadyExists : CodexFailure.writeFailed(code)
         }
         defer { close(fd) }
+        // M1：`O_CREAT|O_EXCL` 這一刻起，磁碟上已經有一個我們剛建立的檔——寫入若失敗，
+        // 先把它的 identity 記下來（`fstat` 同一個 fd，不是之後才 lstat 路徑，避免任何
+        // TOCTOU），寫失敗時用既有的 `unlinkIfIdentityUnchanged(_:)` 清掉再 throw，
+        // 不然這個 0 byte／半寫的殘檔會被之後的 probe 判成「別人的檔」
+        // （`.occupiedByOther`），使用者從此接不上、完整移除也清不掉。
+        var st = stat()
+        _ = fstat(fd, &st)
         do {
-            try FileHandle(fileDescriptor: fd, closeOnDealloc: false).write(contentsOf: json)
+            try writeBytes(fd, json)
         } catch {
-            throw CodexFailure.writeFailed(errno)
+            // `errno` 必須是這裡的**第一個**動作——`unlinkIfIdentityUnchanged` 內部還會
+            // 再呼叫 `lstat`／`unlink`，任何一個成功都會把失敗當下的 `errno` 蓋掉。
+            let code = errno
+            try? unlinkIfIdentityUnchanged(FileIdentity(dev: st.st_dev, ino: st.st_ino))
+            throw CodexFailure.writeFailed(code)
         }
         return json
     }
 
-    /// §4.4：`O_RDONLY|O_NOFOLLOW` → `fstat` 確認 `S_IFREG` → 讀 → **逐位元組比對**
-    /// → 不符 throw `.notOurs`（不刪）→ 相符 → 交給 `unlinkIfIdentityUnchanged(_:)`
-    /// 做最後一道複查再刪。`expected == nil`（憑證遺失）**一律**當作不符——`absent`
-    /// 除外：檔案本來就不在時，不論 `expected` 是什麼都算「已經斷開」，冪等成功。
+    /// §4.4：`O_RDONLY|O_NOFOLLOW` → `fstat` 確認 `S_IFREG` → **大小先比對**（m1，
+    /// spec-reviewer 2026-09-18：同 `probe()` 的 D-q 理由——大小不符就不可能是我們寫的，
+    /// 不必讀；實測一份 300 MB 的 `hooks.json` 若不先比大小會被整包讀進記憶體）→ 讀 →
+    /// **逐位元組比對** → 不符 throw `.notOurs`（不刪）→ 相符 → 交給
+    /// `unlinkIfIdentityUnchanged(_:)` 做最後一道複查再刪。`expected == nil`
+    /// （憑證遺失）**一律**當作不符——`absent` 除外：檔案本來就不在時，不論 `expected`
+    /// 是什麼都算「已經斷開」，冪等成功。
     public func disconnect(ifContentsEqual expected: Data?) throws {
         let fd = open(hooksJSONURL.path, O_RDONLY | O_NOFOLLOW)
         guard fd >= 0 else {
@@ -86,9 +109,12 @@ public struct CodexInstaller: Sendable {
         guard fstat(fd, &st) == 0, (st.st_mode & S_IFMT) == S_IFREG else {
             throw CodexFailure.notOurs   // 目錄或其他型別：不刪
         }
+        guard let expected, st.st_size == off_t(expected.count) else {
+            throw CodexFailure.notOurs
+        }
 
         let actual = try? FileHandle(fileDescriptor: fd, closeOnDealloc: false).readToEnd()
-        guard let expected, actual == expected else {
+        guard actual == expected else {
             throw CodexFailure.notOurs
         }
 
@@ -102,6 +128,10 @@ public struct CodexInstaller: Sendable {
     /// `disconnect()` 整體外部測不出「拿掉這道複查會不會出事」——`CodexInstallerTests`
     /// 直接餵一個刻意不符的 `identity` 測這一步（同 `Installer.guardWriteTarget()`／
     /// `performConnectStepsGuardsWriteTargetDirectly` 的既有先例）。
+    ///
+    /// **第二個呼叫點**（M1，spec-reviewer 2026-09-18）：`connect()` 寫入失敗時，用它
+    /// 清掉剛剛 `O_CREAT|O_EXCL` 建出來、內容半寫的殘檔——前提比 `disconnect()` 那次
+    /// 更強（`fstat` 到的 identity 是幾微秒前**同一個 fd**剛建立的，不是先前遺留的）。
     func unlinkIfIdentityUnchanged(_ identity: FileIdentity) throws {
         var recheck = stat()
         guard lstat(hooksJSONURL.path, &recheck) == 0,

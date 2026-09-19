@@ -202,4 +202,46 @@ struct CodexInstallerTests {
         try codexInstaller.unlinkIfIdentityUnchanged(realIdentity)
         #expect(!FileManager.default.fileExists(atPath: hooksJSONURL.path))
     }
+
+    // MARK: - M1（spec-reviewer 2026-09-18）：寫入失敗必須清掉剛建立的殘檔
+
+    private struct InjectedWriteFailure: Error {}
+
+    @Test("M1：write 失敗時清掉剛建立的殘檔，throw .writeFailed，不留半寫檔給之後的 probe 誤判")
+    func connectCleansUpOrphanFileWhenWriteFails() throws {
+        let layout = try CodexHomeFixture.make(.codexHomeIsEmptyDirectory)
+        defer { layout.cleanup() }
+        let codexInstaller = CodexInstaller(codexHome: layout.codexHome,
+                                            writeBytes: { _, _ in throw InjectedWriteFailure() })
+        let generated = CodexHooksJSON.json(hookBinaryPath: hookBinaryPath)
+
+        do {
+            _ = try codexInstaller.connect(json: generated, translocated: false, inDownloads: false)
+            Issue.record("應該要 throw")
+        } catch let failure as CodexFailure {
+            guard case .writeFailed = failure else {
+                Issue.record("應該是 .writeFailed，實際是 \(failure)"); return
+            }
+        }
+
+        #expect(!FileManager.default.fileExists(
+            atPath: layout.codexHome.appendingPathComponent("hooks.json").path),
+            "寫入失敗必須清掉剛建立的殘檔——留著會被之後的 probe 誤判成「別人的檔」")
+    }
+
+    // MARK: - m1（spec-reviewer 2026-09-18）：disconnect 先比大小，不符不讀
+
+    @Test("m1：disconnect 對 > 64 KiB 的檔案先比大小，大小不符直接 .notOurs，檔案還在")
+    func disconnectRefusesOversizedFileBySizeAlone() throws {
+        let layout = try CodexHomeFixture.make(.hooksJSONIsGarbageOver64KiB)
+        defer { layout.cleanup() }
+        let codexInstaller = CodexInstaller(codexHome: layout.codexHome)
+        let generated = CodexHooksJSON.json(hookBinaryPath: hookBinaryPath)   // 大小遠小於垃圾檔
+
+        #expect(throws: CodexFailure.notOurs) {
+            try codexInstaller.disconnect(ifContentsEqual: generated)
+        }
+        #expect(FileManager.default.fileExists(
+            atPath: layout.codexHome.appendingPathComponent("hooks.json").path))
+    }
 }

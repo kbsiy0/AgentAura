@@ -117,4 +117,34 @@ struct CodexInstallerClobberTests {
         #expect(FileManager.default.fileExists(
             atPath: layout.codexHome.appendingPathComponent("hooks.json").path))
     }
+
+    // MARK: - m2（spec-reviewer 2026-09-18）：extractHookBinaryPath 反推失敗時的接縫
+
+    @Test("m2：畸形 json＋translocated 仍 throw .mustMoveToApplications——布林檢查不受反推失敗影響")
+    func connectStillRejectsTranslocatedEvenWithMalformedJSON() throws {
+        let layout = try CodexHomeFixture.make(.codexHomeIsEmptyDirectory)
+        defer { layout.cleanup() }
+        let codexInstaller = CodexInstaller(codexHome: layout.codexHome)
+        let malformed = Data("{}".utf8)
+
+        #expect(throws: CodexFailure.mustMoveToApplications) {
+            try codexInstaller.connect(json: malformed, translocated: true, inDownloads: false)
+        }
+    }
+
+    /// **已知行為，不是缺陷**（`CodexInstaller.connect` 的 doc comment 已寫明）：
+    /// `extractHookBinaryPath` 反推失敗時 `hookBinaryPath` 退回 `""`，沒有任何字元命中
+    /// `unsupportedCharacters`，字元檢查因此被跳過。R-9 最在意的那一半（上一條測試）
+    /// 完全不受影響——這裡把「被跳過」釘成被測過的已知行為，而不是意外。
+    @Test("m2：畸形 json＋乾淨旗標時字元檢查被跳過，connect() 不 throw")
+    func connectSkipsCharacterCheckWhenPathExtractionFails() throws {
+        let layout = try CodexHomeFixture.make(.codexHomeIsEmptyDirectory)
+        defer { layout.cleanup() }
+        let codexInstaller = CodexInstaller(codexHome: layout.codexHome)
+        let malformed = Data("{}".utf8)
+
+        _ = try codexInstaller.connect(json: malformed, translocated: false, inDownloads: false)
+        #expect(FileManager.default.fileExists(
+            atPath: layout.codexHome.appendingPathComponent("hooks.json").path))
+    }
 }
