@@ -90,12 +90,14 @@ extension AppDelegate {
     func refreshPanel(icon: IconState? = nil) {
         let icon = icon ?? graph.iconState
         // 使用者偏好讀 `userReduceMotion`（唯一寫入點是 `performSetReduceMotion`）。
+        // T08：codex／codexSnippet 先傳安全預設——`AppDelegate+Codex.swift` 的行程常數欄位要到
+        // T10 才落地（本 task 只加 PanelModel 的欄位與 61 個呼叫點）。T10 接線時換成真實狀態。
         let model = PanelModel.make(icon: icon, sessions: graph.visibleSessions, palette: paletteStore.palette,
                                     install: installState, version: appVersion, optionsExpanded: optionsExpanded,
                                     launchAtLogin: launchAtLogin, externalTargetPath: externalTargetPath, banner: banner,
                                     systemReduceMotion: driver.systemReduceMotion,
                                     userReduceMotion: userReduceMotion, iconPlate: iconPlate, iconShape: iconShape,
-                                    language: language)
+                                    language: language, codex: .unavailable, codexSnippet: nil)
         status.setPanel(model)
         // T11（S0-2）：installState 唯一的傳遞路徑——tooltip 才能反映「還沒接上」而不是
         // 一律說「沒有活著的 session」。`refreshPanel()` 是每次 install 可能改變後都會呼叫的

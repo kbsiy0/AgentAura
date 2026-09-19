@@ -15,7 +15,7 @@ struct OptionsToggleStateRenderTests {
     func model(launchAtLogin: Bool) -> PanelModel {
         PanelModel.make(icon: .empty, sessions: [], palette: .default,
                         install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                        optionsExpanded: true, launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                        optionsExpanded: true, launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
     }
 
     func render(_ m: PanelModel) throws -> OffscreenRender.Bitmap {

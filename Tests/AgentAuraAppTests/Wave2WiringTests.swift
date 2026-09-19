@@ -125,7 +125,7 @@ struct Wave2WiringTests {
                                         install: .connected(owner: .external, verified: .verified), version: "1.0",
                                         optionsExpanded: true, launchAtLogin: nil,
                                         externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
-                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         let note = try #require(connected.mountTargetNote, "前提：connected(.external) 應該有 mountTargetNote")
 
         var dumped = ""
@@ -142,7 +142,7 @@ struct Wave2WiringTests {
                                              install: .broken(.hookMissing, owner: .external), version: "1.0",
                                              optionsExpanded: true, launchAtLogin: nil,
                                              externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
-                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         var dumpedBroken = ""
         dump(OptionsSectionView(model: brokenExternal, onAction: { _ in }).body, to: &dumpedBroken)
         #expect(!dumpedBroken.contains(note), """

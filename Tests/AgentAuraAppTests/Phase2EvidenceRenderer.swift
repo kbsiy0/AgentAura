@@ -45,11 +45,11 @@ struct Phase2EvidenceRenderer {
 
         let fullPanelModel = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                              install: .notConnected, version: "1.0", optionsExpanded: false,
-                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         let icon = IconState(activity: .working, counts: [.working: 1], liveCount: 1)
         let bannerModel = PanelModel.make(icon: icon, sessions: [session("a", .working)], palette: .default,
                                           install: .notConnected, version: "1.0", optionsExpanded: false,
-                                          launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                          launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
 
         try Self.renderPair(dir: dir, name: "A1-notConnected-cta", model: fullPanelModel, render: render)
         try Self.renderPair(dir: dir, name: "A1-banner-cta", model: bannerModel, render: render)
@@ -66,10 +66,10 @@ struct Phase2EvidenceRenderer {
 
         let notConnectedModel = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                                  install: .notConnected, version: "1.0", optionsExpanded: false,
-                                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         let brokenModel = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                           install: .broken(.hookBlockedOrBroken, owner: .thisApp), version: "1.0",
-                                          optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                          optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
 
         try Self.renderPair(dir: dir, name: "A2-notConnected-title", model: notConnectedModel, render: render)
         try Self.renderPair(dir: dir, name: "A2-broken-title", model: brokenModel, render: render)
@@ -89,17 +89,17 @@ struct Phase2EvidenceRenderer {
         // A3
         let claudeNotFound = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                              install: .claudeNotFound, version: "1.0", optionsExpanded: false,
-                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         let occupiedByFile = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                              install: .broken(.occupiedByFile, owner: .unknown), version: "1.0",
-                                             optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                             optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A3-claudeNotFound", model: claudeNotFound, render: render)
         try Self.renderPair(dir: dir, name: "A3-occupiedByFile", model: occupiedByFile, render: render)
 
         // A4：連上、展開 Options，第一列應是「說明與快速上手…」不是開關。
         let optionsExpanded = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                               install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                              optionsExpanded: true, launchAtLogin: false, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                              optionsExpanded: true, launchAtLogin: false, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A4-options-expanded-order", model: optionsExpanded, render: render)
 
         // A5：broken external ＋ 有列 → .banner 樣式，副標顯示現有掛載指向。
@@ -107,25 +107,25 @@ struct Phase2EvidenceRenderer {
         let bannerWithSubtitle = PanelModel.make(icon: icon, sessions: [session("a", .working)], palette: .default,
                                                  install: .broken(.hookMissing, owner: .external), version: "1.0",
                                                  optionsExpanded: false, launchAtLogin: nil,
-                                                 externalTargetPath: "/Users/dev/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                                 externalTargetPath: "/Users/dev/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A5-banner-subtitle", model: bannerWithSubtitle, render: render)
 
         // A7：同一個 connected() banner——沒有 session 時還在，有 session 時自動消失。
         let bannerStillThere = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                                install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
                                                optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil,
-                                               banner: .connected(language: .traditionalChinese), systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                               banner: .connected(language: .traditionalChinese), systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         let bannerAutoCleared = PanelModel.make(icon: icon, sessions: [session("a", .working)], palette: .default,
                                                 install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
                                                 optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil,
-                                                banner: .connected(language: .traditionalChinese), systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                                banner: .connected(language: .traditionalChinese), systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A7-banner-still-there", model: bannerStillThere, render: render)
         try Self.renderPair(dir: dir, name: "A7-banner-auto-cleared", model: bannerAutoCleared, render: render)
 
         // A8：圖例列已無「重設」；展開 Options 才看得到「重設顏色」。
         let plainConnected = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                              install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                             optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                             optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A8-legend-no-reset", model: plainConnected, render: render)
         try Self.renderPair(dir: dir, name: "A8-options-has-reset", model: optionsExpanded, render: render)
 
@@ -142,24 +142,24 @@ struct Phase2EvidenceRenderer {
 
         let toggleOn = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                        install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                       optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                       optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         let toggleOff = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                        optionsExpanded: true, launchAtLogin: false, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        optionsExpanded: true, launchAtLogin: false, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A9-toggle-on", model: toggleOn, render: render)
         try Self.renderPair(dir: dir, name: "A9-toggle-off", model: toggleOff, render: render)
 
         let worstCase = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: .connected(owner: .external, verified: .unknown), version: "1.0",
                                         optionsExpanded: true, launchAtLogin: true,
-                                        externalTargetPath: "/Users/dev/some/very/long/path/to/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        externalTargetPath: "/Users/dev/some/very/long/path/to/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A10-worst-case-height", model: worstCase, render: render)
 
         // A11：team-lead 自查——connected ＋ rows 空時，標題與本體先前是同一句「沒有活著的
         // session」，一字不差。本體改成有用的下一步指引，兩句不再撞字。
         let connectedEmpty = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                              install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                             optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                             optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         try Self.renderPair(dir: dir, name: "A11-connected-empty-no-duplicate", model: connectedEmpty, render: render)
 
         try Self.rebuildIndex(dir: dir)

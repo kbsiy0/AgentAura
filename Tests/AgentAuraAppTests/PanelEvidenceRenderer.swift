@@ -58,13 +58,13 @@ struct PanelEvidenceRenderer {
         let cases: [(String, PanelModel)] = [
             ("default-empty", PanelModel.make(icon: empty, sessions: [], palette: .default,
                                               install: .notConnected, version: "1.0", optionsExpanded: false,
-                                              launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)),
+                                              launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)),
             ("default-3rows", PanelModel.make(icon: icon, sessions: three, palette: .default,
                                               install: .notConnected, version: "1.0", optionsExpanded: false,
-                                              launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)),
+                                              launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)),
             ("custom-3rows", PanelModel.make(icon: icon, sessions: three, palette: Self.customPalette,
                                              install: .notConnected, version: "1.0", optionsExpanded: false,
-                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)),
+                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)),
         ]
         let appearance = NSApp?.effectiveAppearance.name.rawValue ?? NSAppearance.currentDrawing().name.rawValue
         var html = "<!doctype html><meta charset=utf-8><title>Change 2 面板證據</title><style>body{font:13px -apple-system,system-ui;padding:20px;background:#f5f5f7;color:#1d1d1f}img{display:block;margin:4px 0 14px;border:1px solid #d2d2d7}.cap{color:#6e6e73;font-size:11px}</style><h1>Change 2 面板證據（NSHostingView 離屏）</h1><p class=cap>產圖外觀：淺底以 .aqua、深底以 .darkAqua 明確指定（機器外觀 \(appearance) 不影響）。背景為純色，非真實 popover 材質——版面與色點顏色可信，材質不可信。「重設」在預設 palette 下為 disabled（灰字）。</p>\n"

@@ -71,7 +71,7 @@ struct PanelModelConnectCTATests {
     static func model(for state: InstallState) -> PanelModel {
         PanelModel.make(icon: icon, sessions: [], palette: .default,
                         install: state, version: "1.0", optionsExpanded: false,
-                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
     }
 
     @Test("每一種 InstallState：chip 文字、showsConnectCTA、CTA 文案都對得上 oracle")

@@ -90,6 +90,16 @@ public struct PanelModel: Equatable, Sendable {
     /// D-3（i18n）：顯示層參數，不是全域狀態——唯一來源是 `AppDelegate.language`
     /// （落盤預設英文，見 `LanguagePreference`），往下傳給 `OptionsSectionView` 等消費端。
     public let language: Language
+    /// T08（spec §3／§4.6）：Codex 掛載六態，唯一來源是 `AppDelegate+Codex.reprobeCodex()`
+    /// 的行程常數（D-t）——`PanelModel` 只是原封不動帶著走，不在這裡重新判定。
+    /// `CodexSectionView`（T09）依這個欄位分支；`OptionsMenuModel.rows(codex:)`
+    /// 走的是同一個值（`AppDelegate.refreshPanel` 只算一次、兩處都傳）。
+    public let codex: CodexState
+    /// T08（R-10／D-s）：`(pathRejection == .mustMoveToApplications) ? nil : CodexHooksJSON.snippet(...)`
+    /// 的產出——**穿過路徑判定**才拿到，不是 `CodexHooksJSON.snippet` 的直接輸出，
+    /// `PanelModel` 一樣只是帶著走。`nil` 時面板卡片改顯示「先把 App 移到『應用程式』」
+    /// 那句（見 `CodexSectionView`），不是省略整塊。
+    public let codexSnippet: String?
 
     /// `rows`／`title` 借用既有的 `PanelViewModel`（已測過的純函式）；`palette` 直接帶入、
     /// `legend` 經 `LegendModel.items(for:)` 組裝、`isDefaultPalette` = `palette.isDefault`。
@@ -101,7 +111,7 @@ public struct PanelModel: Equatable, Sendable {
                             install: InstallState, version: String, optionsExpanded: Bool,
                             launchAtLogin: Bool?, externalTargetPath: String?, banner: PanelBanner?,
                             systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
-                            language: Language, now: Date = Date()) -> PanelModel {
+                            language: Language, codex: CodexState, codexSnippet: String?, now: Date = Date()) -> PanelModel {
         PanelModel(title: title(for: icon, install: install, language: language),
                   rows: PanelViewModel.rows(from: sessions, now: now, language: language),
                   palette: palette,
@@ -110,7 +120,7 @@ public struct PanelModel: Equatable, Sendable {
                   install: install, version: version, optionsExpanded: optionsExpanded,
                   launchAtLogin: launchAtLogin, externalTargetPath: externalTargetPath, banner: banner,
                   systemReduceMotion: systemReduceMotion, userReduceMotion: userReduceMotion, iconPlate: iconPlate,
-                  iconShape: iconShape, language: language)
+                  iconShape: iconShape, language: language, codex: codex, codexSnippet: codexSnippet)
     }
 
     /// T11 commit2（S0-2）：非 `connected` 時面板標題改用 `install.healthLabel`——與

@@ -15,7 +15,7 @@ struct OptionsExpandTests {
         return PanelModel.make(icon: icon, sessions: [], palette: .default,
                                install: .connected(owner: .thisApp, verified: .verified),
                                version: "1.0", optionsExpanded: optionsExpanded,
-                               launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                               launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
     }
 
     @Test("同一個 hostingController：collapsed → setPanel(expanded) 後 preferredContentSize.height 變高")
@@ -86,7 +86,7 @@ struct OptionsExpandTests {
                                         install: install, version: "1.0",
                                         optionsExpanded: true, launchAtLogin: launchAtLogin,
                                         externalTargetPath: "/Users/dev/some/very/long/path/to/repo/plugin", banner: nil,
-                                        systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: false, iconShape: .ledStrip, language: .traditionalChinese)
+                                        systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: false, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil)
         controller.setPanel(worstCase)
         let height = try #require(controller.hostingController).preferredContentSize.height
         let ceiling = OptionsPanelSizing.heightCeiling(forRowCount: rowCount)
