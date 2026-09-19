@@ -21,6 +21,15 @@ struct ColorPickerTests {
         try body(coordinator)
     }
 
+    /// tested ≠ wired 的另一半：`PaletteWiringSmokeTests` 為了不把真視窗丟到桌面上會把
+    /// `presentsPanel` 關掉，所以要有一條測試釘住**生產預設是開的**——否則有人把預設改成
+    /// `false`，全套件照綠，而使用者點圖例什麼都不會出現。
+    @Test("presentsPanel 生產預設為 true（測試才關它）")
+    func colorPanelPresentsByDefaultInProduction() {
+        #expect(ColorPickerCoordinator().presentsPanel == true,
+                "ColorPickerCoordinator 的 presentsPanel 生產預設必須是 true——關掉它只准發生在測試裡")
+    }
+
     @Test("sRGB NSColor 轉換 ≤ 1/255；pattern image 回 nil；pick 後三個旗標與色都對")
     func colorPanelConversion() throws {
         try withCoordinator { coordinator in
