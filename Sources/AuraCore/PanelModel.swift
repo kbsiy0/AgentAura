@@ -42,6 +42,14 @@ public struct PanelBanner: Equatable, Sendable {
         PanelBanner(kind: .error, text: message)
     }
 
+    /// T09（D-m）：Codex 接上成功的固定文案——同 `.connected(language:)` 對 Claude 側的既有
+    /// 理由（忘了傳 `language` 要是編譯錯，不是靜默吃到中文），但兩者**不是同一句**：
+    /// Codex 額外要求「Codex 會問你一次是否信任」（F5，P4 硬下限），Claude 側沒有這件事。
+    /// `AppDelegate+Codex.swift`（T10）是唯一預期呼叫點。
+    public static func codexConnected(language: Language) -> PanelBanner {
+        PanelBanner(kind: .connected, text: L10nCodex.connectedBanner.text(language))
+    }
+
     private init(kind: Kind, text: String) {
         self.kind = kind
         self.text = text
