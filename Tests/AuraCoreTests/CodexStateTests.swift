@@ -135,14 +135,27 @@ struct CodexStateTests {
     /// `CodexStateKind` 的那一半**在 `CodexWiringSmokeTests.codexSnippetIsWithheldWhenPathWillVanish`
     /// （App 層，透過 `CodexRuntime.codexState`／`.codexSnippet` 讀決策層真正算出來的值）——
     /// 這條純函式本身不吃 `CodexStateKind`，在這裡跨它是空轉，兩條測試互相點名見對方 doc comment。
-    @Test("CX40（純函式半）：withheldSnippet 窮盡三個代表性 pathRejection")
-    func withheldSnippetExhaustsRepresentativeRejections() {
+    /// review m1：定義域改用本 codebase 既有的 `RejectionKind.allCases.flatMap(Rejection.samples)`
+    /// 推導慣用法（六處在用），不再手抄三個值——新增第三個 `Rejection` case 時，這裡會被
+    /// 逼著補（原本手抄的寫法不會，是個沒被撞到的缺口，見 review m1）。
+    static let representativeRejectionsIncludingNil: [CodexHookPathCheck.Rejection?] =
+        [nil] + CodexHookPathCheck.RejectionKind.allCases.flatMap(CodexHookPathCheck.Rejection.samples).map(Optional.init)
+
+    @Test("CX40（純函式半）：withheldSnippet 回 nil 若且唯若 pathRejection 的 kind 是 .mustMoveToApplications",
+          arguments: representativeRejectionsIncludingNil)
+    func withheldSnippetExhaustsRepresentativeRejections(_ rejection: CodexHookPathCheck.Rejection?) {
         let path = "/Applications/AgentAura.app/Contents/Resources/plugin/bin/aura-hook"
-        #expect(CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: nil) != nil,
-                "pathRejection == nil 時應該給 snippet")
-        #expect(CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: .mustMoveToApplications) == nil,
-                "pathRejection == .mustMoveToApplications 時應該扣住 snippet（R-10）")
-        #expect(CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: .unsupportedCharacter(" ")) != nil,
-                "pathRejection == .unsupportedCharacter 時仍應該給 snippet——那個路徑不會過期")
+        let snippet = CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: rejection)
+        if rejection?.kind == .mustMoveToApplications {
+            #expect(snippet == nil, """
+                pathRejection=\(String(describing: rejection)) 時應該扣住 snippet（R-10），\
+                實際 \(String(describing: snippet))
+                """)
+        } else {
+            #expect(snippet != nil, """
+                pathRejection=\(String(describing: rejection)) 時仍應該給 snippet——\
+                只有 .mustMoveToApplications 那個路徑會過期
+                """)
+        }
     }
 }
