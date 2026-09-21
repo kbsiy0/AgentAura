@@ -144,7 +144,7 @@ public struct PanelModel: Equatable, Sendable {
                             systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
                             language: Language, codex: CodexState, codexSnippet: String?,
                             codexPathRejection: CodexHookPathCheck.Rejection?, now: Date = Date()) -> PanelModel {
-        PanelModel(title: title(for: icon, install: install, language: language),
+        PanelModel(title: title(for: icon, install: install, codex: codex, language: language),
                   rows: PanelViewModel.rows(from: sessions, now: now, language: language),
                   palette: palette,
                   legend: LegendModel.items(for: palette, language: language),
@@ -160,9 +160,19 @@ public struct PanelModel: Equatable, Sendable {
     /// footer chip／`NotConnectedView` 的說明句同一個 oracle。舊行為（`PanelViewModel.title`，
     /// 純算 session 計數）留給 `connected` 用，否則標題會在還沒接上時說「沒有活著的
     /// session」，跟面板本體的「還沒接上」自相矛盾（persona S0-2：同一張畫面兩句互相打架）。
-    private static func title(for icon: IconState, install: InstallState, language: Language) -> String {
+    ///
+    /// T13f（D-y，S1-1）：非 `connected` 分支改讀 `PanelModel.statusLabel(install:codex:language:)`
+    /// 這個共用 static 核心（`PanelModel+ConnectCTA.swift`）——**修的是同一族毛病的下一個
+    /// 實例**：標題只反映 Claude 時，Codex 已接上且正在跑會全部寫「Not connected yet」，
+    /// 跟面板本體另外兩處（footer chip／CTA 窄條）矛盾。`title` 在這裡（`make(...)` 建構
+    /// `PanelModel` 實例之前）就要算好，還沒有 `self` 能呼叫 instance 版的
+    /// `statusLabel(_:)`，因此吃 `codex` 參數、直接呼叫共用核心——這保證了 CX50④
+    /// 「`title` 在 `install` 非 connected 時逐位元組等於 `statusLabel(l)`」是結構性的，
+    /// 不是兩處各自抄一份湊出來的巧合。`connected` 分支維持既有語意不變（session 計數句，
+    /// 本來就不分 agent，見 §3.1「標題那一欄的不對稱是刻意的」）。
+    private static func title(for icon: IconState, install: InstallState, codex: CodexState, language: Language) -> String {
         if case .connected = install { return PanelViewModel.title(for: icon, language: language) }
-        return install.healthLabel(language)
+        return statusLabel(install: install, codex: codex, language: language)
     }
 
     /// A11（T11 A9–A11 批次）：`connected` ＋ rows 空時的本體訊息——**不得跟 `title` 撞字**。

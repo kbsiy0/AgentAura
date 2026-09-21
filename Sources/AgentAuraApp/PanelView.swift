@@ -38,7 +38,8 @@ struct PanelView: View {
                 // （`connectCTAStyle == .banner` 依 `PanelModel` 的定義恆搭配非空 rows）。
                 if model.connectCTAStyle == .banner,
                    let cta = model.connectCTAText, let action = model.connectCTAAction {
-                    ConnectCTABannerView(label: model.install.healthLabel(model.language), subtitle: model.connectCTASubtitle,
+                    // T13f（D-y，S1-1）：改讀 model.statusLabel（不是 model.install.healthLabel）。
+                    ConnectCTABannerView(label: model.statusLabel(model.language), subtitle: model.connectCTASubtitle,
                                         ctaText: cta, action: action, onAction: onAction)
                 }
                 if model.rows.isEmpty {

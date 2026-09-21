@@ -16,7 +16,14 @@ struct PanelFooterView: View {
             Circle()
                 .fill(Color(rgba: model.install.healthTone.color))
                 .frame(width: 8, height: 8)
-            Text("\(model.install.healthLabel(model.language)) · v\(model.version)")
+            // T13f（D-y，S1-1）：改讀 model.statusLabel（不是 model.install.healthLabel）——
+            // 唯一 oracle 見 PanelModel+ConnectCTA.swift，Codex 已接上時這裡才會跟著講。
+            // `Text(verbatim:)`（不是字面插值的隱式 LocalizedStringKey 多載）：這串文字
+            // 是我們自己 L10n 系統算好的動態內容，不對應任何 SwiftUI 原生 .strings 表的鍵，
+            // 用 verbatim 才是語意正確的選擇（同時讓 CX51 能用 leafStrings 掃到完整組合後
+            // 的字串——LocalizedStringKey 把插值拆成格式鍵＋參數分開存放，Mirror 掃不到
+            // 組合後的結果，這裡驗證過：兩種寫法渲染像素相同，只差 CX51 掃不掃得到）。
+            Text(verbatim: "\(model.statusLabel(model.language)) · v\(model.version)")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

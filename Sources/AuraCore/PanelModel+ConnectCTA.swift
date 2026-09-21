@@ -13,6 +13,26 @@ extension PanelModel {
         rows.contains { $0.agentLabel == Agent.codex.label }
     }
 
+    /// D-y（T13f，S1-1）：三處狀態字串（標題／footer chip／CTA 窄條 label）的唯一 oracle——
+    /// instance 版，`self.install`／`self.codex` 已知。委派給 `Self.statusLabel(install:codex:language:)`
+    /// （下方，static），與 `PanelModel.swift` 的 `title(for:install:codex:language:)` 共用同一個核心，
+    /// 保證「`title` 在 `install` 非 connected 時逐位元組等於 `statusLabel`」不是巧合而是結構性
+    /// 保證（CX50④）——`title` 在 `PanelModel.make(...)` 建構實例**之前**就要算好，那時還沒有
+    /// `self` 可以呼叫這個 instance 版，只能靠這個共用的 static 核心。
+    public func statusLabel(_ language: Language) -> String {
+        Self.statusLabel(install: install, codex: codex, language: language)
+    }
+
+    /// 規則只有一條：`codex == .connected` 時組合 Codex 子句在前、Claude 半在後
+    /// （`L10nCodex.codexConnectedStatus`）；否則**逐位元組等於** `install.healthLabel(l)`
+    /// （D-j：沒裝 Codex 的人零 diff，這是 CX50 的第一條斷言）。**只有 `.connected` 算
+    /// 「Codex 已接上」**——`.connectedStalePath` 指向另一個位置的 AgentAura，說
+    /// 「Codex connected」會是下一個謊，這批修復的主題正是「畫面不得宣稱它無法證實的事」。
+    static func statusLabel(install: InstallState, codex: CodexState, language: Language) -> String {
+        guard codex == .connected else { return install.healthLabel(language) }
+        return L10nCodex.codexConnectedStatus(claudeHalf: install.healthLabel(language), language: language)
+    }
+
     /// §3.1.1：只讀 `install.affordance`，不得自己 switch `InstallState` 或看 `owner`（N9／S2-6）——
     /// 那正是 r3 讓 4 格顯示「按了只會出錯的按鈕」的原因。
     ///

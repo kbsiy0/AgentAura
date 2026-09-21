@@ -60,6 +60,19 @@ extension L10nCodex {
     /// `.mustMoveToApplications`／`.unsupportedPathCharacter` 兩個 case **重用**既有措辭
     /// （`InstallerFailure.mustMoveToApplicationsMessage`／`unsupportedCharacterExplanation`）——
     /// 不維護第二份「App 要搬進應用程式」或「字元指名」的字面，同一個實體理由只該有一份措辭。
+    /// D-y（T13f，S1-1）：`PanelModel.statusLabel(_:)` 的雙 agent 模板——`codex == .connected`
+    /// 時三處狀態字串（標題／footer chip／CTA 窄條 label）共用的唯一組合方式。Codex 子句
+    /// 在前、Claude 半在後（`claudeHalf` 參數就是呼叫端傳來的 Claude 健康標籤，逐字組合，
+    /// 不重寫那十五種變體，也不弄丟 `broken` 的診斷字）——footer chip 是
+    /// `lineLimit(1)`／`truncationMode(.tail)`，截斷時先犧牲尾巴的版本號，不會犧牲
+    /// 「Codex 已接上」這件剛被 persona 判為 S0 的事。
+    public static func codexConnectedStatus(claudeHalf: String, language: Language) -> String {
+        switch language {
+        case .english: return "Codex connected · Claude Code: \(claudeHalf)"
+        case .traditionalChinese: return "Codex 已接上 · Claude Code：\(claudeHalf)"
+        }
+    }
+
     public static func failureMessage(_ failure: CodexFailure, language: Language) -> String {
         switch failure {
         case .codexHomeMissing: return L10nCodex.codexHomeMissingBanner.text(language)
