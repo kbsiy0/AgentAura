@@ -17,6 +17,9 @@ final class SpyRenderer: IconRendering {
     private(set) var pinned: [Bool] = []
     private(set) var attachedPopover = false
     var isVisible = true
+    /// spy 沒有真的選單列圖示，也就沒有資格把 `NSColorPanel.shared` 叫到螢幕上——
+    /// `AppDelegate` 用這個值關掉 coordinator 的 `presentsPanel`（`pickerChainIsWired` 守）。
+    var presentsSystemPanels: Bool { false }
     var onClose: (() -> Void)?
     /// T08：`togglePopover` 的 show 分支在顯示之前呼叫（只 probe＋setPanel，不 acknowledge）。
     var onOpen: (() -> Void)?

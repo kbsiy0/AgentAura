@@ -95,6 +95,8 @@ struct PaletteWiringSmokeTests {
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         // 行程級單例：不清會讓後面的測試收到這裡的 willClose／target（review-t01 I1）
         defer { delegate.colorCoordinator.detach(); NSColorPanel.shared.orderOut(nil) }
+        // 不在這裡手動關 `presentsPanel`：抑制必須來自 AppDelegate 的接線
+        // （`status.presentsSystemPanels` → coordinator），(2) 的 isVisible 斷言守的就是那一跳。
 
         // (1) status.onAction 應該被接上（AppDelegate → coordinator.pick 的入口）。
         #expect(spy.onAction != nil, "AppDelegate 應該把 status.onAction 接到 coordinator.pick —— 目前是 nil")
@@ -102,6 +104,14 @@ struct PaletteWiringSmokeTests {
         // (2) 觸發它：NSColorPanel 應該變成 store 的顏色，且 popover 應被釘住。
         //     用 `?()` 而非 `!()`——onAction 若真是 nil，呼叫應是安全的無動作，不是 crash。
         spy.onAction?(.pickColor(.waiting))
+        // 這條 smoke 走的是**真的**生產接線（AppDelegate → coordinator.pick），而生產的 pick 會
+        // `orderFront` 系統色板——在測試行程裡那是把一扇真的視窗丟到開發者桌面上，每跑一次
+        // 全量就閃一次（2026-09-19 實機回報：多個 worktree 並行跑測試時色板不斷跳出干擾操作）。
+        // 接線要驗、視窗不准出現：色板必須維持不可見。
+        #expect(NSColorPanel.shared.isVisible == false, """
+            (2) 測試行程不得把系統色板真的顯示出來——這條 smoke 驗的是接線，不是視窗；\
+            實際 isVisible=\(NSColorPanel.shared.isVisible)
+            """)
         let panelColor = ColorPickerCoordinator.rgba(from: NSColorPanel.shared.color)
         #expect(panelColor == Optional(delegate.paletteStore.palette[.waiting]), """
             (2) 點圖例後系統色板顏色應變成 store.palette[.waiting]，\
