@@ -20,10 +20,6 @@ public enum L10nCodex: L10nCatalog, Sendable {
     case notConnectedPrompt
     /// `.connectedStalePath`，`pathRejection == nil`：app 搬家，一鍵可重接。§4.6 表逐字寫明。
     case staleMovedPrompt
-    /// `.connectedStalePath`，`pathRejection != nil`：磁碟／憑證相符但跟「現在這個行程」不符，
-    /// 且現在這個行程的路徑本身被拒——**文案不預設成因**（r4 m2）：可能是使用者同時有正本與
-    /// 一份 DMG／備份副本，從副本啟動。解釋＋出路合成一句，§4.6 表逐字寫明，**不給按鈕**（R-9）。
-    case staleOtherCopyMessage
     /// `.occupiedByOther`：兩種 snippet 有無都共用的開場句。
     case occupiedIntro
     /// `.occupiedByOther`，`codexSnippet == nil`：R-10——路徑會在下次開機消失，
@@ -81,17 +77,6 @@ public enum L10nCodex: L10nCatalog, Sendable {
             switch language {
             case .english: return "AgentAura moved — reconnect to keep this working."
             case .traditionalChinese: return "App 移動過，要重新接上"
-            }
-        case .staleOtherCopyMessage:
-            switch language {
-            case .english:
-                return """
-                    This setup points at a different copy of AgentAura; the one running now is in a \
-                    location that will disappear after the next restart. Move the copy you want to keep \
-                    into Applications, then come back.
-                    """
-            case .traditionalChinese:
-                return "這份設定指向另一個位置的 AgentAura；這個副本跑在一個下次開機就會消失的位置。先把要留下的那份放進『應用程式』再回來。"
             }
         case .occupiedIntro:
             switch language {

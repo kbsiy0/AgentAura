@@ -91,17 +91,53 @@ struct CodexSectionViewTests {
 
     /// mutation⑤ 的守衛：被拒時**不得**畫「重新接上」按鈕（R-9）——不管拒絕理由是哪一種
     /// （這裡兩種都測，`RejectionKind.allCases` 推導，不是只測一種代表值）。
-    @Test(".connectedStalePath，pathRejection != nil：換句解釋，不給「重新接上」按鈕",
+    /// **r13（D-x／T13e）**：`staleOtherCopyMessage` 拆成「中性開場」＋「依 rejection 的成因／
+    /// 出路」——中性開場句改讀 `L10nCodexCards.staleOtherCopyIntro`（只講可觀測的事實，
+    /// 不再講「下次開機就會消失」，那句對 `.unsupportedCharacter` 可查證為假）；第二段**重用**
+    /// `.blockedByBundlePath` 那組既有文案（零新增文案），依 `rejection` 分流斷言。
+    /// ~~r12：兩個 rejection 共用同一句 `staleOtherCopyMessage`~~。
+    @Test(".connectedStalePath，pathRejection != nil：中性開場 ＋ 依 rejection 分流，不給「重新接上」按鈕",
           arguments: CodexHookPathCheck.RejectionKind.allCases.flatMap(CodexHookPathCheck.Rejection.samples))
     func staleWithRejectionWithholdsReconnectButton(rejection: CodexHookPathCheck.Rejection) {
         let m = Self.model(codex: .connectedStalePath, codexSnippet: nil, codexPathRejection: rejection)
         let text = Self.dumped(m)
-        #expect(text.contains(L10nCodex.staleOtherCopyMessage.text(.traditionalChinese)), """
-            pathRejection=\(rejection)：沒有看到「這份設定指向另一個位置」的解釋句
+        #expect(text.contains(L10nCodexCards.staleOtherCopyIntro.text(.traditionalChinese)), """
+            pathRejection=\(rejection)：沒有看到中性開場句（這份設定指向另一個位置的 AgentAura）
             """)
+        switch rejection {
+        case .mustMoveToApplications:
+            #expect(text.contains(L10nCodex.blockedPathExplanation.text(.traditionalChinese)), """
+                pathRejection=\(rejection)：沒有看到會消失的成因句（重用 .blockedByBundlePath 那組）
+                """)
+            #expect(text.contains(InstallerFailure.mustMoveToApplicationsMessage(.traditionalChinese)), """
+                pathRejection=\(rejection)：沒有看到「移到應用程式」出路句
+                """)
+        case .unsupportedCharacter(let character):
+            #expect(text.contains(String(character)), """
+                pathRejection=\(rejection)：字元「\(character)」沒有出現在畫面裡
+                """)
+            #expect(text.contains(L10nCodexCards.unsupportedCharacterWayOut.text(.traditionalChinese)), """
+                pathRejection=\(rejection)：沒有看到出路句
+                """)
+        }
         #expect(!text.contains(L10nCodex.reconnectRow.text(.traditionalChinese)), """
             pathRejection=\(rejection)：仍然畫出「重新接上 Codex」按鈕——R-9 的守衛失效，\
             按下去會先 disconnect 掉一份還在運作的檔
+            """)
+    }
+
+    /// **CX36 mutation⑥**（T13e，正向對照）：兩種 `Rejection` 在 `.connectedStalePath` 這一格
+    /// 渲出來的文字**必須不同**——r12 兩者共用同一句，因此證據圖 `10`／`11` 位元組完全相同
+    /// （persona r1 S2-1 現場驗過 md5）。這條擋的是「拆兩句但兩個分支給的還是同一份內容」。
+    @Test("CX36⑥：.connectedStalePath 的兩種 Rejection 渲出的文字彼此不同")
+    func staleWithRejectionRendersDifferentTextPerRejectionKind() {
+        let mustMove = Self.dumped(Self.model(codex: .connectedStalePath, codexSnippet: nil,
+                                               codexPathRejection: .mustMoveToApplications))
+        let unsupported = Self.dumped(Self.model(codex: .connectedStalePath, codexSnippet: nil,
+                                                  codexPathRejection: .unsupportedCharacter(" ")))
+        #expect(mustMove != unsupported, """
+            .mustMoveToApplications 與 .unsupportedCharacter 在 .connectedStalePath 這一格渲出\
+            同一份文字——兩者的成因／出路不同，畫面應該不同
             """)
     }
 

@@ -33,9 +33,14 @@ struct CodexSectionView: View {
         case .connectedStalePath:
             // R-9：`pathRejection != nil` 時**不給按鈕**——按下去會先 disconnect 掉一份
             // 還在運作的檔（見 `CodexHookPathCheck` 的既有理由）。文案不預設成因（r4 m2）。
-            if model.codexPathRejection != nil {
+            // r13（D-x）：拆成「中性開場」（`staleOtherCopyIntro`，只講可觀測的事實）＋
+            // 「依 rejection 的成因／出路」（重用 `rejectionExplanation`，同
+            // `.blockedByBundlePath` 那組，零新增文案）——r12 兩種 rejection 共用一句，
+            // 其中「下次開機就會消失」對 `.unsupportedCharacter` 可查證為假。
+            if let rejection = model.codexPathRejection {
                 card {
-                    explanation(L10nCodex.staleOtherCopyMessage.text(model.language))
+                    explanation(L10nCodexCards.staleOtherCopyIntro.text(model.language))
+                    rejectionExplanation(rejection)
                 }
             } else {
                 card {
@@ -55,22 +60,27 @@ struct CodexSectionView: View {
             }
         case .blockedByBundlePath(let rejection):
             card {
-                switch rejection {
-                case .mustMoveToApplications:
-                    // D-s：**不給 snippet**——那個路徑下次開機就消失。
-                    explanation(L10nCodex.blockedPathExplanation.text(model.language))
-                    explanation(InstallerFailure.mustMoveToApplicationsMessage(model.language))
-                case .unsupportedCharacter(let character):
-                    // r13（D-w）：**不再給 snippet**——那個路徑雖然不會消失，但 command 是裸
-                    // 路徑不加引號，遞出去的是一份我們自己剛說可能會壞的設定檔（同
-                    // `.mustMoveToApplications` 的理由，見 `CodexHooksJSON.withheldSnippet`）。
-                    // `model.codexSnippet` 此時應已由決策層算成 nil（CX40），這裡改成問題＋
-                    // 解法兩句，不再讀 `model.codexSnippet`——同 `.mustMoveToApplications`
-                    // 分支的既有形狀（D-s 的 view 層守衛不依賴決策層先算對，見 CX49）。
-                    explanation(L10nCodex.unsupportedCharacterExplanation(character, language: model.language))
-                    explanation(L10nCodexCards.unsupportedCharacterWayOut.text(model.language))
-                }
+                rejectionExplanation(rejection)
             }
+        }
+    }
+
+    /// D-w／D-x（T13d／T13e）：「路徑被拒的說明與出路」只有一組文案，`.blockedByBundlePath`
+    /// 與 `.connectedStalePath`（`pathRejection != nil`）兩張卡片共用，由 `pathRejection`
+    /// 路由（spec §4.3 doc comment 逐字這樣寫）。`.mustMoveToApplications`：那個路徑下次開機
+    /// 就消失，**不給 snippet**（D-s）。`.unsupportedCharacter`：那個路徑雖然不會消失，但
+    /// `command` 是裸路徑不加引號，遞出去的是一份我們自己剛說可能會壞的設定檔（r13／D-w：
+    /// **同樣不給 snippet**，見 `CodexHooksJSON.withheldSnippet`）——`model.codexSnippet` 此時
+    /// 應已由決策層算成 nil（CX40），這裡不讀它，view 層的守衛不依賴決策層先算對（見 CX49）。
+    @ViewBuilder
+    private func rejectionExplanation(_ rejection: CodexHookPathCheck.Rejection) -> some View {
+        switch rejection {
+        case .mustMoveToApplications:
+            explanation(L10nCodex.blockedPathExplanation.text(model.language))
+            explanation(InstallerFailure.mustMoveToApplicationsMessage(model.language))
+        case .unsupportedCharacter(let character):
+            explanation(L10nCodex.unsupportedCharacterExplanation(character, language: model.language))
+            explanation(L10nCodexCards.unsupportedCharacterWayOut.text(model.language))
         }
     }
 
