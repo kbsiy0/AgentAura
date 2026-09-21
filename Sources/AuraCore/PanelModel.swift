@@ -5,7 +5,15 @@ import Foundation
 /// 只准經下列 public static 建構——與 `PanelModel.make` 同一個理由：任何呼叫端
 /// 想顯示 banner 就只能挑這幾句，不能手搓文案（避免下一個人寫出「立即生效」那種謊，D-m）。
 public struct PanelBanner: Equatable, Sendable {
-    public enum Kind: String, Sendable, Equatable, CaseIterable { case connected, alreadyConnected, disconnected, error }
+    public enum Kind: String, Sendable, Equatable, CaseIterable {
+        case connected, alreadyConnected, disconnected, error
+        /// D-v（T13b，S0-1）：`.codexConnected(language:)` 的專屬 kind——`.connected` 的
+        /// 退場條件（出現任何一列就退場）是為 Claude banner 推導的，出現一列 Claude 的
+        /// session 對「Codex 會問你一次是否信任」這句話什麼都沒兌現。獨立 kind 讓
+        /// `effectiveBanner`（`PanelModel+ConnectCTA.swift`）能依 kind 各自判斷退場條件，
+        /// 不用共用 `.connected` 那組退場邏輯。
+        case codexConnected
+    }
     public let kind: Kind
     public let text: String
 
@@ -47,7 +55,7 @@ public struct PanelBanner: Equatable, Sendable {
     /// Codex 額外要求「Codex 會問你一次是否信任」（F5，P4 硬下限），Claude 側沒有這件事。
     /// `AppDelegate+Codex.swift`（T10）是唯一預期呼叫點。
     public static func codexConnected(language: Language) -> PanelBanner {
-        PanelBanner(kind: .connected, text: L10nCodex.connectedBanner.text(language))
+        PanelBanner(kind: .codexConnected, text: L10nCodex.connectedBanner.text(language))
     }
 
     /// T10：`performDisconnectCodex()` 成功時的固定文案——同 `.codexConnected(language:)`

@@ -62,7 +62,10 @@ extension AppDelegatePanelActionsWiredTests {
             #expect(rig.delegate.codexRuntime.store.contents == written, """
                 CodexHookStore 讀回來的位元組應與 connect() 寫出去的逐位元組相等
                 """)
-            #expect(rig.delegate.banner?.kind == .connected, ".connectCodex 成功後應顯示「已接上」banner")
+            #expect(rig.delegate.banner?.kind == .codexConnected, """
+                .connectCodex 成功後應顯示「已接上」banner，T13b 之後走它自己的 kind
+                （D-v：不再沿用 `.connected`，才能有自己的退場條件），實際 \(String(describing: rig.delegate.banner?.kind))
+                """)
         }
     }
 

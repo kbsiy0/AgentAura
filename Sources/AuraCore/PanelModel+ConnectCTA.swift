@@ -4,6 +4,15 @@
 /// `showsConnectCTA`／`effectiveBanner`／`showsExplanationPanel` 這批本來就是 computed
 /// property，可以住在 extension 裡（跟 `PanelModel+NotConnectedDetail.swift` 同一個手法）。
 extension PanelModel {
+    /// D-v（T13b，S0-1）：面板上有沒有任何一列是 Codex 的——`.codexConnected` banner 的
+    /// 退場條件。用 `agentLabel == Agent.codex.label`（**不是** `agentLabel != nil`）：
+    /// 目前只有兩種 agent，兩種寫法今天等價，但第三種 agent 進來時 `!= nil` 會把它的列
+    /// 也當成「Codex 出現了」而靜默誤退場；`Agent.codex.label` 恆非 nil，已由既有
+    /// `CodexRowLabelTests.codexLabelIsPinnedToLiteralCodex` 釘住字面。
+    public var hasCodexRow: Bool {
+        rows.contains { $0.agentLabel == Agent.codex.label }
+    }
+
     /// §3.1.1：只讀 `install.affordance`，不得自己 switch `InstallState` 或看 `owner`（N9／S2-6）——
     /// 那正是 r3 讓 4 格顯示「按了只會出錯的按鈕」的原因。
     ///
@@ -62,12 +71,24 @@ extension PanelModel {
 
     /// A7（T11 commit3）：banner 沒有生命週期——「下一個 session 起生效」在它宣稱的條件
     /// 被滿足之後（真的出現第一個 session）還一直留著，佔掉面板頂端 40pt。
-    /// 只有 `.connected` kind 有這個自動退場條件（它是唯一「宣稱某件事將會發生」的 banner）；
-    /// 其餘（`disconnected`／`error`／`alreadyConnected`）沒有對應的「條件被滿足」可判斷，
-    /// 維持既有生命週期（使用者按 ✕，或被下一個 banner 蓋掉）。**不改寫 `banner` 這個
-    /// 原始欄位本身**——`AppDelegate` 存的狀態不受影響，這只是顯示層的推導。
+    /// `.connected`／`.codexConnected` 兩個 kind 各自有自己的退場條件（它們是僅有的兩個
+    /// 「宣稱某件事將會發生」的 banner）；其餘（`disconnected`／`error`／`alreadyConnected`）
+    /// 沒有對應的「條件被滿足」可判斷，維持既有生命週期（使用者按 ✕，或被下一個 banner 蓋掉）。
+    /// **不改寫 `banner` 這個原始欄位本身**——`AppDelegate` 存的狀態不受影響，這只是顯示層的推導。
+    ///
+    /// D-v（T13b，S0-1）：`.connected`（Claude）退場條件是「出現任何一列」——那裡「出現一個
+    /// session」確實兌現了「下一個 session 起生效」。**`.codexConnected` 不能沿用同一條**：
+    /// 出現一列 **Claude** 的 session 對「Codex 會問你一次是否信任」這句話什麼都沒兌現，
+    /// 只在出現 **Codex 的列**（`hasCodexRow`）時才退場——這正是 persona r1 抓到的縫：
+    /// 面板上有任何一列（哪怕是 Claude 的）就把 banner 抹掉，D-m 強制的兩句補償話因此
+    /// 被靜默抑制。**禁止**把這條退場條件整個拿掉讓 `.connected` banner 也永遠留著——
+    /// 那是弱化既有行為（A7 修掉的正是「banner 在條件兌現後還佔著頂端 40pt」），不是修 bug。
     public var effectiveBanner: PanelBanner? {
-        if banner?.kind == .connected, !rows.isEmpty { return nil }
+        switch banner?.kind {
+        case .connected: if !rows.isEmpty { return nil }
+        case .codexConnected: if hasCodexRow { return nil }
+        default: break
+        }
         return banner
     }
 
