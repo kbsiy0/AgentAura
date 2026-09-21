@@ -157,8 +157,12 @@ struct CodexWiringSmokeTests {
         #expect(!path.hasPrefix(NSTemporaryDirectory()), "生產 codexHome 不該落在 NSTemporaryDirectory() 下，實際 \(path)")
     }
 
-    /// 建一個 `pathRejection`／`codexState` 都可控的 delegate，供 CX35／CX39 共用。
-    private func makeDelegate(translocated: Bool, inDownloads: Bool = false,
+    /// 建一個 `pathRejection`／`codexState` 都可控的 delegate，供 CX35／CX39／review M5
+    /// 共用——**internal，不是 private**：M5 三個對抗式 mode 測試搬到
+    /// `+Adversarial.swift`（同一個 test target 的既有慣例，見
+    /// `AppDelegatePanelActionsWiredTests+Codex.swift` 對 `withFreshRig` 的做法），
+    /// 跨檔 extension 碰不到 `private`。
+    func makeDelegate(translocated: Bool, inDownloads: Bool = false,
                               fakeInstaller: FakeCodexInstaller) throws -> (delegate: AppDelegate, spy: SpyRenderer,
                                                                             cleanup: () -> Void) {
         let (defaults, suite) = try freshDefaults()
