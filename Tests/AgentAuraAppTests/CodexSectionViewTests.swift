@@ -164,6 +164,43 @@ struct CodexSectionViewTests {
             """)
     }
 
+    /// 按鈕身份用點擊辨識，不用陣列索引（`FooterPositionStabilityTests` 的既有手法）：真的
+    /// 離屏渲染、真的點一遍每顆按鈕，收集它們各自送出的 `PanelAction`。
+    @MainActor
+    private static func receivedActions(from model: PanelModel) -> [PanelAction] {
+        var received: [PanelAction] = []
+        let hosting = NSHostingView(rootView: CodexSectionView(model: model, onAction: { received.append($0) }))
+        hosting.frame = NSRect(x: 0, y: 0, width: 380, height: 400)
+        _ = try? OffscreenRender.render(hosting, over: .white)
+        for button in Self.allButtons(in: hosting) { button.performClick(nil) }
+        return received
+    }
+
+    private static func allButtons(in view: NSView) -> [NSButton] {
+        var found: [NSButton] = []
+        if let button = view as? NSButton { found.append(button) }
+        for sub in view.subviews { found.append(contentsOf: allButtons(in: sub)) }
+        return found
+    }
+
+    /// **CX54 `occupiedCardTellsYouToMergeAndOffersHelp`**（T13h／D-aa）：`.occupiedByOther`
+    /// 有 snippet 時，卡片前一句才說「我們不會動你的檔」，下一句就遞出一份 root
+    /// `{"hooks": …}` 的完整替換檔——這是整個流程裡唯一一個「手滑貼上就毀掉自己 hooks」的
+    /// 位置。加一行合併指示 ＋ 一顆通往 help 的按鈕（重用既有 `.openHelp` action，不開第四個
+    /// `PanelAction`）。含**負向對照**：`codexSnippet == nil` 那格不得有合併指示／help
+    /// 按鈕——沒有東西可併。
+    @Test("CX54：.occupiedByOther 有 snippet 時給合併指示 ＋ help 按鈕；沒有 snippet 時兩者都不給")
+    func occupiedCardTellsYouToMergeAndOffersHelp() {
+        let withSnippet = Self.model(codex: .occupiedByOther, codexSnippet: Self.realSnippet, codexPathRejection: nil)
+        #expect(Self.dumped(withSnippet).contains(L10nCodexCards.mergeInstruction.text(.traditionalChinese)), "有 snippet 時沒有看到合併指示")
+        #expect(Self.receivedActions(from: withSnippet).contains(.openHelp), "有 snippet 時應該有一顆送出 .openHelp 的按鈕")
+
+        // 負向對照：codexSnippet == nil 時，沒有東西可併，合併指示與 help 按鈕都不該出現。
+        let withoutSnippet = Self.model(codex: .occupiedByOther, codexSnippet: nil, codexPathRejection: .mustMoveToApplications)
+        #expect(!Self.dumped(withoutSnippet).contains(L10nCodexCards.mergeInstruction.text(.traditionalChinese)), "沒有 snippet 時仍然畫出合併指示")
+        #expect(!Self.receivedActions(from: withoutSnippet).contains(.openHelp), "沒有 snippet 時仍然有一顆送出 .openHelp 的按鈕")
+    }
+
     @Test(".blockedByBundlePath(.mustMoveToApplications)：解釋 ＋ 出路，不給 snippet／複製按鈕")
     func blockedMustMoveShowsExplanationWithoutSnippet() {
         // 負向斷言必須餵**正向輸入**：這裡刻意給 model 一份真的 snippet。若餵 nil，

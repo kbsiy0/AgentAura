@@ -52,9 +52,15 @@ struct CodexSectionView: View {
             card {
                 explanation(L10nCodex.occupiedIntro.text(model.language))
                 if let snippet = model.codexSnippet {
+                    // r13（D-aa）：卡片前一句才說「我們不會動你的檔」，下一句就遞出一份完整
+                    // 替換檔——加一行合併指示，並給一顆通往說明的按鈕（重用既有 `.openHelp`，
+                    // 不開第四個 `PanelAction`；合併細節一行寫不完，help 兩份文件已經有那段）。
+                    explanation(L10nCodexCards.mergeInstruction.text(model.language))
                     snippetBlock(snippet)
+                    helpButton()
                 } else {
                     // R-10：路徑會在下次開機消失，寧可不給也不給一份會過期的設定。
+                    // 沒有東西可併，合併指示與 help 按鈕在這一格不畫。
                     explanation(L10nCodex.occupiedSnippetWithheldReason.text(model.language))
                 }
             }
@@ -93,6 +99,18 @@ struct CodexSectionView: View {
     private func actionButton(_ action: PanelAction, title: String) -> some View {
         Button { onAction(action) } label: { CTAButtonLabel(text: title) }
             .buttonStyle(.borderless)
+    }
+
+    /// D-aa（T13h）：通往 help 的入口——送出既有的 `.openHelp` action，同
+    /// `NotConnectedView` 的求助按鈕既有形狀（純文字 `Button`，不用 `CTAButtonLabel`：那顆
+    /// 是主要 CTA 才配的填色樣式，help 只是次要出口）。`.borderless`：離屏渲染下 `.bordered`
+    /// 會把真 `NSButton` 包進 `_FocusRingView`，沒有真 `NSWindow` 時 `allButtons` 遞迴走訪
+    /// 找不到（CLAUDE.md 離屏渲染限制①）。
+    @ViewBuilder
+    private func helpButton() -> some View {
+        Button(L10nCodexCards.helpLinkLabel.text(model.language)) { onAction(.openHelp) }
+            .buttonStyle(.borderless)
+            .font(.system(size: 11))
     }
 
     /// 可選取、等寬——使用者是真的會照著貼進 `~/.codex/hooks.json` 的那個人（P2）。
