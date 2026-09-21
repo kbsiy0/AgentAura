@@ -168,6 +168,40 @@ struct CodexWiringSmokeTests {
             """)
     }
 
+    /// CX40（App 半，決策層，R-10）：`CodexRuntime.codexSnippet` 是否被扣住只看
+    /// `pathRejection`，跟 `codexState` 完全無關——乘積表跨 `CodexStateKind.allCases`
+    /// （用 `CodexState.samples(kind)` 逐一設進 `codexRuntime.codexState`，含
+    /// `.occupiedByOther`）× `translocated`（true → pathRejection == .mustMoveToApplications；
+    /// false → nil）。**`.unsupportedCharacter` 這一格留給純函式半**
+    /// （`CodexStateTests.withheldSnippetExhaustsRepresentativeRejections`）——
+    /// `hookBinaryPath` 在這一層永遠是 `Self.productionHookBinaryPath()`（不可注入），
+    /// 這台機器的 repo 路徑不含任何 `unsupportedCharacters`，測試若硬要在這裡驗那一格
+    /// 只會驗到「這台機器的路徑恰好乾淨」，不是真的驗到規則。
+    @Test("CX40：codexSnippet 是否被扣住只看 pathRejection，跨每個 CodexStateKind 都一致",
+          arguments: CodexStateKind.allCases)
+    func codexSnippetIsWithheldWhenPathWillVanish(_ kind: CodexStateKind) throws {
+        for translocated in [true, false] {
+            let fakeInstaller = FakeCodexInstaller(mode: .normal)
+            let (delegate, _, cleanup) = try makeDelegate(translocated: translocated, fakeInstaller: fakeInstaller)
+            defer { cleanup() }
+            for state in CodexState.samples(kind) {
+                delegate.codexRuntime.codexState = state
+                if translocated {
+                    #expect(delegate.codexRuntime.codexSnippet == nil, """
+                        kind=\(kind) state=\(state) translocated=true（pathRejection ==
+                        .mustMoveToApplications）時 codexSnippet 應為 nil，實際 \
+                        \(String(describing: delegate.codexRuntime.codexSnippet))
+                        """)
+                } else {
+                    #expect(delegate.codexRuntime.codexSnippet != nil, """
+                        kind=\(kind) state=\(state) translocated=false（pathRejection == nil）\
+                        時 codexSnippet 應非 nil
+                        """)
+                }
+            }
+        }
+    }
+
     /// CX25 來源掃描半——`codexHome` 的生產路徑不得用 `environment["HOME"]`（T04 review M1／M2
     /// 同一個陷阱已出現兩次：`timeout`／`agentFlag`；掃描本身不能拿產生器跟自己比，但這裡驗的
     /// 是「有沒有用這個字面」，不是「產生器輸出是否正確」，字面掃描是對的工具）。**只掃

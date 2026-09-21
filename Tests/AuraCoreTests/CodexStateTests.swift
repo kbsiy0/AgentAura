@@ -128,4 +128,21 @@ struct CodexStateTests {
             （\(Set(CodexStateKind.allCases))）
             """)
     }
+
+    /// CX40（純函式半，R-10）：`CodexHooksJSON.withheldSnippet(hookBinaryPath:pathRejection:)`
+    /// 只看 `pathRejection`，跟 `CodexState` 完全無關——這裡先窮盡三個代表性 `pathRejection`
+    /// 值（`nil`／`.mustMoveToApplications`／`.unsupportedCharacter(" ")`）。**跨
+    /// `CodexStateKind` 的那一半**在 `CodexWiringSmokeTests.codexSnippetIsWithheldWhenPathWillVanish`
+    /// （App 層，透過 `CodexRuntime.codexState`／`.codexSnippet` 讀決策層真正算出來的值）——
+    /// 這條純函式本身不吃 `CodexStateKind`，在這裡跨它是空轉，兩條測試互相點名見對方 doc comment。
+    @Test("CX40（純函式半）：withheldSnippet 窮盡三個代表性 pathRejection")
+    func withheldSnippetExhaustsRepresentativeRejections() {
+        let path = "/Applications/AgentAura.app/Contents/Resources/plugin/bin/aura-hook"
+        #expect(CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: nil) != nil,
+                "pathRejection == nil 時應該給 snippet")
+        #expect(CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: .mustMoveToApplications) == nil,
+                "pathRejection == .mustMoveToApplications 時應該扣住 snippet（R-10）")
+        #expect(CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: .unsupportedCharacter(" ")) != nil,
+                "pathRejection == .unsupportedCharacter 時仍應該給 snippet——那個路徑不會過期")
+    }
 }
