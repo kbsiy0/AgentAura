@@ -83,8 +83,14 @@ struct CodexWiringSmokeTests {
                 "onOpen 必須觸發 reprobeCodex()（CX24⑤），probe 次數應該增加")
 
         // T10 裁決 3（取代文字掃描「PanelModel.make(」呼叫點）：refreshPanel() 真的把
-        // codexState／codexPathRejection 交給 status.setPanel，不是寫死字面。
+        // codexState／codexSnippet／codexPathRejection 交給 status.setPanel，不是寫死字面。
+        // **前提先釘住 `codex != .unavailable`**（review m2）——否則下面的等式在
+        // `.unavailable == .unavailable` 這種退化情況下也會恆真。
         let lastPanel = try #require(spy.panels.last, "onOpen 之後應該至少畫過一次面板")
+        #expect(lastPanel.codex != .unavailable, """
+            前提：connect 成功之後 codexState 不該還是 .unavailable，否則下面的等式斷言\
+            會退化成拿兩個 .unavailable 互相比對
+            """)
         #expect(lastPanel.codex == delegate.codexRuntime.codexState, """
             status.setPanel 收到的 PanelModel.codex 應等於 codexRuntime.codexState，\
             實際 panel=\(lastPanel.codex) runtime=\(delegate.codexRuntime.codexState)
@@ -92,6 +98,38 @@ struct CodexWiringSmokeTests {
         #expect(lastPanel.codexPathRejection == delegate.codexRuntime.pathRejection, """
             status.setPanel 收到的 PanelModel.codexPathRejection 應等於行程常數 \
             codexRuntime.pathRejection
+            """)
+        // review M1：codexSnippet 完全沒有被斷言過——先釘住這條 rig 下它非 nil
+        // （pathRejection == nil），再比對相等，避免又是一次「兩邊都 nil」的恆真。
+        #expect(delegate.codexRuntime.codexSnippet != nil, """
+            前提：pathRejection == nil 時應該有 snippet 可複製，否則下面的等式斷言會退化成
+            拿兩個 nil 互相比對
+            """)
+        #expect(lastPanel.codexSnippet == delegate.codexRuntime.codexSnippet, """
+            status.setPanel 收到的 PanelModel.codexSnippet 應等於 codexRuntime.codexSnippet，\
+            實際 panel=\(String(describing: lastPanel.codexSnippet)) \
+            runtime=\(String(describing: delegate.codexRuntime.codexSnippet))
+            """)
+    }
+
+    /// review M1（另一半）：路徑被拒時，`refreshPanel()` 交給 `status.setPanel` 的
+    /// `codexPathRejection` 必須真的是 `.mustMoveToApplications`、`codexSnippet` 必須真的是
+    /// `nil`（R-10）——`codexConnectChainIsWired` 那條 rig 的 `pathRejection` 恆為 `nil`，
+    /// 測不到這一半；這裡用 `translocated: true` 開一個 `pathRejection != nil` 的 rig。
+    @Test("被拒路徑：status.setPanel 收到的 codexPathRejection／codexSnippet 跟著行程常數走")
+    func refreshPanelCarriesRejectedPathState() throws {
+        let fakeInstaller = FakeCodexInstaller(mode: .normal)
+        let (delegate, spy, cleanup) = try makeDelegate(translocated: true, fakeInstaller: fakeInstaller)
+        defer { cleanup() }
+
+        let lastPanel = try #require(spy.panels.last, "launch 之後應該至少畫過一次面板")
+        #expect(lastPanel.codexPathRejection == .mustMoveToApplications, """
+            translocated: true 時 codexPathRejection 應該是 .mustMoveToApplications，\
+            實際 \(String(describing: lastPanel.codexPathRejection))
+            """)
+        #expect(lastPanel.codexSnippet == nil, """
+            .mustMoveToApplications 時 codexSnippet 必須被扣住（R-10），\
+            實際 \(String(describing: lastPanel.codexSnippet))
             """)
     }
 
