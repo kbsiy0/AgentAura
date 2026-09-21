@@ -81,7 +81,7 @@ struct CodexCredentialSequenceTests {
 
         for action in sequence {
             let isClaudeSideAction = action == .performConnect || action == .performDisconnect
-            let beforeKeys = Set(defaults.dictionaryRepresentation().keys)
+            let beforeKeys = Set((defaults.persistentDomain(forName: suite) ?? [:]).keys)
             let beforeClaudeValues = Self.claudeKeys.map { defaults.object(forKey: $0) as? String }
             let beforeCodexValue = defaults.string(forKey: Self.codexKey)
 
@@ -108,8 +108,13 @@ struct CodexCredentialSequenceTests {
 
             // 差集斷言（不逐鍵列舉，鍵清單會 drift）：新增／刪除的鍵只准是這一步「自己那一側」
             // 預期會動的鍵；`didConnectOnceKey` 是 Claude 側自己的旗標，跟 Codex 側鍵集合
-            // 互斥，仍算「自己那一側」。
-            let afterKeys = Set(defaults.dictionaryRepresentation().keys)
+            // 互斥，仍算「自己那一側」。**用 `persistentDomain(forName:)`，不是
+            // `dictionaryRepresentation()`**——後者是整條搜尋鏈合併後的效果值，含
+            // `NSGlobalDomain`／registration domain；別的測試在同一個行程裡第一次初始化
+            // 某個 AppKit 文字元件時，會把 `NSUsesTextStylesForLineBreaks` 這類鍵寫進
+            // 全域 domain，讓這條差集斷言在全量套件裡偶爾誤紅（實測抓到過一次）。只看
+            // 這個 suite 自己的 persistent domain 才是這條不變式真正在問的範圍。
+            let afterKeys = Set((defaults.persistentDomain(forName: suite) ?? [:]).keys)
             let ownSideKeys: Set<String> = isClaudeSideAction
                 ? Set(Self.claudeKeys + [AppDelegate.didConnectOnceKey])
                 : [Self.codexKey]
