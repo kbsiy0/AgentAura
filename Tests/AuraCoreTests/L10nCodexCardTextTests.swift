@@ -98,4 +98,22 @@ struct L10nCodexCardTextTests {
         #expect(L10nCodex.failureMessage(.unsupportedPathCharacter("$"), language: .english)
                 == L10nCodex.unsupportedCharacterExplanation("$", language: .english))
     }
+
+    /// review m3：`disconnectedBanner`／`PanelBanner.codexDisconnected` 在 T10 之前零測試
+    /// 引用——唯一觸及它的是 `banner?.kind == .disconnected`，而 Claude 側的斷開 banner
+    /// 也滿足那條，不是內容專屬的守衛。比照 `panelBannerCodexConnectedUsesTheSameOracle`
+    /// 補一條內容 pin：`PanelBanner.codexDisconnected` 讀的是 `L10nCodex.disconnectedBanner`
+    /// 本身，不是另外手搓一份字面；且措辭刻意**不提任何按鈕**（Claude 側寫「要再用的話按
+    /// ［接上］」，這裡照抄會提到一顆不存在的按鈕，`disconnectedBanner` 的 doc comment
+    /// 已載明這個理由）。
+    @Test("PanelBanner.codexDisconnected 讀 L10nCodex.disconnectedBanner，不是另一份字面，且不提任何按鈕")
+    func panelBannerCodexDisconnectedUsesTheSameOracle() {
+        let banner = PanelBanner.codexDisconnected(language: .english)
+        #expect(banner.text == L10nCodex.disconnectedBanner.text(.english))
+        #expect(banner.kind == .disconnected, "拆掉 Codex 掛載成功的視覺樣式應該是 .disconnected")
+        #expect(!banner.text.contains("Connect"), """
+            斷開 banner 不該提任何按鈕字樣（Claude 側「要再用的話按［接上］」的措辭在這裡不適用，
+            Codex 側按鈕字樣是「接上 Codex」／「重新接上 Codex」），實際：\(banner.text)
+            """)
+    }
 }
