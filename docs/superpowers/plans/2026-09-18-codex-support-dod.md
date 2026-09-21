@@ -1,6 +1,6 @@
 # DoD 帳本 · `change/codex-support`（T12）
 
-spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r13**）§7 為門檻來源；
+spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r14**）§7 為門檻來源；
 證據層 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 基準取自 `change/codex-support` 分支點（`c131c30`，＝ `main` ＋ 探針文件），量測時用
 `git worktree add <temp> <基準> --detach` 取乾淨副本，**不動共享工作目錄**。
@@ -207,13 +207,13 @@ S1-1 是三個狀態字串、S1-2 是空狀態句）。那些表面在 diff 裡�
 | **CX47** | `CodexBannerLifecycleTests`（新） | ① **`.codexConnected` 改用 `!rows.isEmpty`（＝ r12 行為）→ 必須紅** ② `hasCodexRow` 改成 `agentLabel != nil` → **預期綠（等價 mutant，要記）** | `codexConnectedBannerOnlyRetiresOnCodexRow`（定義域 `PanelBanner.Kind.allCases` × 四種列組合，程式推導；本 gate 是 `Kind.allCases` 的第一個消費者） | | T13b |
 | **CX48** | `CodexWiringSmokeTests+Banner`（新） | ① **`codexConnected` 改回 `kind: .connected` → 必須紅**（persona r1 抓到的那一行） ② 刪 `effectiveBanner` 的 `.codexConnected` 分支 ③ 讓 banner 永不退場 → **負向對照那格必須紅** | `codexTrustWarningIsDrawnWithClaudeRowsPresent`（`leafStrings` 掃整個 `PanelView.body`；**與 CX24④ 是同一件事的兩層**，doc comment 互相點名） | | T13b |
 | **CX49** | `CodexSectionViewTests` | ① 改回會畫 snippet ② 拿掉出路句 ③ **把輸入的 `codexSnippet` 改成 nil → 全綠（等價 mutant，要記）** | `blockedCharacterCardWithholdsSnippetAndOffersAWayOut`（**輸入餵真的含空白路徑產出的 snippet**——負向斷言餵正向輸入） | | T13d |
-| **CX50** | `PanelStatusLabelTests`（新） | ① 忽略 `codex` ② 無條件加子句 ③ **子句改到尾端** ④ 把 `.connectedStalePath` 也算成已接上 | `panelStatusLabelIsDualAgentAware`（`InstallState` 代表值 × `CodexStateKind.allCases` × 兩語言；三條斷言：**零 diff `==`**／含診斷子字串／Codex 子句在最前） | | T13f |
-| **CX51** | `CodexWiringSmokeTests+Banner` 或 `PanelPixelTests` 同族 | **逐處三個**：把標題／footer chip／CTA 窄條任一處改回 `install.healthLabel` → 對應那一處必須紅（**三個都要跑，逐處記**） | `dualAgentStatusLabelReachesAllThreeSites`（persona r1 的頭號情境：`install = .notConnected` ＋ `codex = .connected` ＋ 一列活著的 Codex session） | | T13f |
-| **CX52** | 來源掃描 | 在任一 view 加回一行 `model.install.healthLabel(model.language)` | `noAppLayerSiteReadsInstallHealthLabelDirectly`（`Sources/AgentAuraApp/` 命中數**恰 0**；站點集合 source-derived，不是手列的三個。已知假陰性同 CX46：跨行寫法／block comment） | | T13f |
+| **CX50** | `PanelStatusLabelTests`（新） | ① 忽略 `codex` ② 無條件加子句 ③ **子句改到尾端** ④ 把 `.connectedStalePath` 也算成已接上 ⑤ **r14：`title` 的非 connected 分支改回 `install.healthLabel` → 第④條斷言必須紅** | `panelStatusLabelIsDualAgentAware`（定義域**逐字寫 `InstallStateAllCases.all()`**，不是「代表值」——test target 既有符號，由 `Reason.allCases × MountOwner.allCases` 推導；× `CodexStateKind.allCases` × 兩語言。**四條**斷言：**零 diff `==`**／含診斷子字串／Codex 子句在最前／**`title` 非 connected 分支 `==` `statusLabel`**（把住在 AuraCore 的標題那一處下推到純函式層守）） | | T13f |
+| **CX51** | `CodexWiringSmokeTests+Banner` 或 `PanelPixelTests` 同族 | **逐處三個，都要跑、逐處記**：footer 改回 → 斷言①紅；標題改回 → ②（2→1）＋③紅**且 CX50④ 也紅**；CTA 窄條改回 → ②（2→1）＋③紅 | `dualAgentStatusLabelReachesAllThreeSites`（persona r1 的頭號情境）。**r14 改方法**：r13 寫的「三處都 `contains(statusLabel)`」**對它自己宣告的三個 mutation 全部不紅**——三處渲染同一個字串、`leafStrings` 回扁平陣列，任一處改回後另外兩處還在。改成三條**可分辨**斷言：① footer 比對複合字面 `"<statusLabel> · v<version>"`；② **裸 `statusLabel` 葉節點出現次數恰 2**；③ `install.healthLabel(l)` **不得**以裸葉節點單獨出現 | | T13f |
+| **CX52** | 來源掃描（**兩個 root**） | ① 在任一 view 加回一行 `model.install.healthLabel(model.language)` → 第①格紅 ② **r14：把 `title` 的讀取點改回 `PanelModel.swift` → 第②格紅**（具名集合多一個檔） | **`healthLabelReadersAreTheNamedSet`**（r14 改名）：① `Sources/AgentAuraApp/` 的 `.healthLabel(` 命中數**恰 0**；② `Sources/AuraCore/` 含有它的**檔案集合恰等於具名清單**（`InstallAffordance`／`TooltipText`／`PanelBanner+InstallerFailure`／`PanelModel+ConnectCTA`）。**r14 為什麼補第②格**：三處裡的標題住在 AuraCore，r13 只掃 App 層＝只守到 2/3，而風險表卻寫「站點集合 source-derived」（overclaim）。已知假陰性同 CX46：跨行寫法／block comment | | T13f |
 | **CX53** | `PanelStatusLabelTests` | ① 一律回舊句 → `.connected` 那格紅 ② 一律回新句 → 其餘五格紅 | `emptyRowsMessageIsAgentAware`（期望值**寫死字面**，不引用 `L10nPanel.emptyRowsMessage`——拿產生器跟自己比的老陷阱，本 change 已踩過兩次） | | T13g |
 | **CX54** | `CodexSectionViewTests` | ① 拿掉合併指示 ② help 按鈕改送別的 action ③ 讓 `codexSnippet == nil` 那格也畫 → **負向對照必須紅** | `occupiedCardTellsYouToMergeAndOffersHelp`（重用既有 `.openHelp`，不開第四個 `PanelAction`；按鈕用點遍收集 action，不用索引） | | T13h |
 | **CX55** | 文件掃描 | 從 `help-english.html`／`help-traditionalChinese.html` **任一份**刪掉那段（兩份各試一次） | `helpDocsExplainMergingIntoExistingHooks`（`@Test(arguments:)` 參數化兩份——CX29 的既有教訓：內容有、守衛沒有） | | T13h |
-| **CX56** | `CodexSnippetHeightTests`（新） | ① 拿掉 snippet 的固定高度 ② **改成 `.frame(maxHeight:)` → `FooterPositionStabilityTests` 必須紅**（兩條一起看） | `snippetCardFitsOnA13InchScreen`（**渲染後座標**：`preferredContentSize.height ≤ 780pt`，「複製」與 footer 的 `minY` 都在天花板內；按鈕**用點擊辨識不用索引**。Options 展開的組合**刻意排除**，見 spec §10-20） | | T13i |
+| **CX56** | `CodexSnippetHeightTests`（新） | ① 拿掉 snippet 的固定高度 ② **改成 `.frame(maxHeight:)` → `FooterPositionStabilityTests` 必須紅**（兩條一起看） ③ **r14：把域縮回「只有 `install: .connected` ＋ `banner: nil`」→ 必須重現 r13 的假綠**（同一個上限下窄域全綠、全域紅，實跑輸出入報告） ④ **r14：拿掉下限那格並把上限壓到 1 列 → 下限那格必須紅** | `snippetCardFitsOnA13InchScreen`（**渲染後座標**：`preferredContentSize.height ≤ 780pt`，「複製」與 footer 的 `minY` 都在天花板內；按鈕**用點擊辨識不用索引**）。**r14 定義域補兩維**：`CodexState` × 兩語言 × {rows 空,3 列} × **`install ∈ {.connected, affordance == .connect 的代表值}`** × **`banner ∈ {nil, .codexConnected}`**——最壞組合（整版 CTA ＋ 有 snippet ＋ 尚未退場的 banner）**從未被量過**，證據圖 `05`／`07` 兩張都是 `install: connected`。**另加下限**：snippet 區塊不得低於 6 個視覺列。**780 在 T13i 量完之前是提案**，到不了要停下來回報三個選項，不得自行砍內容。Options 展開的組合**刻意排除**，見 spec §10-20 | | T13i |
 | **CX57** | `AppDelegatePanelActionsWiredTests+Codex` | ① **改回直接呼叫 `performDisconnectCodex()` → 第一格必須紅** ② 確認框文案拿掉 agent 名 | `codexDisconnectGoesThroughConfirmation`（不確認 → `disconnectCallCount == 0` ＋ 憑證鍵不變；確認 → 1；文案含 `Agent.codex.label!`） | | T13j |
 
 **額外必記的三筆（不是新 gate，是回歸證人）**
@@ -243,7 +243,7 @@ DoD #2 要求**每個 task 的報告附該 commit 的絕對值**，這裡是彙�
 | T10 review 修復（r2 APPROVED） | `5ad5256` | 2018 | 933 / 0 |
 | merge main（PR #7） | `f6cd5f1` | **2018**（`git diff 5ad5256..f6cd5f1 --stat -- Tests` 也是空——merge 對 `Tests/` 淨增同樣是 0，跟 `Sources/` 同一個故事：codex-support 分支自己早已收斂） | 未單獨量（HEAD 已含後續 commit） |
 | T12 CX44 交付 | `ecd323e` | **2025**（+7，恰好等於 `NoPendingFlagRemainsTests.swift` 自己的 7 個 `#expect(`） | **646＋291＝937 tests / 0 issues**（HEAD，3 輪皆同） |
-| **T13 交付（persona r1 修復批次）** | 待填 | 待填（只准上升；基準 **2025**） | 待填（CX47–CX57 全綠、既有全綠、連跑 3 次 0 flake） |
+| **T13 交付（persona r1 修復批次）** | 待填 | 待填（只准上升；**基準 2026**，2026-09-21 於 `7515b44` 實測——r13 誤用 T12 帳本的 2025，已更正） | 待填（CX47–CX57 全綠、既有全綠、連跑 3 次 0 flake） |
 
 **merge main（`f6cd5f1`）對 `Sources/` 淨增實測是 0，不是預期的 +30**：`git diff 5ad5256..f6cd5f1 --stat -- Sources` 輸出為空——`change/codex-support` 分支在 merge **之前**（`cc26b72`，2026-09-19）就已經獨立收斂出跟 main PR #7 完全相同的色板抑制改動（`ColorPickerCoordinator.swift`／`IconRendering.swift`／`StatusItemController+SystemPanels.swift` 三個檔逐位元組相同）；只有 `AppDelegate.swift` 有 38 行差異，屬於本 change 自己的 Codex 接線，跟 merge 無關。**這推翻了 T10 review r2 派工訊息裡「merge main 會讓 Sources/ +30」的預期**——實測 0，`Sources/` 的所有增量都來自 codex-support 自己的 commit，見 DoD#7。
 
@@ -301,6 +301,8 @@ App 搬家的偵測延遲、**R-8 不變式 2 的人類面只有實機 ⑧**、
 | **26** | **DoD #7（`Sources/` 淨增）在 T13 之後會更糟**：T12 實測 +1527（門檻 1150，MISS 377），T13 估計再加約 **270**，合計約 **+1797**（MISS 約 647）。**門檻不往上調**（本專案已有兩次「如實記錄不調門檻」前例）。這 270 行買的是**兩條 S0 的關閉**，替代方案是「維持 NO-GO」，不是「省 270 行」。**是否重設基準是使用者的裁決** | 需使用者裁決 | T13 |
 | **27** | **`TooltipText` 也讀 `install.healthLabel`，但刻意不在 CX52 的掃描範圍內**（CX52 只掃 `Sources/AgentAuraApp/`）。tooltip 是選單列的 hover 文字，不是面板的三處狀態字串——**這個邊界是刻意的，不是漏掉**。若日後判定 tooltip 也該雙 agent 感知，那是另一個 change | 邊界，明寫 | T13f |
 | **28** | **兩個等價 mutant 是預期結果**：CX47② (`hasCodexRow` 改成 `agentLabel != nil`) 與 CX49③（把輸入的 `codexSnippet` 改成 nil）。前者守的是**未來的第三種 agent**、後者守的是**負向斷言的輸入品質**，兩者今天都打不紅。**要記進 mutation 帳並寫明理由**，不要為了「讓它紅」把 gate 改成另一件事 | 方法論，明寫 | T13 |
+| **29** | **r13 review（2026-09-21，0 BLOCKING／3 MAJOR／5 minor）的處置**：M1 CX56 定義域補 `install`×`banner` ＋ snippet 下限 ＋「780 先量後定」· M2 CX51 改成三條可分辨斷言（r13 的寫法對自己宣告的三個 mutation 全部不紅）· M3 並行圖更正（`PanelModel*.swift` 上 T13b→T13f→T13g 序列）· m1 CX52 改名並補 AuraCore 具名檔案集合 · m2 `#expect(` 基準 2025→**2026** · m3 寬度量測擴到標題與 CTA 窄條 · m4 CX50 定義域逐字寫 `InstallStateAllCases.all()` · m5 T13l 補最壞高度組合 #14 · (c) §8.1 補「為何不放 `L10nPanel.swift`」。**九條決策無一被推翻** | 已折入 r14 | r13 review |
+| **30** | **780pt 在 T13i 量完之前是「提案」**：最壞組合（`install` 非 connected ＋ `.occupiedByOther` 有 snippet ＋ `.codexConnected` banner 尚未退場）**從未被量過**。若在 snippet 下限（6 個視覺列）之下仍到不了 780，**要停下來回報三個選項**（調數字／整張卡片可捲／該組合下不同時顯示 banner 與 snippet 卡——第三個會動到 D-v，屬決策變更）。**不得自行砍別處內容讓它變綠** | 待 T13i 實測定案 | r13 review M1 |
 
 ## T12 附錄一：位置索引斷言清查表
 

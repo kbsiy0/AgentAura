@@ -1,10 +1,10 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r13**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r14**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）·
 > persona r1 報告（2026-09-21，**NO-GO 5.68／6.0**）· 證據圖 `docs/evidence/codex/INDEX.md`
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 **r13** 的 spec。
+> 節號引用一律指 **r14** 的 spec。
 > **gate 編號**：本 change 新增的一律 `CX<n>`（共 **57** 條；CX37 拆成 a／b，CX43 未使用，
 > **CX47–CX57 是 T13 的 persona 修復批次**）；提到**既有** gate 一律寫測試函式名。
 
@@ -601,6 +601,8 @@ symlink→`config.toml` 那格必須紅**（報告寫明哪一格）；③ 拿�
 banner 是 `.mustMoveToApplications` 那句）、**CX40 `codexSnippetIsWithheldWhenPathWillVanish`**
 （乘積表 `CodexStateKind.allCases × [nil, .mustMoveToApplications, .unsupportedCharacter(" ")]`，
 斷言 `.mustMoveToApplications` **整行** `codexSnippet == nil`，含 `.occupiedByOther`）。
+**（r13／T13c 之後這條已改名 `codexSnippetIsWithheldForEveryPathRejection` 且期望值整欄翻轉
+——上面是 T10 當時的樣子，保留當歷史；要找那支測試請用新名字。）**
 
 **⚠️ 注意：R-10（snippet 被扣住）目前在任何一層都還沒有守衛**——CX40 尚未存在，而**決策點與
 它的 gate 落在同一個 task**（就是本 task）。也就是說，在 CX40 寫出來之前，「`.occupiedByOther`
@@ -715,6 +717,12 @@ doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要�
 > §4.11（確認框）· §6.3（CX47–CX57）· §9.1（persona 對應）· §10-17–22（新 known gaps）。
 > persona r1 報告全文是本 task 的**需求來源**，不是背景資料——每一條 S0／S1 都要能指回一個子項。
 
+**r14 折入 r13 review（0 BLOCKING／3 MAJOR／5 minor）**：九條決策一條都沒被推翻，改的是
+**CX56 的定義域**（補 `install`×`banner` 兩維 ＋ snippet 下限 ＋ 先量後定）、
+**CX51 的方法**（三處渲染同一個字串，`contains` 分辨不出是哪一處壞了 → 三條可分辨斷言）、
+**並行圖的事實錯誤**（`PanelModel*.swift` 上三個子項互撞），以及五條 minor。
+**T13i 的基準表要在派工前先量**——它會決定 780 這個產品數字是否維持。
+
 **這批的性質**：persona r1 判 **NO-GO**（加權 5.68／門檻 6.0；兩條 S0；P2 = 5.2 低於自己的 ≥6 硬下限）。
 **四個 persona 裡三個的失分不是來自 Codex 功能做錯，而是來自既有的 Claude-only 表面沒有跟著新訊號更新**
 ——所以本 task 大部分的 diff 落在**不是這個 change 寫的碼**上（`effectiveBanner`／`PanelModel.title`／
@@ -736,19 +744,38 @@ doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要�
 ### 子項與依賴
 
 ```
-T13a（純搬移，擋住 T13j）
-  └─ T13j（確認框）
+兩條可以並行的鏈（r14 更正，見下方衝突檔表）：
 
-T13b（S0-1 banner）   ┐
-T13c（S0-2 決策層）    ├─ 彼此獨立，可並行（不同檔）
-T13f（S1-1 狀態字串）  ┘
-   T13c ─→ T13d（S0-2 view 層＋文案）─→ T13e（S2-1 stale 拆句，重用 T13d 的兩句）
-   T13d ─→ T13i（S1-4 高度天花板；卡片內容定案後才量得準）
-T13g（S1-2 空列句）     獨立
-T13h（S1-3 合併指示＋help）  獨立（但與 T13i 同檔，排在 T13i 之前）
-T13k（文件／CLAUDE.md 回寫）  全部之後
-T13l（證據圖重渲）            全部之後（最後一個）
+鏈 A（AuraCore 的 PanelModel*.swift，**必須序列**）
+  T13b（S0-1 banner）→ T13f（S1-1 狀態字串）→ T13g（S1-2 空列句）
+
+鏈 B（Codex 文案與卡片，**必須序列**）
+  T13c（S0-2 決策層，CodexHooksJSON）→ T13d（S0-2 view＋文案）→ T13e（S2-1 stale 拆句）
+      → T13h（S1-3 合併指示＋help）→ T13i（S1-4 高度天花板）
+
+獨立：T13a（純搬移）→ T13j（確認框）
+
+收尾（全部之後，序列）：T13k（文件／CLAUDE.md）→ T13l（證據圖重渲）
 ```
+
+**r13 的並行圖是錯的**（review M3）：它寫「T13b／T13c／T13f 彼此獨立，可並行（**不同檔**）」，
+但 T13b 與 T13f **改的是同樣兩個檔**，T13g 也改其中一個。**「不同檔」那句是事實錯誤，已刪除。**
+照字面派工會在共享工作目錄上撞車，而本專案有明確的實證事故紀錄（未追蹤檔被別人的廣域
+`git add` 掃走、branch 指到錯的 commit）。
+
+**衝突檔表（派工前逐列看一次）**：
+
+| 檔 | 被哪些子項改 | 處置 |
+|---|---|---|
+| `Sources/AuraCore/PanelModel+ConnectCTA.swift` | **T13b、T13f** | 鏈 A 內序列 |
+| `Sources/AuraCore/PanelModel.swift` | **T13b、T13f、T13g** | 鏈 A 內序列 |
+| `Sources/AgentAuraApp/CodexSectionView.swift` | T13d、T13e、T13h、T13i | 鏈 B 內序列 ✓ |
+| `Sources/AuraCore/L10nCodexCards.swift`（新） | T13d、T13e、T13h | 鏈 B 內序列 ✓ |
+| `Sources/AgentAuraApp/AppDelegate.swift` | T13a、T13j | 本來就序列 ✓ |
+
+**鏈 A 與鏈 B 之間零交集**，可以並行——但**若要真的同時派兩個 agent，兩條鏈各開一個
+`git worktree` 再 merge 回 change branch**，不要在同一個工作目錄上同時跑（user-level CLAUDE.md
+的既有規則）。T13a／T13j 那條最短，可以插在任一條鏈的空檔。
 
 ---
 
@@ -832,7 +859,9 @@ T13l（證據圖重渲）            全部之後（最後一個）
     `unsupportedCharacterWayOut`（出路句）、`mergeInstruction`／`helpLinkLabel`（T13h 用）、
     `staleOtherCopyIntro`（T13e 用）。**不塞進 `L10nCodex.swift`**——那個檔 158/200，
     `text(_:)` 的窮盡 `switch` 無法跨檔拆（`L10nUninstallConfirmation` 從 `L10nConfirmationAlerts`
-    分出去的既有理由）。
+    分出去的既有理由）。**也不塞進 `L10nPanel.swift`**（55/200，行數塞得下，r13 review (c) 問過）：
+    那個 catalog 的既有語意是**面板本體的通用字串**，把 Codex 卡片的四句混進去會讓
+    「哪個 catalog 管什麼」這條線消失；省下的約 25–30 行不改變 DoD #7 早已宣告的 MISS。
   - `Sources/AgentAuraApp/CodexSectionView.swift`：`.unsupportedCharacter` 分支拿掉 snippet 區塊、
     加出路句；`.occupiedByOther` 的 withheld 理由改成**依 rejection 分流**。
 - **文案**（spec §4.6 表逐字）：`.unsupportedCharacter` = 既有的 `unsupportedCharacterExplanation(c)`
@@ -886,20 +915,46 @@ T13l（證據圖重渲）            全部之後（最後一個）
   `install.healthLabel(l)`。**Codex 子句在前**（footer chip 是 `lineLimit(1)` ＋ `.tail` 截斷，
   被截掉的一定是尾巴）。
 - **gates**：
-  - **CX50 `panelStatusLabelIsDualAgentAware`**（AuraCore）：三條斷言（零 diff／含診斷子字串／前綴）。
+  - **CX50 `panelStatusLabelIsDualAgentAware`**（AuraCore）：**四條**斷言（零 diff `==`／含診斷子字串／
+    Codex 子句在最前／**`title` 非 connected 分支 `==` `statusLabel`**）。
+    定義域**逐字寫 `InstallStateAllCases.all()`**（test target 既有符號，由 `Reason.allCases ×
+    MountOwner.allCases` 推導，`Tests/AuraCoreTests/` 已有六處在用）——**不得寫「代表值」然後手列**，
+    手列會漏掉 `broken(reason, owner:)` 的變體，而斷言②正是為那些變體存在的（r13 review m4）。
     **mutation**：① 忽略 `codex` → ②③ 紅；② 無條件加子句 → ① 紅；
-    ③ **子句改到尾端 → ③ 紅**；④ 把 `.connectedStalePath` 也算成已接上 → ① 紅。
-  - **CX51 `dualAgentStatusLabelReachesAllThreeSites`**（App，view 值樹）：三處**各自獨立**斷言。
-    **mutation 三個**（逐處把它改回 `install.healthLabel`），**三個都要跑、報告逐處記**。
-  - **CX52 `noAppLayerSiteReadsInstallHealthLabelDirectly`**（來源掃描）：
-    `Sources/AgentAuraApp/` 的 `install.healthLabel(` 命中數**恰為 0**。
-    **mutation**：任一 view 加回一行 → 必須紅。
-    **開工前先實跑一次**這個 grep 記下現況（預期 2 命中：`PanelView.swift:41`／`PanelFooterView.swift:19`）
-    ——「命中數是多少」是待驗證的宣稱，不是背景知識。
-- **量測任務（寫進報告，spec §10-22）**：量出 `"Codex connected · Claude Code: Not connected yet · v1.4.2"`
-  在 11pt system font 下的渲染寬度，與 footer chip 的可用寬度（380 − 左右 14 − 圓點 8 − 間距 − Options 按鈕）。
-  **若量到連 `Codex` 這個字都被截掉**，才改用更短的子句（例如省略 `Claude Code:` 前綴）；
-  只截到版本號是**可接受的取捨**，不要為此改設計。**先量再決定**（gate 哲學第 7 條）。
+    ③ **子句改到尾端 → ③ 紅**；④ 把 `.connectedStalePath` 也算成已接上 → ① 紅；
+    ⑤ **`title` 的非 connected 分支改回 `install.healthLabel` → 第④條必須紅**。
+  - **CX51 `dualAgentStatusLabelReachesAllThreeSites`**（App，view 值樹）。
+    **⚠️ r13 的寫法不成立，不要照抄**（review M2）：三處渲染的是**同一個字串**、`leafStrings` 回的是
+    **扁平陣列**，所以「三處都 `contains(statusLabel)`」在任一處被改回 `install.healthLabel` 之後
+    **仍然成立**——r13 宣告的三個 mutation **一個都不會紅**。
+    r14 的三條**可分辨**斷言：
+    ① **footer 比對複合字面** `"\(statusLabel) · v\(version)"`（版本後綴讓它唯一）；
+    ② **裸 `statusLabel` 葉節點出現次數恰為 2**（標題 ＋ CTA 窄條，任一處被改回就變 1）；
+    ③ **`install.healthLabel(l)` 不得以裸葉節點單獨出現**。
+    標題那一處另由 **CX50④** 在純函式層守，兩條 doc comment 互相點名。
+    **mutation 三個，都要跑、逐處記**：footer 改回 → ①紅；標題改回 → ②（2→1）＋③紅**且 CX50④ 也紅**；
+    CTA 窄條改回 → ②（2→1）＋③紅。
+  - **CX52 `healthLabelReadersAreTheNamedSet`**（來源掃描，**兩個 root**）。
+    ① `Sources/AgentAuraApp/` 的 `.healthLabel(` 命中數**恰為 0**；
+    ② `Sources/AuraCore/` 底下**含有** `.healthLabel(` 的**檔案集合恰等於具名清單**
+    ——`InstallAffordance.swift`（宣告處）、`TooltipText.swift`、`PanelBanner+InstallerFailure.swift`、
+    `PanelModel+ConnectCTA.swift`（`statusLabel` 唯一讀取點）。**用具名集合不用命中數**
+    （數字會被無關增刪推著走）。**為什麼要第二格**（review m1）：三處裡的**標題住在 AuraCore**，
+    只掃 App 層等於只守到 2/3，而 r13 的風險表卻寫「站點集合 source-derived」——那是 overclaim。
+    **mutation**：① 任一 view 加回一行 → 第①格紅；② **把 `title` 的讀取點改回 `PanelModel.swift`
+    → 第②格紅**（集合多一個檔）。
+    **開工前先實跑兩個 grep 記下現況**（2026-09-21 實測：App 層 2 命中
+    `PanelView.swift:41`／`PanelFooterView.swift:19`；AuraCore 側 4 命中，分布在
+    `TooltipText.swift:21`／`PanelModel.swift:157`／`PanelBanner+InstallerFailure.swift:20,21`）
+    ——「命中數／檔案集合是什麼」是待驗證的宣稱，不是背景知識。
+- **量測任務（寫進報告，spec §10-22）**：**三處都要量**（r13 只寫了 footer，review m3）。
+  量的字串是 `"Codex connected · Claude Code: Not connected yet"`（footer 再加 ` · v1.4.2`）：
+  1. **footer chip**：11pt system，可用寬度 = 380 − 左右 14×2 − 圓點 8 − 間距 − Options 按鈕。
+     只截到版本號是**可接受的取捨**；**若連 `Codex` 這個字都被截掉**，才改用更短的子句。
+  2. **標題**（`PanelView.swift:20`）：13pt semibold、**沒有 `lineLimit`** → **會不會換行**。
+  3. **CTA 窄條 label**（`ConnectCTABannerView`）：同樣沒有寬度保護。
+  **標題若換行，把換行後的高度增量交給 T13i 的基準表**——它會直接推高面板，回饋進 §4.10 的天花板。
+  **先量再決定**（gate 哲學第 7 條），不要先改設計。
 - **禁止**：另寫一套雙 agent 的 `healthLabel`（十五種變體會 drift，而且會弄丟 `broken` 的診斷字）；
   「Codex 已接上時不畫 Claude 的 CTA 窄條」（那會讓只用 Codex 的人永遠看不到接上 Claude 的入口，
   把文案問題換成功能問題）。
@@ -955,9 +1010,21 @@ T13l（證據圖重渲）            全部之後（最後一個）
 
 ### T13i　S1-4：snippet 區塊固定高度 ＋ 可捲 ＋ 面板高度天花板（D-ab）
 
-- **先量修前基準**（gate 哲學第 7 條，**這一步不可省**）：對每一個 `CodexState` 代表值 × 兩語言 ×
-  {rows 空, 3 列} × `optionsExpanded ∈ {false, true}`，量 `preferredContentSize.height`，
-  **整張表寫進報告**。mutation 才對得上基準，`§10-20` 的數字也從這裡填。
+- **先量修前基準**（gate 哲學第 7 條，**這一步不可省，而且是本子項的第一個交付物**）：
+  **五個維度的乘積**——`CodexState` 代表值 × 兩語言 × {rows 空, 3 列} ×
+  **`install ∈ {.connected, 一個 affordance == .connect 的代表值}`** ×
+  **`banner ∈ {nil, .codexConnected}`**，量 `preferredContentSize.height`，**整張表寫進報告**；
+  另外把 `optionsExpanded == true` 的版本也量一次，數字填進 spec §10-20。
+- **⚠️ r13 的域漏了 `install` 與 `banner` 兩欄**（review M1）：persona 量到的 944pt 出自證據圖
+  `05`／`07`，而 `CodexEvidenceRenderer.swift:115,131` **兩張都是 `install: connected`**。
+  最壞組合是 **`install` 非 connected（整版 CTA 或窄條）＋ `.occupiedByOther` 有 snippet
+  ＋ `.codexConnected` banner 尚未退場**（剛接上、還沒跑過 Codex session——**那正是最常見的那一刻**），
+  **它從來沒有被量過**。照 r13 的域挑 snippet 上限，CX56 會全綠而那個使用者的「複製」鈕仍在畫面外。
+- **780 在量完之前是「提案」不是「已驗證可達」**：**先量後定**。量完再挑 snippet 上限。
+  **snippet 區塊有下限：至少能同時顯示 6 個視覺列**（從真實 view 推導，不寫死 pt）。
+  **若在下限之下仍然到不了 780，停下來**把數字與三個選項交回主 session／使用者
+  （調整天花板數字／整張 Codex 卡片納入可捲／該組合下不同時顯示 banner 與 snippet 卡——
+  **第三個會動到 D-v，屬於決策變更，必須回 spec**）。**不准自己去砍別處的內容讓它變綠。**
 - **改哪些檔**：`Sources/AuraCore/CodexSnippetSizing.swift`（**新檔 ~40 行**，形狀照抄
   `SessionsCardSizing`：從真實內容推導 ＋ 夾到上限）、`CodexSectionView.swift`
   （snippet 區塊包 `ScrollView`、吃一個**算好的固定高度**）。
@@ -965,12 +1032,16 @@ T13l（證據圖重渲）            全部之後（最後一個）
   只設上限會讓它吃滿外層提案高度，footer 位置又會變回「依畫布而定」——那正是
   `FooterPositionStabilityTests` 守的東西。
 - **gate**：**CX56 `snippetCardFitsOnA13InchScreen`**（App，**渲染後座標**）。
-  `optionsExpanded == false`，定義域 `CodexStateKind.allCases.flatMap(CodexState.samples)` × 兩語言 ×
-  {rows 空, 3 列}，**程式推導**：`preferredContentSize.height ≤ 780pt`；
-  snippet 那些態的「複製」按鈕與 footer 按鈕**轉換到 hosting 座標後**的 `minY` 都 `< 780`。
+  `optionsExpanded == false`，定義域是上面那**五個維度的乘積**（全部程式推導）：
+  `preferredContentSize.height ≤ 780pt`；snippet 那些態的「複製」按鈕與 footer 按鈕
+  **轉換到 hosting 座標後**的 `minY` 都 `< 780`；**另一格**斷言 snippet 區塊高度**不低於 6 個視覺列**。
   **按鈕身份用點擊辨識，不得用陣列索引**（`FooterPositionStabilityTests` 的既有手法與踩過的坑）。
   **mutation**：① 拿掉固定高度（改回無上限）→ 必須紅；
-  ② **改成 `.frame(maxHeight:)` → `FooterPositionStabilityTests` 必須紅**（兩條一起看）。
+  ② **改成 `.frame(maxHeight:)` → `FooterPositionStabilityTests` 必須紅**（兩條一起看）；
+  ③ **把域縮回 r13 的「只有 `install: .connected` ＋ `banner: nil`」→ 必須能重現 r13 的假綠**
+  ——報告要附這一格的實跑輸出（同一個 snippet 上限下，**窄域全綠、全域紅**），
+  那是「域不夠 ＝ gate 沒有牙齒」最直接的證據；
+  ④ **拿掉下限那格並把上限壓到 1 列 → 下限那格必須紅**。
 - **禁止**：
   - 用「宣告順序」代替渲染座標（CLAUDE.md gate 哲學第 4 條：A4 的 gate 一直是綠的，
     實機上 footer 仍被推走 −257pt）。
@@ -978,6 +1049,8 @@ T13l（證據圖重渲）            全部之後（最後一個）
     ——**「換題目」的形狀**）。數字記進 §10-20 就好。
   - 為了讓 780 變綠而去砍別處的留白。**780 紅掉時的第一個問題是「面板是不是又長高了」**
     （icon-shapes 那次的教訓：收斂到一個已經換了題目的 gate，看起來跟正確的紀律一模一樣）。
+  - **把 snippet 壓成一條縫**讓天花板變綠——下限那格（6 個視覺列）就是擋這個的。
+  - **在只量過 `install: connected` 的基準上挑 snippet 上限**（r13 的錯）。
 - **必須重跑（特別警告）**：`FooterPositionStabilityTests`。
   它的畫布**已經改成從現場量到的自然高度推導**（`surplusCanvasHeight()` = `max(collapsed, expanded) + 100`，
   `/simplify` icon-shapes 波次修過），所以**不會**再發生「寫死 600pt 被面板長大追上」那件事
@@ -1047,6 +1120,11 @@ T13l（證據圖重渲）            全部之後（最後一個）
      banner 不再被抹掉）。兩語言。
   4. **#05／#10／#11 重渲**：#05 多了合併指示與 help 按鈕、snippet 區塊變成固定高度；
      #10／#11 的文案在 D-x 之後**不再逐字相同**（persona 現場驗過 r12 兩組圖位元組完全相同）。
+  4b. **新增 #14：最壞高度組合**（r13 review m5）——`install` 非 connected ＋ `.occupiedByOther`
+     有 snippet ＋ `.codexConnected` banner，兩語言。現有 12 張圖裡只有 #12 是
+     `install: .notConnected`，而它的 codex 是 `.connected`（**不畫卡片**），所以 §4.10 講的那一格
+     **目前沒有任何一張圖**。這張是 persona r2 判「S1-4 有沒有真的關掉」的直接證據，
+     也要與 T13i 基準表的同一格數字對得上（圖是 @2x px、基準表是 pt，**不要混用**）。
   5. INDEX 的「persona r1 指出的視覺問題對照」段逐條標成「已修／明寫接受」，並指向對應的 D-xx。
 - **驗收必含**：`AURA_RENDER_EVIDENCE=1 swift test --filter renderCodexEvidence` 跑完之後，
   `git status` 只動到 `docs/evidence/codex/` 與渲染器本身；每一張改動的圖都在 INDEX 有對應說明。
@@ -1064,7 +1142,7 @@ T13l（證據圖重渲）            全部之後（最後一個）
 | 5 | test-edit scrutiny | CX40 改名＋翻轉、CX36 擴充、`emptyRowsMessage` 分格、`.disconnectCodex` 那格——**四處各附三欄** |
 | 6 | 單檔行數 | `IsolationTests.fileLengthLimit` 綠；**特別看** `PanelView.swift`（189→190，餘裕 10）、 `PanelModel.swift`（172→180）、`AppDelegate.swift`（T13a 之後 ≈126） |
 | 7 | `Sources/` 淨增 | 逐檔「估／實」兩欄（spec §8.1 的 r13 表）；DoD #7 **仍是 MISS，不調門檻**，超標數字如實更新 |
-| 8 | `#expect(` 淨增 | 只准上升；附 HEAD 絕對值（指令固定 `grep -rho '#expect(' Tests \| wc -l`，T12 基準 **2025**） |
+| 8 | `#expect(` 淨增 | 只准上升；附 HEAD 絕對值（指令固定 `grep -rho '#expect(' Tests \| wc -l`，**基準 2026**——2026-09-21 於 `7515b44` 實測。r13 寫的 2025 是 T12 帳本裡的舊值，**本 change 第二次犯同族的端點漂移**，而 DoD #2 要求附絕對值正是為了抓它） |
 | 9 | 既有 gate 全綠 | 連跑 3 次 0 flake；**特別重跑清單**見下 |
 | 10 | 量測數字入帳 | §10-20（Options 展開＋snippet 的高度）與 §10-22（chip 寬度）必須是真數字 |
 
