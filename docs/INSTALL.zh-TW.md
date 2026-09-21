@@ -276,6 +276,9 @@ echo '{"hook_event_name":"Stop","session_id":"t1"}' | ./plugin/bin/aura-hook; ec
 沒有錯誤、沒有訊息，Codex 自己的輸出裡什麼都不會出現。如果你不記得看過信任提示，
 開一個新的 Codex session 留意看看。
 
+已經信任過、但失敗時燈還是不會變紅，那是另一個獨立且預期中的落差——見下方
+「**Codex：指令失敗了，但燈沒有變紅**」。
+
 **Codex：指令失敗了，但燈沒有變紅**
 
 這是預期行為，不是 bug。Codex 的 hook 不會回報 tool 失敗——沒有 `PostToolUseFailure`、

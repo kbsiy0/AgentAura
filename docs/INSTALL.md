@@ -270,6 +270,11 @@ Check whether Codex has actually asked you to trust the hook yet. An untrusted h
 **completely silently** — no error, no message, nothing in Codex's own output at all. If you
 don't remember seeing the trust prompt, start a new Codex session and watch for it.
 
+If you already trusted it and the light still won't turn red on a failure, that's a separate,
+expected gap — see
+[Codex: a command failed but the light never turned red](#codex-a-command-failed-but-the-light-never-turned-red)
+below.
+
 ### Codex: a command failed but the light never turned red
 
 That's expected, not a bug. Codex's hooks don't report tool failures — there is no
