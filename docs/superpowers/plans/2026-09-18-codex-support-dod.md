@@ -1,6 +1,6 @@
 # DoD 帳本 · `change/codex-support`（T12）
 
-spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r12**）§7 為門檻來源；
+spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r13**）§7 為門檻來源；
 證據層 `docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）。
 基準取自 `change/codex-support` 分支點（`c131c30`，＝ `main` ＋ 探針文件），量測時用
 `git worktree add <temp> <基準> --detach` 取乾淨副本，**不動共享工作目錄**。
@@ -9,7 +9,7 @@ spec `docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r12**）§7
 門檻不得在量完之後往下調——miss 就記 known gap（本專案已有兩次前例：+292 KB、+746 KB，
 都是如實記錄不調門檻）。
 
-**gate 編號**：本 change 新增的一律 `CX<n>`（**46 條**；CX37 拆成 a／b）；既有 gate 一律寫測試函式名。
+**gate 編號**：本 change 新增的一律 `CX<n>`（**57 條**；CX37 拆成 a／b，CX43 未使用，**CX47–CX57 是 T13 的 persona r1 修復批次**）；既有 gate 一律寫測試函式名。
 
 **起點不是全綠**：`FixtureCodeAnchorTests.everyFixtureModelIsMapped` **目前是紅的**——
 round4 fixture 進 repo 之後，`Jargon.model("gpt-5.5")` 原字回傳（實測輸出：
@@ -37,7 +37,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 |---|---|---|---|---|---|
 | 1 | 測試全綠 | 連跑 **3 次** 0 flake，**含修好 `everyFixtureModelIsMapped`**、**且 `AURA_CODEX_PENDING_T05`／`_T10` 兩個旗標都已解除**（T05／T10 各自的驗收要附解除前／後的 `#expect` 與測試函式數，**只准上升**）；每次存全量 log | `swift test` ×3 ＋ CX44 | 3 輪皆 **646＋291＝937 tests／0 issue**（log：`swift-test-run1/2/3.log`）；`everyFixtureModelIsMapped` 現為 GREEN（獨立重跑 0.006s）；`grep AURA_CODEX_PENDING Sources Tests` 兩處皆 0 命中 | **PASS** |
 | 2 | 新增測試數 | `#expect(` 淨增 **≥ 180**（基準 **1649**）；新增測試函式 **≥ 65**。**量法一次定案**（T04 review m3）：指令固定 `grep -rho '#expect(' Tests \| wc -l`，**每個 task 的報告附該 commit 的絕對值**（不只增量）——只報增量時，兩個端點各差 3 也看不出來。r4 是 170／62，**r5 增量＝CX42 約 +5、Jargon 三列 +3、CX37 拆 a／b +2**（`grep -c '#expect'` 數的是**原始碼出現次數**，迴圈只算一次——20／780 條序列不會讓這個數字暴增） | 前後 **`grep -rho '#expect(' Tests \| wc -l`**；`swift test` 的 tests 計數 | HEAD `#expect(`=**2025**、`@Test`=**941**。對 `c131c30`（1649／768）：+376／+173。對現 main `9ec85d0`（1652／770，本 change 真實貢獻）：+373／+171。兩個基準都遠超門檻（≥180／≥65） | **PASS** |
-| 3 | gate mutation 帳 | **46 條**（CX1–CX46，CX37 拆 a／b）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**） | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | **5 筆抽驗全部現場重跑成功**（見下表秒數欄：CX2 0.001s、CX4 0.001s、CX15 0.008s、CX32 0.007s、CX39 0.180s，皆還原後 `git status` 乾淨）＋ **CX44 現場新做**（Sources 0.032s／Tests 0.056s）。另從 commit 訊息額外找到 7 條有秒數記載（CX7、CX8/CX10/CX38、CX9、CX37a、CX37b，已填入下表）。**其餘 ~34 條**：commit 訊息都記載了 mutation 與指名測試（來源 task 欄已由 plan 填好），但秒數未逐條轉錄進本帳本——彙整 73 個 commit 全文本超出本輪時間預算，標記「未記」而非編造 | **PARTIAL**（5 筆抽驗＋CX44 達標；46 條逐一秒數未全部彙整齊，缺口誠實列在下表） |
+| 3 | gate mutation 帳 | **57 條**（CX1–CX57，CX37 拆 a／b，CX43 未使用）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**）。**T13 追加**：CX47–CX57 **11 條全部**要有秒數（不是抽驗——它們是本輪新寫的），**含兩個等價 mutant**（CX47②／CX49③）的「預期綠」紀錄 | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | **5 筆抽驗全部現場重跑成功**（見下表秒數欄：CX2 0.001s、CX4 0.001s、CX15 0.008s、CX32 0.007s、CX39 0.180s，皆還原後 `git status` 乾淨）＋ **CX44 現場新做**（Sources 0.032s／Tests 0.056s）。另從 commit 訊息額外找到 7 條有秒數記載（CX7、CX8/CX10/CX38、CX9、CX37a、CX37b，已填入下表）。**其餘 ~34 條**：commit 訊息都記載了 mutation 與指名測試（來源 task 欄已由 plan 填好），但秒數未逐條轉錄進本帳本——彙整 73 個 commit 全文本超出本輪時間預算，標記「未記」而非編造 | **PARTIAL**（5 筆抽驗＋CX44 達標；46 條逐一秒數未全部彙整齊，缺口誠實列在下表） |
 | 4 | **Claude 側零回歸**（紅線） | `git diff <基準>..HEAD -- plugin/hooks/hooks.json` **完全為空**；`handledEvents` 的 19 個名字一字未動 | `git diff` ＋ 逐行看 `EventMapping.swift` 的 diff | `git diff c131c30..HEAD -- plugin/hooks/hooks.json` 輸出為空。`EventMapping.swift` 的 diff 只有純新增（`codexEvents`／`codexOnlyEvents`／`case "Interrupt"`），`handledEvents` 陣列內文字一行未動（逐行核對過） | **PASS** |
 | 5 | **Claude 狀態檔位元組不變** | round1／1b／2／3 跑 merge（用**生產的** `SnapshotIO.encoder`）序列化後**不含 `agent` 鍵**；**且**不帶 `--agent` 真 spawn 一次後，**原始檔案文字**不含 `"agent"` | CX9 **兩層**；**這一格的證據以生產層那半為準**（`agent == nil` ≠「檔案裡沒有這個鍵」——自訂 encode 可能寫出 `"agent":null`，解碼回來仍是 nil 而上游全綠） | `swift test --filter "claudeStateFileHasNoAgentKey\|codexStateFileCarriesAgent"`：3 tests 全綠（純函式層 0.017s；生產層真 spawn 0.022s；CX10 真 spawn 1.006s） | **PASS** |
 | 6a | **`config.toml` 零變動（自動化側）** | `swift test` ×3 全程位元組完全不變 | 開工前存副本，跑完 `diff` | 開工前存 md5＝`74472e19f4985c5f6675df4ce20d3f7a`；3 輪 `swift test` 全跑完後 `diff`／`md5` 完全相符；`~/.codex/hooks.json` 全程未出現 | **PASS** |
@@ -59,7 +59,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | 21 | 文件路徑一致 | `README.md`／`SECURITY.md` 都含 `.codex/hooks.json` | CX29 | `grep -l ".codex/hooks.json" README.md README.zh-TW.md SECURITY.md` 三份全部命中 | **PASS** |
 | 22 | help 涵蓋 | 兩個語言都涵蓋**每一個**新的 Options 列標題（含「重新接上 Codex」） | CX28 | `HelpDocOptionsRowCoverageTests` 全綠（含 CX28 mutation②正向對照，6 test case） | **PASS** |
 | 23 | **CX37a／CX37b 的成本** | CX37a **780 條全跑、零 spawn**（毫秒級，**不縮減**）；CX37b **30 條、11 次真 spawn**、走 `SpawnGate`。兩條的 doc comment 要互相點名（a 的等價理由／b 的長度上限理由）。**實測秒數寫進報告** | T06 的完成報告 ＋ 現場重跑 | 現場重跑：CX37a 780 test cases，gate 內部計時 **2.315s**；CX37b 30 test cases，gate 內部計時 **2.291s**。commit 訊息記載的原始數字：CX37a 1.9s／2930 次操作；CX37b 4.2–8.4s（視全套件負載）／11 次 `installer.connect(` 呼叫 | **PASS** |
-| 24 | persona | 加權 **≥ 6.0**；硬下限四條（見下） | Tier 1，integrator 綠後派 persona-tester | 由主 session 在 integrator 綠燈後另派，不屬本輪範圍 | **N/A（persona-tester 另派）** |
+| 24 | persona | 加權 **≥ 6.0**；硬下限四條（見下） | Tier 1，integrator 綠後派 persona-tester | **r1（2026-09-21）：加權 5.68 / 10，NO-GO**。P1 6.0（下限 5，PASS）· **P2 5.2（下限 6，FAIL）** · P3 5.2（下限 5，PASS 但內含 S0）· P4 6.4（下限 5，PASS）。**S0 × 2、S1 × 7、S2 × 6**。三條 no-go 規則各自獨立成立：兩條 S0 硬否決／P2 低於自己的下限／加權不足。**強 gate**（寫使用者真實 `~/.codex/hooks.json`、公開散佈）→ 判定**綁定、不可繞**。修復批次＝**T13**（spec r13 §0.4 D-v–D-ad），完成後送 **r2 retest** | **FAIL（r1）→ 待 r2** |
 
 ### DoD #7 逐檔「估／實」對照（T12 補；估算來自 spec §8.1）
 
@@ -116,7 +116,44 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | P3 | 不懂「信任」提示的 vibe coding 使用者 | 按下接上之後，知道「還要在 Codex 裡按一次同意」才會生效 | **≥ 5** |
 | P4 | 兩個都用的人 | 同專案同時跑時兩列分得出來；**兩側都接上時兩邊的燈都真的會動**（R-8） | **≥ 5** |
 
-## Gate mutation 帳（46 條；T12 彙整，✓現場 = 抽驗重跑）
+### persona r1 結果與 r2 送審條件（2026-09-21）
+
+**r1 判定：NO-GO（加權 5.68／門檻 6.0）**。報告全文由主 session 保管；逐條 finding 與 r13 決策的對應見
+spec §9.1。**最值得留著的一句觀察**：四個 persona 裡三個的失分**不是**來自 Codex 功能做錯，
+而是來自**既有的 Claude-only 表面沒有跟著這個新訊號一起更新**（S0-1 是 A7 的退場條件、
+S1-1 是三個狀態字串、S1-2 是空狀態句）。那些表面在 diff 裡幾乎沒被動到，**所以四道機器關卡全綠是合理的
+——它們守的是被改動的碼**。這是 CLAUDE.md Lessons #4（整合接縫）的另一種形狀。
+
+| finding | persona | 處置 | gate |
+|---|---|---|---|
+| **S0-1** 接上成功 banner 在面板有任何 session 列時被靜默抑制 | P3 | **D-v**（`.codexConnected` 自己的 kind ＋ 退場條件＝出現 **Codex** 的列） | CX47 · **CX48** |
+| **S0-2** `.unsupportedCharacter` 點名問題、不點名解法，還遞出含那條壞路徑的設定檔 | P2 | **D-w**（兩種 rejection 都扣住 snippet ＋ 問題／解法兩句） | **CX40 翻轉** · CX49 · CX36④⑤ |
+| S1-1 三處狀態字串只反映 Claude | P1／P4 | **D-y** | CX50 · CX51 · CX52 |
+| S1-2 Codex banner 下方寫「Once Claude Code starts running…」 | P1／P3 | **D-z** | CX53 |
+| S1-3 遞出完整替換檔、零合併指示 | P2 | **D-aa** | CX54 · CX55 |
+| S1-4 snippet 區塊無上限不可捲，複製鈕與 footer 被裁出畫面 | P2 | **D-ab** | CX56 |
+| S1-5 Codex 移除無確認框，但標題有刪節號、兄弟列有確認框 | P4 | **D-ac** | CX57 |
+| S1-6 證據圖 #07 的 snippet 由不含空白的路徑產生 | P2 | **D-ad** | （證據，無 gate） |
+| S1-7 頭號情境完全沒有證據圖 | P1 | **D-ad**（新增 #12） | （證據，無 gate） |
+| S2-1 stale 那句對 `.unsupportedCharacter` 可查證為假 | P2 | **D-x** | CX36⑥ |
+| S2-2 列上「Codex」標籤與權限文字同字級同色 | P4 | **明寫接受** | spec §10-19 |
+| S2-3 `.connected` 零常駐正向確認 | P1 | **D-y 順帶關閉** | CX51 |
+| S2-4 legend「Error」沒有通往「Codex 沒有 error 燈」的面板內路徑 | P3 | **明寫接受** | spec §10-18 |
+| S2-5 10pt 等寬 snippet 是全 app 最小的字、不吃 Dynamic Type | a11y | 既有形狀，本 change 加劇；**明寫接受** | spec §10（沿用） |
+| S2-6 `INSTALL.md` 仍寫「one file per Claude Code session」 | doc | **T13k 修** | （文件） |
+
+**r2 retest 的送審條件（四條全部滿足才送）**：
+1. **兩條 S0 全關**，且各自的 mutation 在 r12 的碼上實跑過是紅的（不是「應該會紅」）。
+2. **七條 S1 全關**，或在 spec §10 明寫接受並附理由（目前規劃全關）。
+3. **四條硬下限全過**（P1 ≥5、**P2 ≥6**、P3 ≥5、P4 ≥5）。
+4. **加權 ≥ 6.0**。
+
+**r2 要重打的三個地方**（派工時附給 persona-tester）：① 接上 Codex 之後、面板上**有別的 agent 的列**時，
+兩句信任警語還在不在；② 只接 Codex 時，標題與 footer chip 寫什麼；
+③ `.unsupportedCharacter` 的卡片**現在不給 snippet 了**——要判的是「它有沒有給我一條真的能走的出路」，
+不是「為什麼不給我 snippet」（不給的理由見 spec D-w／§10-17，**有解鎖條件**）。
+
+## Gate mutation 帳（57 條；T12 彙整 CX1–CX46，**CX47–CX57 由 T13 填**；✓現場 = 抽驗重跑）
 
 | Gate | 位置 | Mutation | 指名測試 | 秒數 | 來源 task |
 |---|---|---|---|---|---|
@@ -143,7 +180,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | CX21 | `OptionsMenuModelTests`／`CodexOptionsRowTests` | `.connectCodex` 塞進 `nonMenuKinds` | 既有 `optionsRowsCoverEveryAction` ＋ `nonMenuKindsIsExactlyThatLiteralSet` | | T07 |
 | CX22 | `PanelViewModelTests` ＋ `CodexRowLabelPixelTests` | `agentLabel` 對 `.claude` 也給值 | `agentLabelOnlyForNonClaude`（model ＋ 像素兩半） | | T08／T09 |
 | **CX23** | `CodexRowLabelPixelTests` | 標籤另起一行 | `codexLabelDoesNotChangeRowHeight` | | T09 |
-| **CX24** | `CodexWiringSmokeTests` | ① 分支改 `break` ② banner 只留一句 ③ 拿掉 `onOpen` 的 `reprobeCodex()` | `codexConnectChainIsWired`（五段；③ 紅在第五段；第③段比對**位元組**） | | T10 |
+| **CX24** | `CodexWiringSmokeTests` | ① 分支改 `break` ② banner 只留一句 ③ 拿掉 `onOpen` 的 `reprobeCodex()` | `codexConnectChainIsWired`（五段；③ 紅在第五段；第③段比對**位元組**）。**T13 註記**：④ 斷言的是**儲存值** `delegate.banner?.text` 且 session graph 是空的——**渲染那一半由 CX48 守**，persona r1 的 S0-1 就活在這個縫裡 | | T10（CX48 於 T13b） |
 | CX25 | `CodexWiringSmokeTests` ＋ 掃描 | `codexHome` 改成 `environment["HOME"]` | `productionCodexHomeSourceNeverReadsHomeEnvVar`（來源掃描半，0.022s 變紅）。**`productionCodexHomeIsRealHome`（型別／接線半）對這個 mutation 是等價 mutant**——開發機上 `$HOME` 就等於真 home，實測綠，不代表這條 gate 空轉，它守的是另一件事（生產注入的是真 `CodexInstaller`，不是 fake） | | T10 |
 | CX26 | `UninstallerTests` | codex disconnect 與 `erasePersistentDomain` 對調 | `uninstallRemovesCodexBeforeErasingDefaults` | | T10 |
 | CX27 | script gate | ① 拿掉腳本第 7 項 ② **拿掉 `--only` 的值域檢查（`[1-7]`）** | `verifyUninstallScriptDetectsOurCodexHooks`（**判準是 `--only 7` 那一行**；**外加兩格**：`--only`（缺值）在有界時間內非零退出、`--only 77` 非零退出且**輸出不含「PASS」**） | | T11 |
@@ -155,17 +192,29 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | **CX33** | `CodexHookPathCheckTests` | ① 一律回 `.unsupportedCharacter(" ")` ② 優先序對調 | `codexPathCheckNamesTheOffendingCharacter`（定義域從 `unsupportedCharacters` 推導） | | T04 |
 | **CX34** | `CodexStateTests` | `from` 忽略 `currentExpectedContents` | `codexStalePathIsDetectedAndOffersReconnect` | | T07 |
 | **CX35** | `CodexWiringSmokeTests` | stale 時直接 `connect`（不先 disconnect） | `stalePathReconnectDisconnectsBeforeConnecting`（**前提：`pathRejection == nil`**） | | T10 |
-| **CX36** | `CodexSectionRenderTests` | ① 錯誤文案不插字元（籠統句） ② **被拒時仍畫「重新接上」按鈕** ③ **把 `.mustMoveToApplications` 分支改成會畫 snippet → 必須紅**（T09 review M1：輸入改成真 snippet 之前，這個 mutation 紅 0 條） | `codexSectionRendersEveryState`（六態 ＋ 兩種 Rejection；`.mustMoveToApplications` 那格**必須餵真的 `codexSnippet`**） | | T09 |
+| **CX36** | `CodexSectionViewTests` | ① 錯誤文案不插字元（籠統句） ② **被拒時仍畫「重新接上」按鈕** ③ **把 `.mustMoveToApplications` 分支改成會畫 snippet → 必須紅**（T09 review M1：輸入改成真 snippet 之前，這個 mutation 紅 0 條） ④ **T13：把 `.unsupportedCharacter` 分支改回會畫 snippet → 必須紅** ⑤ **T13：拿掉 `.unsupportedCharacter` 的出路句 → 必須紅** ⑥ **T13：`.connectedStalePath` 兩個 rejection 改回共用一句 → 必須紅**（r12 是同一句，證據圖 `10`／`11` 因此位元組完全相同） | `codexSectionRendersEveryState`（六態 ＋ 兩種 Rejection；**兩個** blocked 那格都**必須餵真的 `codexSnippet`**） | | T09 · **T13d／T13e 擴充** |
 | **CX37a** | `CodexCoexistenceSequenceTests` | `CodexInstaller.connect` 順手 touch `<claudeHome>/skills/agentaura` 的 mtime（**CX37a 與 CX37b 都必須紅**，兩條都記） | `bothSidesNeverDisturbEachOthersFiles`（**780 條全跑**，`connectClaude` 走 `guardWriteTarget()` ＋ `atomicReplace()`，零 spawn） | commit 訊息：**1.9s**／780 條／2930 次操作。T12 現場（正常路徑，非 mutation）：gate 內部計時 2.315s | T06 |
 | **CX37b** | `CodexCoexistenceSequenceTests` | 同 CX37a | `bothSidesNeverDisturbEachOthersFilesOnProductionPath`（長度 ≤ 2 共 30 條，完整 `connect`，11 次真 spawn） | commit 訊息：**4.2–8.4s**（視全套件負載）／11 次 `installer.connect(`。T12 現場（正常路徑，非 mutation）：gate 內部計時 2.291s | T06 |
 | **CX38** | `EndToEndWiredGateTests`（或拆出的 `EndToEndDualAgentTests`） | `--agent` 解析改成一律回 `.claude` | `oneBinaryServesBothAgentsInOneRoot`（兩個方向各跑一次） | commit 訊息：**1.6s**（8 個斷言，4 個 codex session × 正序／反序各一次） | T05 |
 | **CX39** | `CodexWiringSmokeTests` | **把 R-9 的 guard 移到 `disconnect` 之後** | `codexReconnectNeverDisconnectsWhenPathIsRejected`（`disconnect` 次數 0、檔案仍在） | **0.180s**（T12 現場重跑，`fakeInstaller.disconnectCallCount` 從預期 0 變成 1） | T10 · **抽驗必做 ✓現場** |
-| **CX40** | `CodexStateTests` ＋ `CodexWiringSmokeTests` | **讓 `reprobeCodex` 在 `.mustMoveToApplications` 時仍然給 snippet**（＝拿掉 `codexSnippet` 的條件） | `codexSnippetIsWithheldWhenPathWillVanish`（**乘積表**，`.mustMoveToApplications` 整行 nil）。**與 CX36③ 是同一條不變式的兩層**（決策層／view 層），**D-s 在兩者落地前零強制力** | | T10 |
+| **CX40**（**T13c 改名＋期望值翻轉**） | `CodexStateTests` ＋ `CodexWiringSmokeTests` | ① **讓 `reprobeCodex` 無條件給 snippet**（拿掉條件） ② **T13：改回 `pathRejection == .mustMoveToApplications`（只扣一種）→ `.unsupportedCharacter` 整行必須紅**——**r12 的實作在這個 mutation 下是綠的**，實跑輸出要寫進報告 | **`codexSnippetIsWithheldForEveryPathRejection`**（原 `...WhenPathWillVanish`；**乘積表**，**兩種 rejection 整行 nil**，只有 `nil` 整行非 nil）。**與 CX36③④ 是同一條不變式的兩層**（決策層／view 層），**D-s／D-w 在兩者落地前零強制力**。改名理由：「會消失」不再是判準，留著舊名會讓下一個人照名字推回舊條件 | | T10 · **T13c 翻轉** |
 | **CX41** | `JargonCodexModelTests` | ① Codex 分支回傳 raw（**既有 `everyFixtureModelIsMapped` 也必須紅**，兩條都記） ② 把 `o3` 改成 `O3` ③ **把 Codex 分支移到既有演算法之後 → `gpt-5` 那列必須紅** | `jargonModelCoversCodexNaming`（釘死的輸入→輸出表**九列**，含 `gpt-5`／`gpt-4.1-mini`／`gpt-5.5[high]`；既有九列輸出完全不變） | | T05 |
 | **CX42** | `CodexCredentialSequenceTests` | `performDisconnect()` 順手 `defaults.removeObject(forKey: CodexHookStore.key)` | `bothSidesNeverDisturbEachOthersCredentials`（**20 條**長度 ≤ 2 序列，fake ＋ 注入 suite、零 spawn；另一側鍵位元組不變 ＋ 鍵集合**差集**斷言） | | T10 |
 | **CX44** | `NoPendingFlagRemainsTests` | 在 **`Sources/` 與 `Tests/` 各留一個** `AURA_CODEX_PENDING_T08`（**兩處都要紅**） | `sourcesHasNoPendingFlag`／`testsHasNoPendingFlag`（**`Sources/` ＋ `Tests/`** 都不得殘留 pending 標記；**含暫存目錄正向對照** `scanCatchesRealPendingFlag`） | **Sources 0.032s／Tests 0.056s**（T12 新做，兩處各放一個探針檔，兩處都紅；還原後乾淨） | T12 · **✓現場** |
 | **CX45** | `SessionState` 來源掃描 | 在 `Sources/` 加第二個 `SessionState(` 建構點且不傳 `agent:` | `sessionStateProductionConstructionSitesPassAgent`（`Sources/` 的 `SessionState(` 恰 1 處且含 `agent:`） | | T05d |
 | **CX46** | `OptionsMenuModel` 呼叫點來源掃描 | 把 view 那一行改回 `codex: .unavailable, codexPathRejection: nil` | `optionsRowsCallSitePassesRealCodexState`（`Sources/` 不得出現那兩個字面）。**已知假陰性**：跨行寫法掃不到、註解過濾兩個缺口——主守衛是 T10 的**行為斷言**，本條是便宜的第二道 | | T08 |
+
+| **CX47** | `CodexBannerLifecycleTests`（新） | ① **`.codexConnected` 改用 `!rows.isEmpty`（＝ r12 行為）→ 必須紅** ② `hasCodexRow` 改成 `agentLabel != nil` → **預期綠（等價 mutant，要記）** | `codexConnectedBannerOnlyRetiresOnCodexRow`（定義域 `PanelBanner.Kind.allCases` × 四種列組合，程式推導；本 gate 是 `Kind.allCases` 的第一個消費者） | | T13b |
+| **CX48** | `CodexWiringSmokeTests+Banner`（新） | ① **`codexConnected` 改回 `kind: .connected` → 必須紅**（persona r1 抓到的那一行） ② 刪 `effectiveBanner` 的 `.codexConnected` 分支 ③ 讓 banner 永不退場 → **負向對照那格必須紅** | `codexTrustWarningIsDrawnWithClaudeRowsPresent`（`leafStrings` 掃整個 `PanelView.body`；**與 CX24④ 是同一件事的兩層**，doc comment 互相點名） | | T13b |
+| **CX49** | `CodexSectionViewTests` | ① 改回會畫 snippet ② 拿掉出路句 ③ **把輸入的 `codexSnippet` 改成 nil → 全綠（等價 mutant，要記）** | `blockedCharacterCardWithholdsSnippetAndOffersAWayOut`（**輸入餵真的含空白路徑產出的 snippet**——負向斷言餵正向輸入） | | T13d |
+| **CX50** | `PanelStatusLabelTests`（新） | ① 忽略 `codex` ② 無條件加子句 ③ **子句改到尾端** ④ 把 `.connectedStalePath` 也算成已接上 | `panelStatusLabelIsDualAgentAware`（`InstallState` 代表值 × `CodexStateKind.allCases` × 兩語言；三條斷言：**零 diff `==`**／含診斷子字串／Codex 子句在最前） | | T13f |
+| **CX51** | `CodexWiringSmokeTests+Banner` 或 `PanelPixelTests` 同族 | **逐處三個**：把標題／footer chip／CTA 窄條任一處改回 `install.healthLabel` → 對應那一處必須紅（**三個都要跑，逐處記**） | `dualAgentStatusLabelReachesAllThreeSites`（persona r1 的頭號情境：`install = .notConnected` ＋ `codex = .connected` ＋ 一列活著的 Codex session） | | T13f |
+| **CX52** | 來源掃描 | 在任一 view 加回一行 `model.install.healthLabel(model.language)` | `noAppLayerSiteReadsInstallHealthLabelDirectly`（`Sources/AgentAuraApp/` 命中數**恰 0**；站點集合 source-derived，不是手列的三個。已知假陰性同 CX46：跨行寫法／block comment） | | T13f |
+| **CX53** | `PanelStatusLabelTests` | ① 一律回舊句 → `.connected` 那格紅 ② 一律回新句 → 其餘五格紅 | `emptyRowsMessageIsAgentAware`（期望值**寫死字面**，不引用 `L10nPanel.emptyRowsMessage`——拿產生器跟自己比的老陷阱，本 change 已踩過兩次） | | T13g |
+| **CX54** | `CodexSectionViewTests` | ① 拿掉合併指示 ② help 按鈕改送別的 action ③ 讓 `codexSnippet == nil` 那格也畫 → **負向對照必須紅** | `occupiedCardTellsYouToMergeAndOffersHelp`（重用既有 `.openHelp`，不開第四個 `PanelAction`；按鈕用點遍收集 action，不用索引） | | T13h |
+| **CX55** | 文件掃描 | 從 `help-english.html`／`help-traditionalChinese.html` **任一份**刪掉那段（兩份各試一次） | `helpDocsExplainMergingIntoExistingHooks`（`@Test(arguments:)` 參數化兩份——CX29 的既有教訓：內容有、守衛沒有） | | T13h |
+| **CX56** | `CodexSnippetHeightTests`（新） | ① 拿掉 snippet 的固定高度 ② **改成 `.frame(maxHeight:)` → `FooterPositionStabilityTests` 必須紅**（兩條一起看） | `snippetCardFitsOnA13InchScreen`（**渲染後座標**：`preferredContentSize.height ≤ 780pt`，「複製」與 footer 的 `minY` 都在天花板內；按鈕**用點擊辨識不用索引**。Options 展開的組合**刻意排除**，見 spec §10-20） | | T13i |
+| **CX57** | `AppDelegatePanelActionsWiredTests+Codex` | ① **改回直接呼叫 `performDisconnectCodex()` → 第一格必須紅** ② 確認框文案拿掉 agent 名 | `codexDisconnectGoesThroughConfirmation`（不確認 → `disconnectCallCount == 0` ＋ 憑證鍵不變；確認 → 1；文案含 `Agent.codex.label!`） | | T13j |
 
 **額外必記的三筆（不是新 gate，是回歸證人）**
 1. T01 的 `DirectoryTreeSnapshot` 抽取之後，**當場重跑既有 `installerTouchesOnlyAllowedPaths`
@@ -194,6 +243,7 @@ DoD #2 要求**每個 task 的報告附該 commit 的絕對值**，這裡是彙�
 | T10 review 修復（r2 APPROVED） | `5ad5256` | 2018 | 933 / 0 |
 | merge main（PR #7） | `f6cd5f1` | **2018**（`git diff 5ad5256..f6cd5f1 --stat -- Tests` 也是空——merge 對 `Tests/` 淨增同樣是 0，跟 `Sources/` 同一個故事：codex-support 分支自己早已收斂） | 未單獨量（HEAD 已含後續 commit） |
 | T12 CX44 交付 | `ecd323e` | **2025**（+7，恰好等於 `NoPendingFlagRemainsTests.swift` 自己的 7 個 `#expect(`） | **646＋291＝937 tests / 0 issues**（HEAD，3 輪皆同） |
+| **T13 交付（persona r1 修復批次）** | 待填 | 待填（只准上升；基準 **2025**） | 待填（CX47–CX57 全綠、既有全綠、連跑 3 次 0 flake） |
 
 **merge main（`f6cd5f1`）對 `Sources/` 淨增實測是 0，不是預期的 +30**：`git diff 5ad5256..f6cd5f1 --stat -- Sources` 輸出為空——`change/codex-support` 分支在 merge **之前**（`cc26b72`，2026-09-19）就已經獨立收斂出跟 main PR #7 完全相同的色板抑制改動（`ColorPickerCoordinator.swift`／`IconRendering.swift`／`StatusItemController+SystemPanels.swift` 三個檔逐位元組相同）；只有 `AppDelegate.swift` 有 38 行差異，屬於本 change 自己的 Codex 接線，跟 merge 無關。**這推翻了 T10 review r2 派工訊息裡「merge main 會讓 Sources/ +30」的預期**——實測 0，`Sources/` 的所有增量都來自 codex-support 自己的 commit，見 DoD#7。
 
@@ -247,6 +297,10 @@ App 搬家的偵測延遲、**R-8 不變式 2 的人類面只有實機 ⑧**、
 | 22 | **`scripts/measure-cpu.sh`／`scripts/verify-app.sh` 的收尾 `pkill -f "AgentAura.app/Contents/MacOS/AgentAuraApp"` 會連帶殺掉使用者機器上正在跑的正式安裝**（不分辨是 `build/` 的測試副本還是 `/Applications/` 的正式安裝）。T12 實測跑 `verify-app.sh` 時已證實發生（PID 2194 的正式安裝被殺，已手動 `open /Applications/AgentAura.app` 復原）；`measure-cpu.sh` 風險更高（5 態 × 66s ≈ 5.5 分鐘期間使用者選單列會是測試 build，且腳本本身不會自動重開正式安裝），因此本輪 DoD#14／#15 未執行。建議兩支腳本改成只 `kill` 自己剛 `open` 出來的那個 PID，不要用路徑字面比對 | **建議修，影響安全量測的可行性** | T12 新發現 |
 | 23 | **spec §8.1 檔案佈局估算表完全沒列到六個新檔**：`CodexFailure.swift`（38 行）、`CodexObservation.swift`（32 行）、`CodexState+From.swift`（42 行）、`L10nCodex+Failures.swift`（75 行）、`OptionsMenuModel+Codex.swift`（38 行）、`OptionsSectionView.swift`（淨 +16 行），合計 241 行——這是 DoD#7 超標（377–407 行）裡佔比最大的單一成因，不是既有檔案膨脹，是拆檔產生的新檔完全沒被估算 | 記錄成因，供下次估算校正 | T12 新發現（DoD#7） |
 | 24 | **DoD 帳本三處檔名／測試名與實際不符**：CX32 的指名測試帳本原記 `codexConnectRefusesBlockedBundlePath`（那是 MARK 註解分組名，實際函式是 `codexConnectRefusesTranslocated`／`codexConnectRefusesInDownloads`）；「額外必記」第 2 筆帳本原記 `AppDelegateCodexWiredTests.swift`（實際檔名 `AppDelegatePanelActionsWiredTests+Codex.swift`，commit `e6ef148`）。T12 已在對應行更正，供之後找檔案／測試時直接用實際名稱 | 帳本文字校正 | T12 新發現 |
+| **25** | **spec §10 追加六條（17–22）**：`.unsupportedCharacter` 不再給 snippet 之後「完全沒有手動出路」（**有解鎖條件**：互動探針量到引號可行就開後續 change）· legend「Error」沒有面板內路徑（**明寫接受**）· 列標籤樣式（**明寫接受**）· Options 展開＋snippet 的總高度不在 CX56 之內（數字待 T13i 填）· Claude 側 CTA 仍是泛稱「Connect」（**明寫接受**）· footer chip 可能截掉版本號（數字待 T13f 填） | 見 spec §10-17–22 | T13 |
+| **26** | **DoD #7（`Sources/` 淨增）在 T13 之後會更糟**：T12 實測 +1527（門檻 1150，MISS 377），T13 估計再加約 **270**，合計約 **+1797**（MISS 約 647）。**門檻不往上調**（本專案已有兩次「如實記錄不調門檻」前例）。這 270 行買的是**兩條 S0 的關閉**，替代方案是「維持 NO-GO」，不是「省 270 行」。**是否重設基準是使用者的裁決** | 需使用者裁決 | T13 |
+| **27** | **`TooltipText` 也讀 `install.healthLabel`，但刻意不在 CX52 的掃描範圍內**（CX52 只掃 `Sources/AgentAuraApp/`）。tooltip 是選單列的 hover 文字，不是面板的三處狀態字串——**這個邊界是刻意的，不是漏掉**。若日後判定 tooltip 也該雙 agent 感知，那是另一個 change | 邊界，明寫 | T13f |
+| **28** | **兩個等價 mutant 是預期結果**：CX47② (`hasCodexRow` 改成 `agentLabel != nil`) 與 CX49③（把輸入的 `codexSnippet` 改成 nil）。前者守的是**未來的第三種 agent**、後者守的是**負向斷言的輸入品質**，兩者今天都打不紅。**要記進 mutation 帳並寫明理由**，不要為了「讓它紅」把 gate 改成另一件事 | 方法論，明寫 | T13 |
 
 ## T12 附錄一：位置索引斷言清查表
 
