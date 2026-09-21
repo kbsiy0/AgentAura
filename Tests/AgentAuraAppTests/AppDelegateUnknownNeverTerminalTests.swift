@@ -47,7 +47,8 @@ struct AppDelegateUnknownNeverTerminalTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         // T10b：觸發＋輪詢整段一起經過 SpawnGate，理由同 AppDelegateVerificationLifecycleTests。
@@ -86,7 +87,8 @@ struct AppDelegateUnknownNeverTerminalTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         await SpawnGate.shared.run {

@@ -68,6 +68,7 @@ struct IconShapeMenuReduceMotionWiringTests {
                 presented.appearances.append(appearance)
                 onSelect(.ledStrip)
             },
+            codexDependencies: .inert(),
             makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         await wait(upTo: 5) { spy.applied.contains { $0.activity == .waiting } }

@@ -140,8 +140,10 @@ struct CodexWiringSmokeTests {
     /// 的 doc comment：唯讀可以援用那個先例，`connect`／`disconnect` 不能）。
     @Test("productionCodexHomeIsRealHome：不覆寫 codexDependencies 時，codexHome 是真的 ~/.codex")
     func productionCodexHomeIsRealHome() throws {
-        // 不需要 launch——codexRuntime 是 init 就算好的欄位，建構完就在。
-        let delegate = AppDelegate(root: FileManager.default.temporaryDirectory)
+        // 不需要 launch——codexRuntime 是 init 就算好的欄位，建構完就在。**這條測試的重點就是
+        // 「不覆寫」，所以明確傳 `.production()`（不是 `.inert()`）——review M3 拿掉預設值後，
+        // 這裡改成顯式傳同一個生產值，測的事情完全不變。
+        let delegate = AppDelegate(root: FileManager.default.temporaryDirectory, codexDependencies: .production())
         guard let installer = delegate.codexRuntime.installer as? CodexInstaller else {
             Issue.record("""
                 生產注入的 codexRuntime.installer 型別是 \(type(of: delegate.codexRuntime.installer))，\

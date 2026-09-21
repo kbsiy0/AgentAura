@@ -67,7 +67,8 @@ struct Wave2WiringTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         await SpawnGate.shared.run {
@@ -100,7 +101,8 @@ struct Wave2WiringTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         #expect(delegate.installState == .claudeNotFound, "前提：不存在的 claudeHome 應該 probe 成 .claudeNotFound")

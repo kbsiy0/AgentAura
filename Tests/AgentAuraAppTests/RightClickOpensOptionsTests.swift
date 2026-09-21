@@ -73,7 +73,8 @@ struct RightClickOpensOptionsTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -94,7 +95,8 @@ struct RightClickOpensOptionsTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

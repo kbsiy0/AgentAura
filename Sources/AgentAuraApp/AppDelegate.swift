@@ -97,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              { current, language, appearance, showsPlate, onSelect in
                  IconShapeMenu.present(current: current, language: language,
                                        appearance: appearance, showsPlate: showsPlate, onSelect: onSelect) },
-         codexDependencies: CodexDependencies = .production(),
+         codexDependencies: CodexDependencies,   // review M3：無預設值，漏傳即編譯錯（曾害過一次寫真的 ~/.codex）
          makeRenderer: @escaping @MainActor () -> any IconRendering = { StatusItemController() }) {
         self.root = root
         self.livenessInterval = livenessInterval

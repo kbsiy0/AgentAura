@@ -5,6 +5,6 @@ import AppKit
 // 的 LSUIElement 宣告（Task 18）。
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
-let delegate = AppDelegate()
+let delegate = AppDelegate(codexDependencies: .production())
 app.delegate = delegate
 app.run()

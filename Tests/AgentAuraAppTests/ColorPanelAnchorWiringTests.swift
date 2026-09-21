@@ -22,7 +22,7 @@ struct ColorPanelAnchorWiringTests {
         let spy = SpyRenderer()
         let defaults = try #require(UserDefaults(suiteName: "aura-anchor-\(UUID().uuidString)"))
         let delegate = AppDelegate(root: root, livenessInterval: 60, defaults: defaults,
-                                   makeRenderer: { spy })
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

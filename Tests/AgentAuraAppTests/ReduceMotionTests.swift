@@ -71,7 +71,8 @@ struct ReduceMotionTests {
 
         let spy1 = SpyRenderer()
         let delegate1 = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                    makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy1 })
+                                    makeLoginItem: { FakeLoginItem() },
+                                    codexDependencies: .inert(), makeRenderer: { spy1 })
         delegate1.applicationDidFinishLaunching(Notification(name: .init("test")))
         #expect(delegate1.userReduceMotion == false, "前提：從沒設過，預設應為 false")
         let onAction1 = try #require(spy1.onAction)
@@ -80,7 +81,8 @@ struct ReduceMotionTests {
 
         let spy2 = SpyRenderer()
         let delegate2 = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                    makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy2 })
+                                    makeLoginItem: { FakeLoginItem() },
+                                    codexDependencies: .inert(), makeRenderer: { spy2 })
         delegate2.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate2.applicationWillTerminate(Notification(name: .init("test"))) }
         #expect(delegate2.userReduceMotion == true, """
@@ -96,7 +98,8 @@ struct ReduceMotionTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -125,7 +128,8 @@ struct ReduceMotionTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

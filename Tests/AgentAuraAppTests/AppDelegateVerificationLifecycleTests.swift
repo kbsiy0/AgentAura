@@ -44,7 +44,8 @@ struct AppDelegateVerificationLifecycleTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         // T10b：觸發＋輪詢整段一起經過 SpawnGate——只 wrap 觸發那一下不夠，實際 spawn
@@ -73,7 +74,8 @@ struct AppDelegateVerificationLifecycleTests {
         // (b) 用同一份 defaults 重建一次 AppDelegate，模擬重啟。
         let spy2 = SpyRenderer()
         let delegate2 = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                    installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy2 })
+                                    installer: installer, makeLoginItem: { FakeLoginItem() },
+                                    codexDependencies: .inert(), makeRenderer: { spy2 })
         delegate2.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate2.applicationWillTerminate(Notification(name: .init("test"))) }
         guard case .broken(.hookBlockedOrBroken, _) = delegate2.installState else {
@@ -95,7 +97,8 @@ struct AppDelegateVerificationLifecycleTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         await SpawnGate.shared.run {
@@ -132,7 +135,8 @@ struct AppDelegateVerificationLifecycleTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         await SpawnGate.shared.run {
@@ -170,7 +174,8 @@ struct AppDelegateVerificationLifecycleTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         // 模擬「先前按接上失敗過」留下的錯誤 banner。
         delegate.banner = .error(InstallState.hookBlockedPrescription(.english))
@@ -215,7 +220,8 @@ struct AppDelegateVerificationLifecycleTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
