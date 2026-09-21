@@ -201,7 +201,8 @@
       <li><strong>Connect Codex</strong> — writes <span class="mono">~/.codex/hooks.json</span> so Codex notifies AgentAura too. It never touches <span class="mono">~/.codex/config.toml</span>, and it only writes that file if it doesn't already exist.</li>
       <li>The next time you start Codex, it will ask you once whether to trust this hook. You have to say yes for the light to move — AgentAura has no way to tell whether you said yes or no, so it can only tell you to expect the prompt.</li>
       <li><strong>Reconnect Codex</strong> — shows up instead of "Connect Codex" if the app was moved after you connected; rebuilds the same mount pointing at the app's new location.</li>
-      <li><strong>Remove Codex mount…</strong> — deletes only the <span class="mono">hooks.json</span> entry AgentAura wrote. If you already had your own <span class="mono">~/.codex/hooks.json</span>, AgentAura leaves it alone and shows you a snippet to add by hand instead. Add these entries into your existing hooks object — don't replace the whole file.</li>
+      <li><strong>Remove Codex mount…</strong> — deletes only the <span class="mono">hooks.json</span> entry AgentAura wrote. If you already had your own <span class="mono">~/.codex/hooks.json</span>, AgentAura leaves it alone and shows you a snippet to add by hand instead.</li>
+      <li>Add these entries into your existing hooks object — don't replace the whole file.</li>
     </ul>
     <p class="muted">Codex sessions have no dedicated "error" signal to report to AgentAura — that light never turns on for a Codex-only session, only for Claude Code ones.</p>
   </section>

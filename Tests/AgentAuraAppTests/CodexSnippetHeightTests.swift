@@ -38,13 +38,28 @@ struct CodexSnippetHeightTests {
                     liveness: .alive(pid: 1), updatedAt: Date())
     }
 
-    /// 同生產碼 `withheldSnippet` 的判準（R-10／D-w）：`.blockedByBundlePath(r)` → 扣住、
-    /// pathRejection=r；`.occupiedByOther` → 真的產生器輸出、pathRejection=nil；其餘皆 nil。
+    /// 同生產碼 `withheldSnippet` 的判準（R-10／D-w）：**窮盡 switch，不得有 `default`**
+    /// （D-r；review m1：`default: return (nil, nil)` 把 `.connectedStalePath` 壓成「沒有
+    /// rejection」，T13e 這一輪剛加高的「中性開場＋依 rejection 分流」兩段卡（D-x）因此
+    /// 從來沒有進過高度域——`.connectedStalePath` 是生產可達、且真的比「重新接上」單行版本
+    /// 高的一格（§4.6 表）。`default:` 本身違反 D-r：新增 `CodexState` case 也會靜默落進
+    /// `(nil, nil)`，這正是 `RejectionKind` 這個平行型別存在的理由）。
+    /// `.blockedByBundlePath(r)` → 扣住、pathRejection=r；`.connectedStalePath` → 帶一個
+    /// 代表性 rejection（§4.6「pathRejection != nil」那一列，兩段卡）；`.occupiedByOther` →
+    /// 主域固定給真的產生器輸出（STEP1 確認的真正最壞態，不能被稀釋成「snippet nil」的
+    /// 矮版本）；其餘三態（`.unavailable`／`.notConnected`／`.connected`）皆無 rejection、
+    /// 無 snippet。`.occupiedByOther` 的「snippet nil」矮子變體另外補一條獨立檢查
+    /// （`occupiedByOtherWithoutSnippetFitsWithinCeiling`，review m1「順手補」）。
     func codexInputs(for state: CodexState) -> (snippet: String?, rejection: CodexHookPathCheck.Rejection?) {
         switch state {
-        case .blockedByBundlePath(let r): return (nil, r)
-        case .occupiedByOther: return (CodexHooksJSON.snippet(hookBinaryPath: Self.hookPath), nil)
-        default: return (nil, nil)
+        case .unavailable, .notConnected, .connected:
+            return (nil, nil)
+        case .connectedStalePath:
+            return (nil, .mustMoveToApplications)
+        case .blockedByBundlePath(let r):
+            return (nil, r)
+        case .occupiedByOther:
+            return (CodexHooksJSON.snippet(hookBinaryPath: Self.hookPath), nil)
         }
     }
 
@@ -107,6 +122,38 @@ struct CodexSnippetHeightTests {
             以下組合超過 780pt 天花板（紅掉時第一個問題是「面板是不是又長高了」，見 §4.10）：
             \(violations.joined(separator: "\n"))
             """)
+    }
+
+    /// **review m1「順手補」**：`.occupiedByOther` 還有另一個生產可達的子變體——
+    /// `pathRejection != nil` 時 `codexSnippet == nil`（§4.6「`.occupiedByOther`，
+    /// `codexSnippet == nil`」那一列，換句話說明，不給 snippet）。主域（CX56①）固定給
+    /// `.occupiedByOther` 真的 snippet（那才是真正的最壞態，`CodexSnippetHeightMeasurement`
+    /// STEP1 確認過），這裡補這個更矮的子變體，避免「窮盡」名不副實。
+    @Test("CX56①補：.occupiedByOther，codexSnippet == nil 的矮子變體也在天花板內")
+    func occupiedByOtherWithoutSnippetFitsWithinCeiling() {
+        var violations: [String] = []
+        for language in Language.allCases {
+            for sessionCount in [0, 3] {
+                for (installLabel, install) in Self.installCandidates {
+                    for (bannerLabel, banner) in [("nil", Optional<PanelBanner>.none), ("codexConnected", PanelBanner.codexConnected(language: language))] {
+                        let icon = sessionCount == 0 ? IconState.empty : IconState(activity: .working, counts: [.working: sessionCount], liveCount: sessionCount)
+                        let sessions = (0..<sessionCount).map { session("s\($0)", .working) }
+                        let target = install.affordance == .replaceExternal ? "/Applications/OtherApp.app" : nil
+                        let m = PanelModel.make(icon: icon, sessions: sessions, palette: .default,
+                                                install: install, version: "1.4.2", optionsExpanded: false,
+                                                launchAtLogin: true, externalTargetPath: target, banner: banner,
+                                                systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
+                                                iconShape: .ledStrip, language: language, codex: .occupiedByOther,
+                                                codexSnippet: nil, codexPathRejection: .mustMoveToApplications)
+                        let h = height(m)
+                        if h > Self.ceiling {
+                            violations.append("lang=\(language) rows=\(sessionCount) install=\(installLabel) banner=\(bannerLabel) -> \(h)pt")
+                        }
+                    }
+                }
+            }
+        }
+        #expect(violations.isEmpty, "以下組合超過 780pt 天花板：\n\(violations.joined(separator: "\n"))")
     }
 
     /// 只在真的有 snippet 的那一態（`.occupiedByOther`，`pathRejection == nil`）檢查按鈕位置——
