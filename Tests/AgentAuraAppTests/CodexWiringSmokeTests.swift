@@ -81,6 +81,18 @@ struct CodexWiringSmokeTests {
         onOpen()
         #expect(fakeInstaller.probeCallCount > before,
                 "onOpen 必須觸發 reprobeCodex()（CX24⑤），probe 次數應該增加")
+
+        // T10 裁決 3（取代文字掃描「PanelModel.make(」呼叫點）：refreshPanel() 真的把
+        // codexState／codexPathRejection 交給 status.setPanel，不是寫死字面。
+        let lastPanel = try #require(spy.panels.last, "onOpen 之後應該至少畫過一次面板")
+        #expect(lastPanel.codex == delegate.codexRuntime.codexState, """
+            status.setPanel 收到的 PanelModel.codex 應等於 codexRuntime.codexState，\
+            實際 panel=\(lastPanel.codex) runtime=\(delegate.codexRuntime.codexState)
+            """)
+        #expect(lastPanel.codexPathRejection == delegate.codexRuntime.pathRejection, """
+            status.setPanel 收到的 PanelModel.codexPathRejection 應等於行程常數 \
+            codexRuntime.pathRejection
+            """)
     }
 
     /// CX25（§6.2 第二條）：不覆寫 `codexDependencies` 時，生產注入的是真的 `CodexInstaller`，

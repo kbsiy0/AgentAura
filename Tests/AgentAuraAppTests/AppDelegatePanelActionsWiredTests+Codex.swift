@@ -48,19 +48,49 @@ extension AppDelegatePanelActionsWiredTests {
         }
     }
 
-    /// team-lead 裁決（AURA_CODEX_PENDING_T10）：`AppDelegate+PanelActions.swift` 的
-    /// `switch action` 對這三個新 case 目前是暫時 stub（`break`）——T10 接線前，故意驗一個
-    /// 現在會失敗的屬性（沒有任何 banner 出現），讓這條「每個 kind 都要有真副作用」的既有
-    /// gate 對這三個新 kind 保持誠實地紅，而不是被繞過或標成通過（tested≠wired 的守衛正在
-    /// 做它該做的事）。T10 接線後必須把這裡換成真的斷言（連上 `CodexInstaller`／
-    /// `CodexHookStore` 之後的可觀察效果）。
+    /// T10：三個新 case 從 stub 換成真接線之後的驗證體——各自對準自己的真副作用，不是
+    /// 共用一個「banner != nil」（T07 review m3：T10 之後任何 banner 都能滿足那條，函式
+    /// 名也會變成謊言）。**`.copyCodexSnippet` 的真實副作用是寫剪貼簿、不一定設 banner**
+    /// ——把斷言放寬成 `banner != nil` 是弱化，這裡對準注入縫 `pasteboardWrites`。
     @MainActor
-    func verifyCodexActionsAreStubbed(kind: PanelActionKind, samples: [PanelAction]) async throws {
+    func verifyConnectCodex(samples: [PanelAction]) async throws {
         try await withFreshRig { rig in
             for action in samples { rig.onAction(action) }
-            #expect(rig.delegate.banner != nil, """
-                .\(kind) 目前是 stub（break），還沒有任何真副作用——T10 接線後這裡應該
-                有 banner 或其他可觀察效果，暫時保持紅燈是正確的
+            #expect(rig.recorder.fakeCodexInstaller.connectCallCount == 1,
+                    ".connectCodex 應該讓注入的 fake 收到恰一次 connect()")
+            let written = try #require(rig.recorder.fakeCodexInstaller.diskContents)
+            #expect(rig.delegate.codexRuntime.store.contents == written, """
+                CodexHookStore 讀回來的位元組應與 connect() 寫出去的逐位元組相等
+                """)
+            #expect(rig.delegate.banner?.kind == .connected, ".connectCodex 成功後應顯示「已接上」banner")
+        }
+    }
+
+    @MainActor
+    func verifyDisconnectCodex(samples: [PanelAction]) async throws {
+        try await withFreshRig { rig in
+            // 前提：先接上一次，讓 disconnect 這一步有真的東西可拆（同 Claude 側 `.disconnect`
+            // case 的既有形狀）。
+            rig.onAction(.connectCodex)
+            #expect(rig.recorder.fakeCodexInstaller.connectCallCount == 1, "前置條件失敗：先 connectCodex 一次應該成功")
+            rig.delegate.banner = nil   // 清掉前置 connect 留下的 banner，只看這個動作自己的效果
+
+            for action in samples { rig.onAction(action) }
+            #expect(rig.recorder.fakeCodexInstaller.disconnectCallCount == 1,
+                    ".disconnectCodex 應該讓注入的 fake 收到恰一次 disconnect()")
+            #expect(rig.recorder.fakeCodexInstaller.diskContents == nil, "disconnect 成功後磁碟內容應清空")
+            #expect(rig.delegate.banner?.kind == .disconnected, ".disconnectCodex 成功後應顯示「已移除」banner")
+        }
+    }
+
+    @MainActor
+    func verifyCopyCodexSnippet(samples: [PanelAction]) async throws {
+        try await withFreshRig { rig in
+            #expect(rig.delegate.codexRuntime.codexSnippet != nil, "前提：pathRejection == nil 時應該有 snippet 可複製")
+            for action in samples { rig.onAction(action) }
+            #expect(rig.recorder.pasteboardWrites.count == 1, ".copyCodexSnippet 應該真的寫進剪貼簿注入縫恰一次")
+            #expect(rig.recorder.pasteboardWrites.last == rig.delegate.codexRuntime.codexSnippet, """
+                寫進剪貼簿的內容應該就是 codexSnippet 本身
                 """)
         }
     }

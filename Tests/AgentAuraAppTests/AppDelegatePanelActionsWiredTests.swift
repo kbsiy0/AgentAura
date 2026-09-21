@@ -220,7 +220,10 @@ struct AppDelegatePanelActionsWiredTests {
                 try await verifySetIconPlate(samples: samples)
             case .setLanguage: try await verifyLanguage(samples: samples)   // T26：body 在 +Language.swift
             case .pickIconShape: try await verifyIconShape(samples: samples)   // T32：body 在 +IconShape.swift
-            case .connectCodex, .disconnectCodex, .copyCodexSnippet: try await verifyCodexActionsAreStubbed(kind: kind, samples: samples)   // T07：body 在 +Codex.swift
+            // T10：各自對準真副作用，body 在 +Codex.swift（T07 的 stub 驗證已由此取代）。
+            case .connectCodex: try await verifyConnectCodex(samples: samples)
+            case .disconnectCodex: try await verifyDisconnectCodex(samples: samples)
+            case .copyCodexSnippet: try await verifyCopyCodexSnippet(samples: samples)
             }
         }
     }
