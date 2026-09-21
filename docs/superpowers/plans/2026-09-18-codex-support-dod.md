@@ -98,13 +98,13 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | CX22 | `PanelViewModelTests` ＋ `CodexRowLabelPixelTests` | `agentLabel` 對 `.claude` 也給值 | `agentLabelOnlyForNonClaude`（model ＋ 像素兩半） | | T08／T09 |
 | **CX23** | `CodexRowLabelPixelTests` | 標籤另起一行 | `codexLabelDoesNotChangeRowHeight` | | T09 |
 | **CX24** | `CodexWiringSmokeTests` | ① 分支改 `break` ② banner 只留一句 ③ 拿掉 `onOpen` 的 `reprobeCodex()` | `codexConnectChainIsWired`（五段；③ 紅在第五段；第③段比對**位元組**） | | T10 |
-| CX25 | `CodexWiringSmokeTests` ＋ 掃描 | `codexHome` 改成 `environment["HOME"]` | `productionCodexHomeIsRealHome` | | T10 |
+| CX25 | `CodexWiringSmokeTests` ＋ 掃描 | `codexHome` 改成 `environment["HOME"]` | `productionCodexHomeSourceNeverReadsHomeEnvVar`（來源掃描半，0.022s 變紅）。**`productionCodexHomeIsRealHome`（型別／接線半）對這個 mutation 是等價 mutant**——開發機上 `$HOME` 就等於真 home，實測綠，不代表這條 gate 空轉，它守的是另一件事（生產注入的是真 `CodexInstaller`，不是 fake） | | T10 |
 | CX26 | `UninstallerTests` | codex disconnect 與 `erasePersistentDomain` 對調 | `uninstallRemovesCodexBeforeErasingDefaults` | | T10 |
 | CX27 | script gate | ① 拿掉腳本第 7 項 ② **拿掉 `--only` 的值域檢查（`[1-7]`）** | `verifyUninstallScriptDetectsOurCodexHooks`（**判準是 `--only 7` 那一行**；**外加兩格**：`--only`（缺值）在有界時間內非零退出、`--only 77` 非零退出且**輸出不含「PASS」**） | | T11 |
 | CX28 | `HelpDocOptionsRowCoverageTests` | **只刪掉其中一個 Codex 列標題** | `allRows` 對 `CodexStateKind.allCases` 取聯集後的兩語言各一條 | | T11 |
 | CX29 | 文件掃描 | 從 **`SECURITY.md`／`README.md`／`README.zh-TW.md` 任一份**刪掉 `.codex/hooks.json`（**三份各試一次**） | `securityDocListsEveryPathWeWrite`（`@Test(arguments:)` 參數化三份文件） | | T11 |
 | CX30 | 全 repo 掃描 | 在 `scripts/` 或 **`.github/`** 加一行 `codex exec` | `noCodexExecInRepo`（roots = `Tests/` ＋ `scripts/` ＋ **`.github/`**；`docs/` 刻意不納入——F12 的證據文件必須逐字寫指令名） | | T11 |
-| **CX31** | `CodexHookStoreTests` | 在 `write` 裡加 `trimmingCharacters` | `codexHookStoreRoundTripsBytes`（輸入用**真正的產生器輸出**，逐位元組） | | T10 |
+| **CX31** | `CodexHookStoreTests` | 在 `write` 裡加 `trimmingCharacters` | `codexHookStoreRoundTripsBytes`（輸入用**真正的產生器輸出**，逐位元組）——**這個 mutation 對這條輸入是等價 mutant**：`JSONSerialization` 的輸出天生沒有開頭／結尾空白，trim 是 no-op，實測綠。真正紅的是 `codexHookStoreDoesNotTrimBoundaryWhitespace`（0.006s，產生器輸出前後各接一段空白位元組，斷言 `write`／`contents` 不做任何正規化） | | T10 |
 | **CX32** | `CodexInstallerClobberTests` | 拿掉 `connect` 第一行的 guard | `codexConnectRefusesBlockedBundlePath`（**且整棵樹零差異**） | | T06 · **抽驗必做** |
 | **CX33** | `CodexHookPathCheckTests` | ① 一律回 `.unsupportedCharacter(" ")` ② 優先序對調 | `codexPathCheckNamesTheOffendingCharacter`（定義域從 `unsupportedCharacters` 推導） | | T04 |
 | **CX34** | `CodexStateTests` | `from` 忽略 `currentExpectedContents` | `codexStalePathIsDetectedAndOffersReconnect` | | T07 |
