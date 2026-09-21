@@ -71,6 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `confirmDisconnect` 的注入縫（測試不真的彈 `NSAlert`，spec §6.4）。
     let confirmReplaceExternalMount: @MainActor (Language, @escaping () -> Void) -> Void
     let confirmUninstall: @MainActor (Language, @escaping () -> Void) -> Void
+    /// T13j（S1-5，D-ac）：`.disconnectCodex` 的確認框——同 `confirmDisconnect` 的既有注入縫，
+    /// 比照 Claude 側 `confirmDisconnect` 的形狀（第四個確認框）。
+    let confirmDisconnectCodex: @MainActor (Language, @escaping () -> Void) -> Void
     /// T32：`.setIconShape` 觸發時開啟的造型選單——同 `confirmDisconnect` 的注入縫，
     /// 測試不真的彈 `NSMenu`（spec §6.4）。
     /// T34：多帶 `IconAppearance`／`showsPlate` 為了畫縮圖（挑造型要看得到造型）——
@@ -97,6 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              { language, onConfirm in ReplaceMountConfirmation.present(language: language, onConfirm: onConfirm) },
          confirmUninstall: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
              { language, onConfirm in UninstallConfirmation.present(language: language, onConfirm: onConfirm) },
+         confirmDisconnectCodex: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
+             { language, onConfirm in CodexDisconnectConfirmation.present(language: language, onConfirm: onConfirm) },
          presentIconShapeMenu: @escaping @MainActor (IconShape, Language, IconAppearance, Bool, @escaping (IconShape) -> Void) -> Void =
              { current, language, appearance, showsPlate, onSelect in
                  IconShapeMenu.present(current: current, language: language,
@@ -114,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.confirmDisconnect = confirmDisconnect
         self.confirmReplaceExternalMount = confirmReplaceExternalMount
         self.confirmUninstall = confirmUninstall
+        self.confirmDisconnectCodex = confirmDisconnectCodex
         self.presentIconShapeMenu = presentIconShapeMenu
         self.makeRenderer = makeRenderer
         codexRuntime = CodexRuntime(dependencies: codexDependencies, store: CodexHookStore(defaults: defaults))

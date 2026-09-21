@@ -47,6 +47,7 @@ struct AppDelegatePanelActionsWiredTests {
         /// A5（T11 commit3）：`.replaceExternalMount` 現在也要先走確認框，同 `confirmedDisconnects`。
         var confirmedReplaceExternalMounts = 0
         var confirmedUninstalls = 0   // T24：`.uninstall` 同理
+        var confirmedDisconnectCodexes = 0   // T13j：`.disconnectCodex` 同理
         /// T32：`.pickIconShape` 每次真的走過選單呈現閉包才 +1——同 `confirmedDisconnects`
         /// 的理由，證明這一步沒有被跳過。
         var presentedIconShapeMenuCount = 0
@@ -95,6 +96,7 @@ struct AppDelegatePanelActionsWiredTests {
             confirmDisconnect: { _, onConfirm in recorder.confirmedDisconnects += 1; onConfirm() },
             confirmReplaceExternalMount: { _, onConfirm in recorder.confirmedReplaceExternalMounts += 1; onConfirm() },
             confirmUninstall: { _, onConfirm in recorder.confirmedUninstalls += 1; onConfirm() },
+            confirmDisconnectCodex: { _, onConfirm in recorder.confirmedDisconnectCodexes += 1; onConfirm() },
             presentIconShapeMenu: { current, _, _, _, onSelect in recorder.presentedIconShapeMenuCount += 1; onSelect(current) },
             codexDependencies: CodexDependencies(installer: recorder.fakeCodexInstaller, translocated: false, inDownloads: false,
                                                  writeToPasteboard: { recorder.pasteboardWrites.append($0) },

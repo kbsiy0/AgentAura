@@ -79,6 +79,9 @@ extension AppDelegatePanelActionsWiredTests {
             rig.delegate.banner = nil   // 清掉前置 connect 留下的 banner，只看這個動作自己的效果
 
             for action in samples { rig.onAction(action) }
+            // T13j（S1-5，D-ac）：`.disconnectCodex` 現在先走確認框——同 `.disconnect`／
+            // `.replaceExternalMount` 的既有斷言形狀，證明這一步沒有被跳過。
+            #expect(rig.recorder.confirmedDisconnectCodexes == 1, ".disconnectCodex 應該先走過確認對話框閉包")
             #expect(rig.recorder.fakeCodexInstaller.disconnectCallCount == 1,
                     ".disconnectCodex 應該讓注入的 fake 收到恰一次 disconnect()")
             #expect(rig.recorder.fakeCodexInstaller.diskContents == nil, "disconnect 成功後磁碟內容應清空")

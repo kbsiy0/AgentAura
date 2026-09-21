@@ -167,6 +167,11 @@ struct CodexWiringSmokeTests {
     /// 跨檔 extension 碰不到 `private`。
     /// review m8：`hookBinaryPath` 可覆寫（預設仍是生產路徑）——CX40 App 半的乘積表用它
     /// 補回第三欄（`.unsupportedCharacter`），其餘呼叫端不受影響。
+    /// T13j（D-ac）：`confirmDisconnectCodex` 預設**會**呼叫 `onConfirm`（同 `confirmDisconnect`
+    /// 在既有 `withFreshRig` 的既有慣例）——這個 helper 服務的是「送出 .disconnectCodex 之後
+    /// 底層邏輯對不對」這一族測試，不是在測確認框本身（那是 `CodexDisconnectConfirmationTests`
+    /// 的 CX57）。**若不覆寫，預設值原本會呼叫真的 `NSAlert().runModal()`**——headless 測試
+    /// 環境下會整個掛住（`disconnectClaimsSuccessButFileRemainsBecomesOccupied` 實測踩到）。
     func makeDelegate(translocated: Bool, inDownloads: Bool = false,
                               hookBinaryPath: String = AppDelegate.productionHookBinaryPath(),
                               fakeInstaller: FakeCodexInstaller) throws -> (delegate: AppDelegate, spy: SpyRenderer,
@@ -174,6 +179,7 @@ struct CodexWiringSmokeTests {
         let (defaults, suite) = try freshDefaults()
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() },
                                    codexDependencies: CodexDependencies(installer: fakeInstaller, translocated: translocated,
                                                                         inDownloads: inDownloads, writeToPasteboard: { _ in },
                                                                         hookBinaryPath: hookBinaryPath),
