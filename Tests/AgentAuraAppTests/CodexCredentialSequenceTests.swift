@@ -74,7 +74,8 @@ struct CodexCredentialSequenceTests {
                                    makeLoginItem: { FakeLoginItem() },
                                    confirmDisconnect: { _, onConfirm in onConfirm() },
                                    codexDependencies: CodexDependencies(installer: fakeCodexInstaller, translocated: false,
-                                                                        inDownloads: false, writeToPasteboard: { _ in }),
+                                                                        inDownloads: false, writeToPasteboard: { _ in },
+                                                                        hookBinaryPath: AppDelegate.productionHookBinaryPath()),
                                    makeRenderer: { SpyRenderer() })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }

@@ -12,8 +12,12 @@ import Foundation
 /// ＋ `writeToPasteboard` 不做任何事。**不叫 `.production()`**——那個名字留給真的生產
 /// 預設值（`CodexDependencies.production()`），避免兩個語意混淆。
 extension CodexDependencies {
+    /// `hookBinaryPath` 用一個乾淨的字面路徑（不含任何 `unsupportedCharacters`）——這個
+    /// helper 服務的是「不特別關心 Codex」的測試，`pathRejection` 應該恆為 nil，不該因為
+    /// 路徑字面而意外變成 `.blockedByBundlePath`。
     static func inert() -> CodexDependencies {
         CodexDependencies(installer: FakeCodexInstaller(mode: .normal), translocated: false,
-                          inDownloads: false, writeToPasteboard: { _ in })
+                          inDownloads: false, writeToPasteboard: { _ in },
+                          hookBinaryPath: "/Applications/AgentAura.app/Contents/Resources/plugin/bin/aura-hook")
     }
 }

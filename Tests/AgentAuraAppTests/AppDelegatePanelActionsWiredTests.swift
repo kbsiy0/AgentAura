@@ -95,7 +95,8 @@ struct AppDelegatePanelActionsWiredTests {
             confirmUninstall: { _, onConfirm in recorder.confirmedUninstalls += 1; onConfirm() },
             presentIconShapeMenu: { current, _, _, _, onSelect in recorder.presentedIconShapeMenuCount += 1; onSelect(current) },
             codexDependencies: CodexDependencies(installer: recorder.fakeCodexInstaller, translocated: false, inDownloads: false,
-                                                 writeToPasteboard: { recorder.pasteboardWrites.append($0) }),
+                                                 writeToPasteboard: { recorder.pasteboardWrites.append($0) },
+                                                 hookBinaryPath: AppDelegate.productionHookBinaryPath()),
             makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }

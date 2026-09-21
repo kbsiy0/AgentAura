@@ -112,8 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.confirmUninstall = confirmUninstall
         self.presentIconShapeMenu = presentIconShapeMenu
         self.makeRenderer = makeRenderer
-        codexRuntime = CodexRuntime(dependencies: codexDependencies, store: CodexHookStore(defaults: defaults),
-                                    hookBinaryPath: Self.productionHookBinaryPath())
+        codexRuntime = CodexRuntime(dependencies: codexDependencies, store: CodexHookStore(defaults: defaults))
         super.init()
     }
 

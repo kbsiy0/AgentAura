@@ -29,12 +29,21 @@ extension CodexInstaller: CodexInstalling {}
 /// 不猜、不近似：`installer` 是真 `CodexInstaller`，`translocated`／`inDownloads` 是
 /// `RunningBundle` 對 `Bundle.main.bundleURL` 現場量出來的值，`writeToPasteboard` 是真的
 /// `NSPasteboard`。測試注入 `FakeCodexInstaller`／固定布林／spy 閉包。
+///
+/// **review m8**：`hookBinaryPath` 併入這個注入袋（原本是 `CodexRuntime.init` 另外吃的
+/// 參數，永遠讀 `AppDelegate.productionHookBinaryPath()`，測試沒有注入縫）。**無預設值**
+/// （`AppDelegate.productionHookBinaryPath()` 是 `@MainActor` 方法，不能當 struct 屬性
+/// 的預設值運算式——同一個「不用預設值」的紀律這裡也適用）：讓編譯器帶路更新每個
+/// `CodexDependencies(...)` 建構點，CX40 App 半的乘積表因此能補回第三欄
+/// （`.unsupportedCharacter`）：注入一個含不支援字元的 `hookBinaryPath` 即可。
 struct CodexDependencies {
     let installer: any CodexInstalling
     let translocated: Bool
     let inDownloads: Bool
     let writeToPasteboard: @MainActor (String) -> Void
+    let hookBinaryPath: String
 
+    @MainActor
     static func production() -> CodexDependencies {
         CodexDependencies(
             installer: CodexInstaller.production(),
@@ -44,7 +53,8 @@ struct CodexDependencies {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
                 pasteboard.setString(text, forType: .string)
-            })
+            },
+            hookBinaryPath: AppDelegate.productionHookBinaryPath())
     }
 }
 
@@ -53,32 +63,35 @@ struct CodexDependencies {
 /// 算**一次**存成欄位——`reprobeCodex()` 只重算 `codexState` 那一段（檔案系統 I/O），
 /// 不會在每次 `onOpen` 都重跑 `SecTranslocateIsTranslocatedURL` ＋ 兩次
 /// `resolvingSymlinksInPath` ＋ 產 12 個事件的 JSON。
+///
+/// **review m7**：直接持有 `dependencies`，不重複宣告 `installer`／`translocated`／
+/// `inDownloads`／`writeToPasteboard` 四個欄位（省約 12 行）——讀取端改走下面四個
+/// computed property，呼叫端逐字不變（`codexRuntime.installer` 等）。
 struct CodexRuntime {
-    let installer: any CodexInstalling
+    let dependencies: CodexDependencies
     let store: CodexHookStore
-    let translocated: Bool
-    let inDownloads: Bool
     let pathRejection: CodexHookPathCheck.Rejection?
     let currentExpectedContents: Data
     /// R-10：穿過路徑判定的 snippet——`CodexHooksJSON.withheldSnippet(...)` 是唯一來源，
     /// 這裡不重算一次同樣的三元判斷（CX40 守的正是那個判斷本身）。
     let codexSnippet: String?
-    let writeToPasteboard: @MainActor (String) -> Void
     /// 唯一的可變欄位——`reprobeCodex()` 的四個時機各自重新算它。
     var codexState: CodexState = .unavailable
 
-    init(dependencies: CodexDependencies, store: CodexHookStore, hookBinaryPath: String) {
-        installer = dependencies.installer
+    var installer: any CodexInstalling { dependencies.installer }
+    var translocated: Bool { dependencies.translocated }
+    var inDownloads: Bool { dependencies.inDownloads }
+    var writeToPasteboard: @MainActor (String) -> Void { dependencies.writeToPasteboard }
+
+    init(dependencies: CodexDependencies, store: CodexHookStore) {
+        self.dependencies = dependencies
         self.store = store
-        translocated = dependencies.translocated
-        inDownloads = dependencies.inDownloads
-        writeToPasteboard = dependencies.writeToPasteboard
         let rejection = CodexHookPathCheck.rejection(
             translocated: dependencies.translocated, inDownloads: dependencies.inDownloads,
-            hookBinaryPath: hookBinaryPath)
+            hookBinaryPath: dependencies.hookBinaryPath)
         pathRejection = rejection
-        currentExpectedContents = CodexHooksJSON.json(hookBinaryPath: hookBinaryPath)
-        codexSnippet = CodexHooksJSON.withheldSnippet(hookBinaryPath: hookBinaryPath, pathRejection: rejection)
+        currentExpectedContents = CodexHooksJSON.json(hookBinaryPath: dependencies.hookBinaryPath)
+        codexSnippet = CodexHooksJSON.withheldSnippet(hookBinaryPath: dependencies.hookBinaryPath, pathRejection: rejection)
     }
 }
 

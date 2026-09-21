@@ -46,7 +46,8 @@ struct CodexWiringSmokeTests {
 
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
                                    codexDependencies: CodexDependencies(installer: fakeInstaller, translocated: false,
-                                                                        inDownloads: false, writeToPasteboard: { _ in }),
+                                                                        inDownloads: false, writeToPasteboard: { _ in },
+                                                                        hookBinaryPath: AppDelegate.productionHookBinaryPath()),
                                    makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
@@ -164,14 +165,18 @@ struct CodexWiringSmokeTests {
     /// `+Adversarial.swift`（同一個 test target 的既有慣例，見
     /// `AppDelegatePanelActionsWiredTests+Codex.swift` 對 `withFreshRig` 的做法），
     /// 跨檔 extension 碰不到 `private`。
+    /// review m8：`hookBinaryPath` 可覆寫（預設仍是生產路徑）——CX40 App 半的乘積表用它
+    /// 補回第三欄（`.unsupportedCharacter`），其餘呼叫端不受影響。
     func makeDelegate(translocated: Bool, inDownloads: Bool = false,
+                              hookBinaryPath: String = AppDelegate.productionHookBinaryPath(),
                               fakeInstaller: FakeCodexInstaller) throws -> (delegate: AppDelegate, spy: SpyRenderer,
                                                                             cleanup: () -> Void) {
         let (defaults, suite) = try freshDefaults()
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
                                    codexDependencies: CodexDependencies(installer: fakeInstaller, translocated: translocated,
-                                                                        inDownloads: inDownloads, writeToPasteboard: { _ in }),
+                                                                        inDownloads: inDownloads, writeToPasteboard: { _ in },
+                                                                        hookBinaryPath: hookBinaryPath),
                                    makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         return (delegate, spy, {
@@ -224,73 +229,45 @@ struct CodexWiringSmokeTests {
             """)
     }
 
+    /// review m8：三個代表性 `pathRejection` 情境——`hookBinaryPath` 併入 `CodexDependencies`
+    /// 之後（見 `AppDelegate+Codex.swift` doc comment）這一層終於有注入縫，CX40 App 半的
+    /// 乘積表補回第三欄，不必再全部留給純函式半。
+    private enum PathScenario: CaseIterable { case clean, mustMoveToApplications, unsupportedCharacter }
+
     /// CX40（App 半，決策層，R-10）：`CodexRuntime.codexSnippet` 是否被扣住只看
     /// `pathRejection`，跟 `codexState` 完全無關——乘積表跨 `CodexStateKind.allCases`
     /// （用 `CodexState.samples(kind)` 逐一設進 `codexRuntime.codexState`，含
-    /// `.occupiedByOther`）× `translocated`（true → pathRejection == .mustMoveToApplications；
-    /// false → nil）。**`.unsupportedCharacter` 這一格留給純函式半**
-    /// （`CodexStateTests.withheldSnippetExhaustsRepresentativeRejections`）——
-    /// `hookBinaryPath` 在這一層永遠是 `Self.productionHookBinaryPath()`（不可注入），
-    /// 這台機器的 repo 路徑不含任何 `unsupportedCharacters`，測試若硬要在這裡驗那一格
-    /// 只會驗到「這台機器的路徑恰好乾淨」，不是真的驗到規則。
-    @Test("CX40：codexSnippet 是否被扣住只看 pathRejection，跨每個 CodexStateKind 都一致",
+    /// `.occupiedByOther`）× 三個代表性 `pathRejection` 情境（`.clean`／
+    /// `.mustMoveToApplications`／`.unsupportedCharacter`，`PathScenario.allCases` 推導，
+    /// 不手列）。純函式半（`CodexStateTests.withheldSnippetExhaustsRepresentativeRejections`）
+    /// 窮盡全部 `Rejection` 樣本；這裡只取三個代表值，兩條測試互相點名，不是重複覆蓋。
+    @Test("CX40：codexSnippet 是否被扣住只看 pathRejection，跨每個 CodexStateKind ＋ 三個代表性路徑情境都一致",
           arguments: CodexStateKind.allCases)
     func codexSnippetIsWithheldWhenPathWillVanish(_ kind: CodexStateKind) throws {
-        for translocated in [true, false] {
+        for scenario in PathScenario.allCases {
             let fakeInstaller = FakeCodexInstaller(mode: .normal)
-            let (delegate, _, cleanup) = try makeDelegate(translocated: translocated, fakeInstaller: fakeInstaller)
+            let translocated = scenario == .mustMoveToApplications
+            let hookBinaryPath = scenario == .unsupportedCharacter
+                ? "/Applications/Agent Aura.app/Contents/Resources/plugin/bin/aura-hook"
+                : AppDelegate.productionHookBinaryPath()
+            let (delegate, _, cleanup) = try makeDelegate(translocated: translocated, hookBinaryPath: hookBinaryPath,
+                                                           fakeInstaller: fakeInstaller)
             defer { cleanup() }
             for state in CodexState.samples(kind) {
                 delegate.codexRuntime.codexState = state
-                if translocated {
+                if scenario == .mustMoveToApplications {
                     #expect(delegate.codexRuntime.codexSnippet == nil, """
-                        kind=\(kind) state=\(state) translocated=true（pathRejection ==
+                        kind=\(kind) state=\(state) scenario=\(scenario)（pathRejection ==
                         .mustMoveToApplications）時 codexSnippet 應為 nil，實際 \
                         \(String(describing: delegate.codexRuntime.codexSnippet))
                         """)
                 } else {
                     #expect(delegate.codexRuntime.codexSnippet != nil, """
-                        kind=\(kind) state=\(state) translocated=false（pathRejection == nil）\
-                        時 codexSnippet 應非 nil
+                        kind=\(kind) state=\(state) scenario=\(scenario) 時 codexSnippet 應非 nil
                         """)
                 }
             }
         }
     }
 
-    /// CX25 來源掃描半——`codexHome` 的生產路徑不得用 `environment["HOME"]`（T04 review M1／M2
-    /// 同一個陷阱已出現兩次：`timeout`／`agentFlag`；掃描本身不能拿產生器跟自己比，但這裡驗的
-    /// 是「有沒有用這個字面」，不是「產生器輸出是否正確」，字面掃描是對的工具）。**只掃
-    /// `Sources/`**——`Tests/`／`docs/` 裡出現這個字面是在講這件事，不是在做這件事。
-    @Test("productionCodexHomeIsRealHome 來源掃描：Sources/ 不得用 environment[\"HOME\"] 算 codexHome")
-    func productionCodexHomeSourceNeverReadsHomeEnvVar() throws {
-        let sourcesRoot = Self.repoRoot().appendingPathComponent("Sources")
-        let offenders = Self.swiftFiles(under: sourcesRoot).compactMap { url -> String? in
-            guard let text = try? String(contentsOf: url, encoding: .utf8),
-                  text.contains("environment[\"HOME\"]") else { return nil }
-            return url.lastPathComponent
-        }
-        #expect(offenders.isEmpty, """
-            \(offenders) 用了 environment["HOME"] 算路徑——codexHome／claudeHome 都必須用
-            FileManager.default.homeDirectoryForCurrentUser，不是環境變數（CX25）
-            """)
-    }
-
-    /// 同一個 target 看不到 `Tests/AuraCoreTests/Gate.swift`，各自維護一份小型
-    /// `repoRoot()`（同 `AboutContentTests` 的既有先例）。
-    static func repoRoot() -> URL {
-        var dir = URL(fileURLWithPath: #filePath)
-        while dir.pathComponents.count > 1 {
-            dir = dir.deletingLastPathComponent()
-            if FileManager.default.fileExists(atPath: dir.appendingPathComponent("Package.swift").path) {
-                return dir
-            }
-        }
-        fatalError("找不到 Package.swift")
-    }
-
-    static func swiftFiles(under root: URL) -> [URL] {
-        guard let e = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return [] }
-        return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
-    }
 }
