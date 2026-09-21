@@ -1,33 +1,18 @@
 import Foundation
+import AuraCore
+@testable import AgentAuraApp
 
 /// codex-support T01 佔位——對抗式 double `FakeCodexInstaller`（spec §6.1(7)、§8.1
 /// file layout：`Tests/AgentAuraAppTests/Support/FakeCodexInstaller`）。供 T10 的
 /// `CodexWiringSmokeTests`（CX24⑤）、`stalePathReconnectDisconnectsBeforeConnecting`
 /// （CX35）、`codexReconnectNeverDisconnectsWhenPathIsRejected`（CX39）共用。
 ///
-/// **T01b（review M2）**：協定簽章對齊 spec §4.4／§2 已定案的
-/// `CodexInstaller.connect(json:translocated:inDownloads:) throws -> Data`／
-/// `disconnect(ifContentsEqual:) throws`——舊版本地協定是零參數的 `connect()`／
-/// `disconnect()`，**在原理上表達不出** CX39（「`translocated` 時 `connect` 被拒，
-/// 所以 `disconnect` 呼叫次數必須是 0」）與 CX35／CX17（「內容不符就不刪」）這兩個
-/// 情境——不是簽章微調，是少了承載這些情境的維度。與既有
-/// `Tests/AgentAuraAppTests/Support/FakeLoginItem.swift` 在 `LoginItemControlling`
-/// 落地前的做法不同：那時協定還沒定案；這裡 spec 早就寫死了，照抄零成本。
-/// `probe()` 的回傳型別（`FakeCodexProbeState`）仍是暫定——`CodexInstaller.probe()`
-/// 的正式回傳型別（`CodexObservation`，T04）落地後對齊即可。
-protocol CodexInstallerProtocol {
-    func probe() throws -> FakeCodexProbeState
-    func connect(json: Data, translocated: Bool, inDownloads: Bool) throws -> Data
-    func disconnect(ifContentsEqual: Data?) throws
-}
-
-enum FakeCodexProbeState: Equatable {
-    case notConnected
-    case connected(Data)
-}
-
+/// **T10（對齊 T04／T06 已落地的正式簽章）**：直接遵守 `CodexInstalling`
+/// （`AppDelegate+Codex.swift`，composition root 用它注入替身）——`probe()` 不 throw、
+/// 回真的 `CodexObservation`（T04），不再是 T01 當時暫定的本地協定 ＋
+/// `FakeCodexProbeState`（doc comment 早已預告「落地後對齊即可」）。`connect`／
+/// `disconnect` 簽章原本就已對齊 spec §4.4／§2，不動。
 enum FakeCodexInstallerError: Error, Equatable {
-    case probeFailed
     /// `connect` 因為 `translocated || inDownloads` 被拒（R-5／R-9；CX39 的情境）。
     case blockedByBundlePath
     /// `disconnect(ifContentsEqual:)` 給的內容與磁碟上的不符（CX35／CX17 的情境）。
@@ -35,9 +20,11 @@ enum FakeCodexInstallerError: Error, Equatable {
 }
 
 /// 四種刁鑽行為，見 spec §6.1(7)：
-/// ① `connect()` 成功但 `probe()` 仍回 `.notConnected`；
+/// ① `connect()` 成功但 `probe()` 仍回「未接上」形狀；
 /// ② `disconnect()` 宣稱成功但檔案還在（`diskContents` 不清空）；
-/// ③ `probe()` 丟錯；
+/// ③ `probe()` 回「不可用」形狀——同 `CodexInstaller.probe()` 的真實契約：對檔案系統的
+///   失敗一律吞成 `.absent`／`codexHomeIsDirectory: false` 形狀，**不 throw**（T10 對齊，
+///   舊版 `.probeThrows` 是 T01 暫定協定底下的近似，那個近似已經不成立）；
 /// ④ 記錄 `connect`／`disconnect`／`probe` 的呼叫順序與次數（`callOrder`，任何 mode 都記）。
 ///
 /// 額外兩個維度（T01b M2，不分 mode、對所有 mode 一致生效，比照 spec §4.4 執行層的
@@ -45,13 +32,15 @@ enum FakeCodexInstallerError: Error, Equatable {
 /// - `connect(translocated: true, ...)` 或 `inDownloads: true` 一律 throw
 ///   `.blockedByBundlePath`，不寫入、不改動 `diskContents`（CX39 用：驗證「被拒時
 ///   disconnect 呼叫次數是 0」，需要呼叫端因為 `connect` 真的丟錯而不往下呼叫 disconnect）。
-/// - `disconnect(ifContentsEqual:)` 給的內容與 `diskContents` 不符時一律 throw
-///   `.contentsMismatch`、不清空（CX35／CX17 用）。
-final class FakeCodexInstaller: CodexInstallerProtocol {
+/// - `disconnect(ifContentsEqual:)`：磁碟為 nil（absent）一律冪等成功（同
+///   `CodexInstaller.disconnect` 的 `ENOENT` 分支）；磁碟非 nil 時，`expected` 為 nil
+///   或與磁碟不符一律 throw `.contentsMismatch`、不清空（CX35／CX17 用；同真實實作
+///   「`expected == nil` 一律當作不符，`absent` 除外」的既有理由）。
+final class FakeCodexInstaller: CodexInstalling {
     enum Mode {
         case connectSucceedsButProbeStaysNotConnected
         case disconnectClaimsSuccessButLeavesFile
-        case probeThrows
+        case probeReturnsUnavailable
         case normal
     }
 
@@ -69,19 +58,26 @@ final class FakeCodexInstaller: CodexInstallerProtocol {
         self.diskContents = seededDiskContents
     }
 
-    func probe() throws -> FakeCodexProbeState {
+    func probe() -> CodexObservation {
         callOrder.append("probe")
-        if case .probeThrows = mode { throw FakeCodexInstallerError.probeFailed }
-        if case .connectSucceedsButProbeStaysNotConnected = mode { return .notConnected }
-        guard let d = diskContents else { return .notConnected }
-        return .connected(d)
+        if case .probeReturnsUnavailable = mode {
+            return CodexObservation(codexHomeIsDirectory: false, entryType: .absent, contents: nil, displayPath: nil)
+        }
+        if case .connectSucceedsButProbeStaysNotConnected = mode {
+            return CodexObservation(codexHomeIsDirectory: true, entryType: .absent, contents: nil, displayPath: nil)
+        }
+        guard let d = diskContents else {
+            return CodexObservation(codexHomeIsDirectory: true, entryType: .absent, contents: nil, displayPath: nil)
+        }
+        return CodexObservation(codexHomeIsDirectory: true, entryType: .regularFile, contents: d,
+                                displayPath: "/fake/.codex/hooks.json")
     }
 
     func connect(json: Data, translocated: Bool, inDownloads: Bool) throws -> Data {
         callOrder.append("connect")
         guard !translocated, !inDownloads else { throw FakeCodexInstallerError.blockedByBundlePath }
         if case .connectSucceedsButProbeStaysNotConnected = mode {
-            // 假裝寫成功但不真的記錄進「磁碟」——probe() 之後仍會回 .notConnected，
+            // 假裝寫成功但不真的記錄進「磁碟」——probe() 之後仍回「未接上」形狀，
             // 逼呼叫端不能只信 connect() 的回傳值。
             return json
         }
@@ -91,7 +87,8 @@ final class FakeCodexInstaller: CodexInstallerProtocol {
 
     func disconnect(ifContentsEqual expected: Data?) throws {
         callOrder.append("disconnect")
-        if let expected, expected != diskContents {
+        guard let disk = diskContents else { return }   // absent：冪等成功（同真實 ENOENT 分支）
+        guard let expected, expected == disk else {
             throw FakeCodexInstallerError.contentsMismatch
         }
         if case .disconnectClaimsSuccessButLeavesFile = mode {

@@ -42,6 +42,7 @@ extension AppDelegate {
     /// invariant；`PanelHostingTests.acknowledgeFiresOnCloseNotOpen` 是它的回歸 gate）。
     func handleOnOpen() {
         reprobe()
+        reprobeCodex()   // D-t 時機②（CX24⑤）。
         refreshPanel()
     }
 

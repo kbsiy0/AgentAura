@@ -4,12 +4,11 @@ import Foundation
 import AuraCore
 import AuraHookFile
 
-/// codex-support T01 骨架（CX24，**T10 解除**）：composition-root smoke 五段
-/// （spec §6.2／§6.3）——驗 `AppDelegate+Codex.swift`（T10）真的把 `CodexInstaller`／
-/// `CodexHookStore`／`reprobeCodex()` 接起來，而不是「單元測試證明能用、composition
-/// root 忘了傳」（user-level CLAUDE.md「Tested-capability ≠ wired-capability」）。
+/// T10：composition-root smoke（spec §6.2／§6.3）——驗 `AppDelegate+Codex.swift` 真的把
+/// `CodexInstaller`／`CodexHookStore`／`reprobeCodex()` 接起來，而不是「單元測試證明能用、
+/// composition root 忘了傳」（user-level CLAUDE.md「Tested-capability ≠ wired-capability」）。
 ///
-/// **五段**（CX24）：
+/// **CX24 五段**：
 /// ① 接線：`delegate` 真的持有注入的 codex 依賴，不是 nil／換成生產預設值。
 /// ② fake 收到 `connect()` 呼叫：送出接上動作之後，fake 的呼叫序裡有一次 "connect"。
 /// ③ 憑證取回是同一串位元組：`connect()` 回傳的 `Data` 與 `CodexHookStore` 讀回來的
@@ -19,18 +18,11 @@ import AuraHookFile
 ///    從 `L10nCodex` 的鍵推導，不寫死中文全文，語言一換也要能跟著換。
 /// ⑤ spy 記 `probe()` 次數：`onOpen` 之後 `probeCallCount` 必須比呼叫前更多
 ///    （`reprobeCodex()` 四個時機之一；漏接的症狀是「裝了 Codex、開面板、什麼都沒有，
-///    重開才出現」，見 spec §4.6）。
-///
-/// **型別依賴（RED 理由＝編譯依賴）**：`AppDelegate` 目前的 init 沒有任何 Codex 相關
-/// 參數（T10 才加），`reprobeCodex()`／`performConnectCodex()`／`codexHookStore`／
-/// `L10nCodex` 都還不存在。下面的注入參數名與呼叫序是**依 spec §4.6／§6.2／既有
-/// `AppDelegateOnOpenTests.swift` 的注入模式推測的形狀**，不保證與 T10 最終簽章逐字
-/// 相同——T10 若簽章不同，把對應呼叫調整即可，五段各自要驗的性質不變。
-///
-/// **T10 解除方式**：把測試函式裡的 `#if AURA_CODEX_PENDING_T10` / `#else` /
-/// `Issue.record(...)` / `#endif` 拿掉，只留 `#if` 分支內的真斷言（依實際簽章調整）。
+///    重開才出現」，見 spec §4.6）。**這一段比對位元組**（`fakeInstaller.probeCallCount`
+///    是計數，不是位元組——這裡指的是 mutation③「拿掉 onOpen 的 reprobeCodex()」時，
+///    唯一會變的就是這個計數，其餘四段的斷言在那個 mutation 下仍然照樣通過）。
 @MainActor
-@Suite("Codex composition-root smoke（CX24）", .serialized)
+@Suite("Codex composition-root smoke（CX24／CX25）", .serialized)
 struct CodexWiringSmokeTests {
 
     func makeRoot() throws -> URL {
@@ -47,32 +39,36 @@ struct CodexWiringSmokeTests {
 
     @Test("五段：接線／fake 收到 connect／憑證位元組相等／banner 兩個關鍵詞／probe 次數增加")
     func codexConnectChainIsWired() throws {
-        #if AURA_CODEX_PENDING_T10
         let (defaults, suite) = try freshDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let fakeInstaller = FakeCodexInstaller(mode: .normal)
 
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   makeRenderer: { spy }, codexInstaller: fakeInstaller)
+                                   codexDependencies: CodexDependencies(installer: fakeInstaller, translocated: false,
+                                                                        inDownloads: false, writeToPasteboard: { _ in }),
+                                   makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         // ① 接線：注入的依賴真的被持有，不是 nil／換成生產預設值。
-        #expect(delegate.codexInstaller is FakeCodexInstaller,
-                "composition root 沒有把注入的 fake 接上，實際型別 \(type(of: delegate.codexInstaller as Any))")
+        #expect(delegate.codexRuntime.installer is FakeCodexInstaller,
+                "composition root 沒有把注入的 fake 接上，實際型別 \(type(of: delegate.codexRuntime.installer))")
 
-        // ② fake 收到 connect() 呼叫。
-        delegate.performConnectCodex()
+        // ② fake 收到 connect() 呼叫——**走 onAction**（不是直接呼叫 `performConnectCodex()`），
+        // 這樣「`switch action` 的 `.connectCodex` 分支改 break」才會讓這一段真的變紅
+        // （mutation①；直接呼叫方法會繞過那個 switch，測不到接線本身斷掉）。
+        let onAction = try #require(spy.onAction, "AppDelegate 沒有接 status.onAction")
+        onAction(.connectCodex)
         #expect(fakeInstaller.connectCallCount == 1, "送出接上動作之後，fake 應該收到恰一次 connect()")
 
         // ③ 憑證取回是同一串位元組（不是「非 nil」）。
         let written = try #require(fakeInstaller.diskContents)
-        #expect(delegate.codexHookStore.contents == written,
+        #expect(delegate.codexRuntime.store.contents == written,
                 "CodexHookStore 讀回來的位元組應與 connect() 寫出去的逐位元組相等")
 
         // ④ banner 含兩個關鍵詞（從 L10nCodex 鍵推導，不寫死全文）。
-        let banner = try #require(delegate.currentBanner)
+        let banner = try #require(delegate.banner?.text)
         #expect(banner.contains(L10nCodex.nextSessionTakesEffectKeyword)
                 && banner.contains(L10nCodex.codexWillAskToTrustKeyword), """
             接上成功的 banner 必須同時講「下一個 session 起生效」與「Codex 會問你信任」（D-m），
@@ -85,12 +81,65 @@ struct CodexWiringSmokeTests {
         onOpen()
         #expect(fakeInstaller.probeCallCount > before,
                 "onOpen 必須觸發 reprobeCodex()（CX24⑤），probe 次數應該增加")
-        #else
-        Issue.record("""
-            待 T10：AppDelegate+Codex.swift／CodexHookStore／L10nCodex 尚未存在，\
-            composition-root 五段接線無法驗證。T10 落地後把本測試函式裡的 \
-            #if AURA_CODEX_PENDING_T10 / #else / #endif 拿掉，依實際簽章調整呼叫即可生效。
+    }
+
+    /// CX25（§6.2 第二條）：不覆寫 `codexDependencies` 時，生產注入的是真的 `CodexInstaller`，
+    /// `codexHome` 是真的 `~/.codex`——同 `AppDelegateCompositionInjectionTests
+    /// .productionUsesRealInstaller` 對 Claude 側的既有先例，`probe()` 只讀不寫，
+    /// 不違反「測試裡絕不碰真的 ~/.codex」（見 `AppDelegatePanelActionsWiredTests.Recorder`
+    /// 的 doc comment：唯讀可以援用那個先例，`connect`／`disconnect` 不能）。
+    @Test("productionCodexHomeIsRealHome：不覆寫 codexDependencies 時，codexHome 是真的 ~/.codex")
+    func productionCodexHomeIsRealHome() throws {
+        // 不需要 launch——codexRuntime 是 init 就算好的欄位，建構完就在。
+        let delegate = AppDelegate(root: FileManager.default.temporaryDirectory)
+        guard let installer = delegate.codexRuntime.installer as? CodexInstaller else {
+            Issue.record("""
+                生產注入的 codexRuntime.installer 型別是 \(type(of: delegate.codexRuntime.installer))，\
+                不是真的 CodexInstaller——composition root 沒有接上生產實作
+                """)
+            return
+        }
+        let path = installer.codexHome.path
+        #expect(path.hasSuffix("/.codex"), "生產 codexHome 應以 /.codex 結尾，實際 \(path)")
+        #expect(!path.hasPrefix("/var/folders/"), """
+            生產 codexHome 不該落在 /var/folders/ 下（那是測試注入的 temp 值），實際 \(path)
             """)
-        #endif
+        #expect(!path.hasPrefix(NSTemporaryDirectory()), "生產 codexHome 不該落在 NSTemporaryDirectory() 下，實際 \(path)")
+    }
+
+    /// CX25 來源掃描半——`codexHome` 的生產路徑不得用 `environment["HOME"]`（T04 review M1／M2
+    /// 同一個陷阱已出現兩次：`timeout`／`agentFlag`；掃描本身不能拿產生器跟自己比，但這裡驗的
+    /// 是「有沒有用這個字面」，不是「產生器輸出是否正確」，字面掃描是對的工具）。**只掃
+    /// `Sources/`**——`Tests/`／`docs/` 裡出現這個字面是在講這件事，不是在做這件事。
+    @Test("productionCodexHomeIsRealHome 來源掃描：Sources/ 不得用 environment[\"HOME\"] 算 codexHome")
+    func productionCodexHomeSourceNeverReadsHomeEnvVar() throws {
+        let sourcesRoot = Self.repoRoot().appendingPathComponent("Sources")
+        let offenders = Self.swiftFiles(under: sourcesRoot).compactMap { url -> String? in
+            guard let text = try? String(contentsOf: url, encoding: .utf8),
+                  text.contains("environment[\"HOME\"]") else { return nil }
+            return url.lastPathComponent
+        }
+        #expect(offenders.isEmpty, """
+            \(offenders) 用了 environment["HOME"] 算路徑——codexHome／claudeHome 都必須用
+            FileManager.default.homeDirectoryForCurrentUser，不是環境變數（CX25）
+            """)
+    }
+
+    /// 同一個 target 看不到 `Tests/AuraCoreTests/Gate.swift`，各自維護一份小型
+    /// `repoRoot()`（同 `AboutContentTests` 的既有先例）。
+    static func repoRoot() -> URL {
+        var dir = URL(fileURLWithPath: #filePath)
+        while dir.pathComponents.count > 1 {
+            dir = dir.deletingLastPathComponent()
+            if FileManager.default.fileExists(atPath: dir.appendingPathComponent("Package.swift").path) {
+                return dir
+            }
+        }
+        fatalError("找不到 Package.swift")
+    }
+
+    static func swiftFiles(under root: URL) -> [URL] {
+        guard let e = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return [] }
+        return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 }

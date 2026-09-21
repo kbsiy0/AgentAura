@@ -32,10 +32,16 @@ struct Uninstaller {
     /// T29（i18n）：垃圾桶動作失敗時 `UninstallFailureLog` 那一行紀錄要用哪個語言寫，
     /// 跟著呼叫端目前的顯示語言（`AppDelegate.language`）走。
     let language: Language
+    /// T10（D-n／L5）：完整移除必須一併移除我們寫的 `~/.codex/hooks.json`（內容相符時）——
+    /// 比對用的內容住在 persistent domain 裡，所以這一步**必須在 `erasePersistentDomain()`
+    /// 之前**（CX26）。
+    let codexInstaller: any CodexInstalling
+    let codexStore: CodexHookStore
 
     func run() {
         try? loginItem.set(false)
         try? installer.disconnect()
+        try? codexInstaller.disconnect(ifContentsEqual: codexStore.contents)
         StateDirectoryEraser.erase(stateDirectory, home: homeDirectory)
         erasePersistentDomain()
         recycleBundleAndTerminate()

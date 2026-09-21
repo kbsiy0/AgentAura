@@ -50,6 +50,12 @@ public struct PanelBanner: Equatable, Sendable {
         PanelBanner(kind: .connected, text: L10nCodex.connectedBanner.text(language))
     }
 
+    /// T10：`performDisconnectCodex()` 成功時的固定文案——同 `.codexConnected(language:)`
+    /// 的既有理由，`.disconnected` kind（視覺上是「已移除」樣式，同 Claude 側 `.disconnect`）。
+    public static func codexDisconnected(language: Language) -> PanelBanner {
+        PanelBanner(kind: .disconnected, text: L10nCodex.disconnectedBanner.text(language))
+    }
+
     private init(kind: Kind, text: String) {
         self.kind = kind
         self.text = text

@@ -41,6 +41,11 @@ public enum L10nCodex: L10nCatalog, Sendable {
     /// 按下去之前與之後都要看到這句）。與 Claude 側 `.connected` 不是同一句
     /// （Claude 側沒有「信任提示」這件事）。
     case connectedBanner
+    /// T10：拆掉 Codex 掛載成功的固定文案——同 Claude 側 `.disconnected(language:)` 的既有
+    /// 理由（`.text` 一律不給預設值），但不重用那句：Claude 側寫「要再用的話按［接上］」，
+    /// 這裡的按鈕字樣是「接上 Codex」／「重新接上 Codex」（`L10nCodex.connectRow`／
+    /// `reconnectRow`），照抄 Claude 側措辭會提到一顆不存在的按鈕。
+    case disconnectedBanner
     /// `CodexFailure.codexHomeMissing` 的 banner。
     case codexHomeMissingBanner
     /// `CodexFailure.alreadyExists` 的 banner。
@@ -121,6 +126,11 @@ public enum L10nCodex: L10nCatalog, Sendable {
                     """
             case .traditionalChinese:
                 return "已接上 Codex · 下一個 Codex session 起生效；Codex 啟動時會問你一次是否信任這個 hook，要按同意才會生效。"
+            }
+        case .disconnectedBanner:
+            switch language {
+            case .english: return "Removed Codex's hook mount."
+            case .traditionalChinese: return "已移除 Codex 掛載。"
             }
         case .codexHomeMissingBanner:
             switch language {

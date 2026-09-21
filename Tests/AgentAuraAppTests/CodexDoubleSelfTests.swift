@@ -1,8 +1,11 @@
 import Testing
 import Foundation
+import AuraCore
 
 /// codex-support T01 自我測試：`FakeCodexInstaller`／`FakeCodexStore` 真的有它們宣稱
-/// 的行為——純記憶體邏輯，不依賴 T06／T10 的任何生產型別。**這些合理地是 GREEN**：
+/// 的行為——純記憶體邏輯，不依賴 T06 以外的任何生產型別（`probe()` 的回傳型別
+/// `CodexObservation` 是 T04 的產物，T10 對齊時把這裡也一併換過來，見
+/// `FakeCodexInstaller.swift` 的 doc comment）。**這些合理地是 GREEN**：
 /// 驗的是 fake 自己，同 `Tests/AuraCoreTests/CodexFixtureSelfTests.swift` 的角色。
 @Suite("Codex fake 自我驗證")
 struct CodexDoubleSelfTests {
@@ -32,21 +35,27 @@ struct CodexDoubleSelfTests {
     @Test("FakeCodexInstaller：呼叫序與次數逐一累計（四種 mode 共用同一套記帳）")
     func fakeCodexInstallerRecordsCallOrder() throws {
         let fake = FakeCodexInstaller(mode: .normal)
-        _ = try fake.probe()
-        _ = try fake.connect(json: Data("x".utf8), translocated: false, inDownloads: false)
-        try fake.disconnect(ifContentsEqual: nil)
-        _ = try fake.probe()
+        _ = fake.probe()
+        let written = try fake.connect(json: Data("x".utf8), translocated: false, inDownloads: false)
+        // T10：disconnect(ifContentsEqual:) 現在對齊真實 `CodexInstaller.disconnect` 的契約——
+        // 磁碟非 nil 時 `expected` 必須逐位元組相符才會清空，`nil` 一律視為不符
+        // （同 CX17 的既有理由）。這裡只是要證明呼叫序被記到，改用相符的位元組，不改「記帳」
+        // 這件事本身要驗的東西。
+        try fake.disconnect(ifContentsEqual: written)
+        _ = fake.probe()
         #expect(fake.callOrder == ["probe", "connect", "disconnect", "probe"])
         #expect(fake.probeCallCount == 2)
         #expect(fake.connectCallCount == 1)
         #expect(fake.disconnectCallCount == 1)
     }
 
-    @Test("FakeCodexInstaller：① connect 成功但 probe 仍回 notConnected")
+    @Test("FakeCodexInstaller：① connect 成功但 probe 仍回「未接上」形狀")
     func modeConnectSucceedsButProbeStaysNotConnected() throws {
         let fake = FakeCodexInstaller(mode: .connectSucceedsButProbeStaysNotConnected)
         _ = try fake.connect(json: Data("x".utf8), translocated: false, inDownloads: false)
-        #expect(try fake.probe() == .notConnected)
+        let observed = fake.probe()
+        #expect(observed.entryType == .absent, "connect 之後 probe 仍應觀察到 absent，而不是真的寫進磁碟")
+        #expect(observed.contents == nil)
     }
 
     @Test("FakeCodexInstaller：② disconnect 宣稱成功但檔案還在")
@@ -57,17 +66,21 @@ struct CodexDoubleSelfTests {
         #expect(fake.diskContents == seeded, "宣稱斷開成功，但磁碟內容必須還在")
     }
 
-    @Test("FakeCodexInstaller：③ probe 丟錯")
-    func modeProbeThrows() {
-        let fake = FakeCodexInstaller(mode: .probeThrows)
-        #expect(throws: FakeCodexInstallerError.self) { _ = try fake.probe() }
+    @Test("FakeCodexInstaller：③ probe 回「不可用」形狀（同真實契約：檔案系統的失敗一律吞成 absent，不 throw）")
+    func modeProbeReturnsUnavailable() {
+        let fake = FakeCodexInstaller(mode: .probeReturnsUnavailable)
+        let observed = fake.probe()
+        #expect(observed.codexHomeIsDirectory == false, "codexHome 本身探測失敗時應觀察到 codexHomeIsDirectory == false")
+        #expect(observed.contents == nil)
     }
 
-    @Test("FakeCodexInstaller：normal 模式下 connect 之後 probe 回 .connected 且位元組一致")
+    @Test("FakeCodexInstaller：normal 模式下 connect 之後 probe 回 regularFile 且位元組一致")
     func normalModeConnectThenProbeAgree() throws {
         let fake = FakeCodexInstaller(mode: .normal)
         let written = try fake.connect(json: Data("payload".utf8), translocated: false, inDownloads: false)
-        #expect(try fake.probe() == .connected(written))
+        let observed = fake.probe()
+        #expect(observed.entryType == .regularFile)
+        #expect(observed.contents == written)
     }
 
     @Test("FakeCodexInstaller（T01b M2）：translocated／inDownloads 時 connect 被拒，磁碟不變，disconnect 從未被呼叫")

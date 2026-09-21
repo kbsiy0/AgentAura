@@ -95,7 +95,8 @@ extension AppDelegate {
                    bundleIdentifier: bundleID, stateDirectory: root.deletingLastPathComponent(),
                    homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
                    recycler: WorkspaceRecycler(), bundleURL: bundleID != nil ? Bundle.main.bundleURL : nil,
-                   terminator: terminator, language: language).run()
+                   terminator: terminator, language: language,
+                   codexInstaller: codexRuntime.installer, codexStore: codexRuntime.store).run()
     }
 
     /// §4.2：設完**重讀實際值**——`.requiresApproval` 等失敗時開關要彈回去，

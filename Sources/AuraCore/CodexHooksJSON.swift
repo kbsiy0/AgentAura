@@ -64,4 +64,16 @@ public enum CodexHooksJSON {
     public static func snippet(hookBinaryPath: String) -> String {
         String(decoding: json(hookBinaryPath: hookBinaryPath), as: UTF8.self)
     }
+
+    /// R-10：snippet 也要穿過路徑判定——`pathRejection == .mustMoveToApplications` 時扣住
+    /// （那個路徑下次開機就消失，給出來等於發一張明天就過期的票，P2 是最會真的照著貼的
+    /// 那個 persona）；其餘情況（含 `.unsupportedCharacter`）照給，那個路徑不會消失。
+    /// **這條規則不看 `CodexState`**——CX40 的乘積表故意跨每個 `CodexStateKind` 驗證同一個
+    /// 結論，確保沒有人不小心把扣住的條件寫成「只在 `.blockedByBundlePath` 時」（那會漏掉
+    /// `.occupiedByOther`，正是 r3 M1 指出的那扇側門）。`AppDelegate+Codex.swift` 的
+    /// `CodexRuntime` 是唯一生產呼叫點，不在那裡另外重算一次同樣的三元判斷。
+    public static func withheldSnippet(hookBinaryPath: String,
+                                       pathRejection: CodexHookPathCheck.Rejection?) -> String? {
+        pathRejection == .mustMoveToApplications ? nil : snippet(hookBinaryPath: hookBinaryPath)
+    }
 }

@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var loginItem: (any LoginItemControlling)!
 
     var installState: InstallState = .notConnected
+    /// T10：Codex 依賴 ＋ 五個行程常數（型別定義、`reprobeCodex()`／`performConnectCodex()`
+    /// 等接線都在 `AppDelegate+Codex.swift`——這裡只放這一個 stored property）。
+    var codexRuntime: CodexRuntime
     var optionsExpanded = false
     var launchAtLogin: Bool?
     var externalTargetPath: String?
@@ -94,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              { current, language, appearance, showsPlate, onSelect in
                  IconShapeMenu.present(current: current, language: language,
                                        appearance: appearance, showsPlate: showsPlate, onSelect: onSelect) },
+         codexDependencies: CodexDependencies = .production(),
          makeRenderer: @escaping @MainActor () -> any IconRendering = { StatusItemController() }) {
         self.root = root
         self.livenessInterval = livenessInterval
@@ -108,6 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.confirmUninstall = confirmUninstall
         self.presentIconShapeMenu = presentIconShapeMenu
         self.makeRenderer = makeRenderer
+        codexRuntime = CodexRuntime(dependencies: codexDependencies, store: CodexHookStore(defaults: defaults),
+                                    hookBinaryPath: Self.productionHookBinaryPath())
         super.init()
     }
 
@@ -177,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // §4.4：首啟順序強制——attachPopover→setPanel(真實狀態)→showPanel；obs 轉給下面（E6）。
         let obs = reprobeObserving()
+        reprobeCodex()   // D-t 時機①：第一次 refreshPanel() 之前（CX24⑤）。
         refreshPanel()
         runFirstRunSequenceIfNeeded()
         launchVerificationIfNeeded(observed: obs)
