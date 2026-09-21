@@ -25,6 +25,13 @@ struct CodexEvidenceRenderer {
     /// 真的產生器輸出，不是手寫字面（同 `CodexSectionViewTests.realSnippet` 的既有理由）。
     static let realSnippet = CodexHooksJSON.snippet(hookBinaryPath: "/Applications/AgentAura.app/Contents/PlugIns/aura-hook")
 
+    /// S1-6（persona r1）：#07 宣告 `.unsupportedCharacter(" ")`，但先前餵的 `realSnippet`
+    /// 來源路徑根本不含空白——圖上的 snippet 因此看不到「那條會壞的路徑」，跟文案兜不起來。
+    /// 這裡改用真的含空白的路徑產生 snippet，讓畫面上的 snippet 內容與宣稱的 rejection 一致。
+    /// **r13 之後這個情境會改成「不給 snippet」**（spec 已改），這條常數與 #07 是 r13 前的
+    /// 修前基準，T13 落地後要重渲（見 `scenarios(now:)` #07 與 `writeIndex` 的附註）。
+    static let realSnippetWithSpace = CodexHooksJSON.snippet(hookBinaryPath: "/Users/someone/My Apps/AgentAura.app/Contents/PlugIns/aura-hook")
+
     func session(_ id: String, _ name: String, _ a: Activity, agent: Agent, updatedAt: Date) -> SessionState {
         SessionState(id: id, projectName: name, permissionMode: "default", effort: nil, model: nil, agent: agent,
                     activity: a, mainActivity: a, subActivity: nil, currentTool: "Bash", subagentTool: nil,
@@ -71,9 +78,10 @@ struct CodexEvidenceRenderer {
                                codex: codex, codexSnippet: codexSnippet, codexPathRejection: codexPathRejection, now: now)
     }
 
-    /// 11 個情境（10 個題項 + 「connectedStalePath 兩種 Rejection 都不給重新接上按鈕」拆兩張，
+    /// 12 個情境（10 個題項 + 「connectedStalePath 兩種 Rejection 都不給重新接上按鈕」拆兩張，
     /// 見 #10／#11：這兩張與 #6／#7 不是同一個 `CodexState`（#6/#7 是 `occupiedByOther`／
-    /// `blockedByBundlePath`，#10/#11 是 `connectedStalePath`），沒有重疊可併）。
+    /// `blockedByBundlePath`，#10/#11 是 `connectedStalePath`），沒有重疊可併，+ #12
+    /// S1-7 補的證據缺口——見該情境的 doc comment）。
     func scenarios(now: Date) -> [Scenario] {
         let claude = session("a", "fitness-tracker", .working, agent: .claude, updatedAt: now)
         let codexRow = session("b", "fitness-tracker", .waiting, agent: .codex, updatedAt: now.addingTimeInterval(-30))
@@ -115,10 +123,13 @@ struct CodexEvidenceRenderer {
                      codexPathRejection: .mustMoveToApplications, language: lang, now: now)
             },
             // 7. P2：blockedByBundlePath(.unsupportedCharacter(" "))——文案指名是空白字元。
+            //    S1-6（persona r1）：snippet 來源路徑真的含空白（/Users/someone/My Apps/...），
+            //    不再是不含空白的 realSnippet——r13 前的修前基準，T13 落地後（改成不給
+            //    snippet）要重渲這張，見 writeIndex 的附註。
             Scenario(name: "07-blocked-unsupported-character",
-                     desc: "P2：blockedByBundlePath(.unsupportedCharacter(\" \"))——文案指名是空白字元＋snippet（同源）＋「複製」按鈕") { lang in
+                     desc: "P2：blockedByBundlePath(.unsupportedCharacter(\" \"))——文案指名是空白字元＋snippet（同源，來源路徑真的含空白：/Users/someone/My Apps/…）＋「複製」按鈕。**r13 前的狀態**（r13 之後這格改成不給 snippet，T13 落地後要重渲）") { lang in
                 panel(sessions: [claude], install: connected,
-                     codex: .blockedByBundlePath(.unsupportedCharacter(" ")), codexSnippet: Self.realSnippet,
+                     codex: .blockedByBundlePath(.unsupportedCharacter(" ")), codexSnippet: Self.realSnippetWithSpace,
                      codexPathRejection: .unsupportedCharacter(" "), language: lang, now: now)
             },
             // 8. 斷開成功 banner（codexDisconnected）＋斷開後卡片回到 notConnected 的提示。
@@ -145,10 +156,22 @@ struct CodexEvidenceRenderer {
                 panel(sessions: [claude], install: connected, codex: .connectedStalePath,
                      codexPathRejection: .unsupportedCharacter(" "), language: lang, now: now)
             },
+            // 12. S1-7（persona r1 指出的證據缺口）：本 change 的頭號情境——Claude 側
+            //     `.notConnected`，同時有一列活著的 Codex session（agent==.codex，working
+            //     態）。標題（`PanelModel.title`）、footer chip（`PanelFooterView`）、CTA
+            //     窄條（`ConnectCTABannerView`）三處都只讀 `model.install`（`healthLabel`／
+            //     `connectCTAText`），完全不看 `model.codex`——這張圖如實呈現「三處都只反映
+            //     Claude」這個現況，不是修過的版本（這裡不改生產碼）。
+            Scenario(name: "12-notConnected-claude-with-live-codex-session",
+                     desc: "S1-7：install=.notConnected（Claude 未接上）＋一列活著的 Codex session（working）＋Codex 卡片 .connected——看標題／footer chip／CTA 窄條三處在這個組合下寫什麼字（persona r1：三處都只反映 Claude，完全沒提到正在跑的 Codex session）") { lang in
+                let liveCodexSession = session("c", "fitness-tracker", .working, agent: .codex, updatedAt: now)
+                return panel(sessions: [liveCodexSession], install: .notConnected, codex: .connected,
+                            language: lang, now: now)
+            },
         ]
     }
 
-    @Test("產出 11 組 Codex 面板情境 × 兩語言（.aqua）＋ INDEX.md")
+    @Test("產出 12 組 Codex 面板情境 × 兩語言（.aqua）＋ INDEX.md")
     func renderCodexEvidence() throws {
         let dir = try Self.outputDirectory()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -187,6 +210,21 @@ struct CodexEvidenceRenderer {
 
             **只有 `.aqua`（淺色）**：深淺色對比不是這批圖要驗的維度，版面與文案在深淺模式下走同一份 SwiftUI\
             語意色（`.primary`／`.secondary`），需要深色對照時另外要求即可。
+
+            ## persona r1 指出的視覺問題對照（只標，不修）
+
+            - **S0-1** ↔ `03-connected-banner-*`：接上成功 banner 的兩句話要看得到，這張圖的 `sessions` 刻意留空\
+            （`.connected` kind banner 在有活著的 session 時會自動退場，見 #03 的情境註解）——不是遺漏 session，\
+            是唯一能讓兩句話同時留在畫面上的組合。
+            - **S1-4** ↔ `05-occupied-with-snippet-*` ／ `07-blocked-unsupported-character-*`：面板高度約 944pt，\
+            「複製」按鈕落在約 848pt 處（皆為 pt，非這批圖的 px——見上方尺寸單位附註）——snippet 區塊把卡片撐得\
+            很高，複製鈕在很下面才看得到。這裡先標記現況，不在這輪修版面。
+            - **S1-6** ↔ `07-blocked-unsupported-character-*`：已修——snippet 現在由真的含空白的路徑\
+            （`/Users/someone/My Apps/AgentAura.app/Contents/PlugIns/aura-hook`）產生，圖上看得到那條會壞的路徑就在\
+            snippet 裡。**r13 前的修前基準**：spec r13 之後這個情境會改成「不給 snippet」，T13 落地後要重渲這張。
+            - **S1-7** ↔ `12-notConnected-claude-with-live-codex-session-*`：新增。本 change 的頭號情境\
+            （Claude 未接上 ＋ 一列活著的 Codex session）先前完全沒有證據圖——這張如實呈現標題／footer chip／CTA\
+            窄條三處目前都只讀 `model.install`（不看 `model.codex`），完全沒提到正在跑的 Codex session。
 
             | 檔名 | 情境（給 persona 看什麼） |
             |---|---|
