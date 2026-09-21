@@ -134,16 +134,16 @@ struct CodexWiringSmokeTests {
             """)
     }
 
-    /// CX25（§6.2 第二條）：不覆寫 `codexDependencies` 時，生產注入的是真的 `CodexInstaller`，
+    /// CX25（§6.2 第二條）：顯式傳 `.production()` 時，生產注入的是真的 `CodexInstaller`，
     /// `codexHome` 是真的 `~/.codex`——同 `AppDelegateCompositionInjectionTests
     /// .productionUsesRealInstaller` 對 Claude 側的既有先例，`probe()` 只讀不寫，
     /// 不違反「測試裡絕不碰真的 ~/.codex」（見 `AppDelegatePanelActionsWiredTests.Recorder`
-    /// 的 doc comment：唯讀可以援用那個先例，`connect`／`disconnect` 不能）。
-    @Test("productionCodexHomeIsRealHome：不覆寫 codexDependencies 時，codexHome 是真的 ~/.codex")
+    /// 的 doc comment：唯讀可以援用那個先例，`connect`／`disconnect` 不能）。**review M3
+    /// 拿掉 `codexDependencies` 的預設值之後，這裡已經不是「不覆寫」，是明確傳同一個生產值**
+    /// ——測的事情（生產值本身是真的）完全不變，只是不再靠隱式預設達成。
+    @Test("productionCodexHomeIsRealHome：顯式傳 .production() 時，codexHome 是真的 ~/.codex")
     func productionCodexHomeIsRealHome() throws {
-        // 不需要 launch——codexRuntime 是 init 就算好的欄位，建構完就在。**這條測試的重點就是
-        // 「不覆寫」，所以明確傳 `.production()`（不是 `.inert()`）——review M3 拿掉預設值後，
-        // 這裡改成顯式傳同一個生產值，測的事情完全不變。
+        // 不需要 launch——codexRuntime 是 init 就算好的欄位，建構完就在。
         let delegate = AppDelegate(root: FileManager.default.temporaryDirectory, codexDependencies: .production())
         guard let installer = delegate.codexRuntime.installer as? CodexInstaller else {
             Issue.record("""

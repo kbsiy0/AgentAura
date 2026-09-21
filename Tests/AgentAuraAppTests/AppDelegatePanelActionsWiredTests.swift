@@ -50,12 +50,14 @@ struct AppDelegatePanelActionsWiredTests {
         /// T32：`.pickIconShape` 每次真的走過選單呈現閉包才 +1——同 `confirmedDisconnects`
         /// 的理由，證明這一步沒有被跳過。
         var presentedIconShapeMenuCount = 0
-        /// T10：`AppDelegate.init` 的 `codexDependencies` 預設值是**真的** `.production()`
+        /// T10：`AppDelegate.init` 的 `codexDependencies` 曾經預設是**真的** `.production()`
         /// （同 Claude 側 `installer: Installer = .production()` 的既有先例）——`withFreshRig`
         /// 若不明確覆寫，`.connectCodex`／`.disconnectCodex` 會真的打中這台機器的
         /// `~/.codex/hooks.json`（`reprobeCodex()` 的 `probe()` 是唯讀，可以比照
         /// `AppDelegateCompositionInjectionTests` 的既有先例不覆寫；`connect`／`disconnect`
-        /// 會寫，不能援用那個先例）。**每個 case 全新一份**，不跨 case 共用。
+        /// 會寫，不能援用那個先例）。**這個預設值已於 review M3 拿掉**（`d75bd06` 是這裡的
+        /// 事故修補、`a6df758` 是拿掉預設值的結構修法）——fake 現在由編譯器強制傳入，
+        /// 不再是「忘了覆寫就靜默用生產值」。**每個 case 全新一份**，不跨 case 共用。
         let fakeCodexInstaller = FakeCodexInstaller(mode: .normal)
         var pasteboardWrites: [String] = []
     }
