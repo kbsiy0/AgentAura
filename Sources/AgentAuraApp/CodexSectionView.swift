@@ -118,15 +118,25 @@ struct CodexSectionView: View {
     /// `PanelModel.codexSnippet`（`CodexHooksJSON.snippet(...)` 的產出，R-10 之後穿過
     /// 路徑判定），這裡只負責畫出來，同源見 `CodexSectionViewTests`
     /// 的 `occupiedWithSnippetShowsSnippetAndCopyButton`（mutation③：改成手寫字串，會紅）。
+    ///
+    /// T13i（S1-4，D-ab，CX56）：包一層 `ScrollView` 並吃 `CodexSnippetSizing.height` 這個
+    /// **算好的固定高度**——修前這裡沒有任何高度上限，13 吋機顯示 Dock 時「複製」鈕與整個
+    /// footer 都會被裁在畫面外（persona r1 S1-4，實測 944pt）。**用固定 `.frame(height:)`，
+    /// 不用 `.frame(maxHeight:)`**：T22 已實測 `ScrollView` 垂直方向貪婪，只設上限會讓它
+    /// 吃滿外層提案高度，footer 位置又會變回「依畫布而定」（`FooterPositionStabilityTests`
+    /// 守的東西，CX56 mutation②）。
     @ViewBuilder
     private func snippetBlock(_ snippet: String) -> some View {
-        Text(snippet)
-            .font(.system(size: 10, design: .monospaced))
-            .foregroundStyle(.primary)
-            .textSelection(.enabled)
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        ScrollView {
+            Text(snippet)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .frame(height: CodexSnippetSizing.height)
         actionButton(.copyCodexSnippet, title: L10nCodex.copyButtonLabel.text(model.language))
     }
 
