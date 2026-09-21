@@ -61,10 +61,14 @@ struct CodexSectionView: View {
                     explanation(L10nCodex.blockedPathExplanation.text(model.language))
                     explanation(InstallerFailure.mustMoveToApplicationsMessage(model.language))
                 case .unsupportedCharacter(let character):
+                    // r13（D-w）：**不再給 snippet**——那個路徑雖然不會消失，但 command 是裸
+                    // 路徑不加引號，遞出去的是一份我們自己剛說可能會壞的設定檔（同
+                    // `.mustMoveToApplications` 的理由，見 `CodexHooksJSON.withheldSnippet`）。
+                    // `model.codexSnippet` 此時應已由決策層算成 nil（CX40），這裡改成問題＋
+                    // 解法兩句，不再讀 `model.codexSnippet`——同 `.mustMoveToApplications`
+                    // 分支的既有形狀（D-s 的 view 層守衛不依賴決策層先算對，見 CX49）。
                     explanation(L10nCodex.unsupportedCharacterExplanation(character, language: model.language))
-                    if let snippet = model.codexSnippet {
-                        snippetBlock(snippet)
-                    }
+                    explanation(L10nCodexCards.unsupportedCharacterWayOut.text(model.language))
                 }
             }
         }
@@ -85,8 +89,7 @@ struct CodexSectionView: View {
     /// **文字直接讀 `snippet` 參數，不手搓第二份字面**——`snippet` 的唯一來源是
     /// `PanelModel.codexSnippet`（`CodexHooksJSON.snippet(...)` 的產出，R-10 之後穿過
     /// 路徑判定），這裡只負責畫出來，同源見 `CodexSectionViewTests`
-    /// 的 `occupiedWithSnippetShowsSnippetAndCopyButton`／`blockedUnsupportedCharacterNamesTheCharacterAndKeepsSnippet`
-    /// 兩條（mutation③：改成手寫字串，兩條都會紅）。
+    /// 的 `occupiedWithSnippetShowsSnippetAndCopyButton`（mutation③：改成手寫字串，會紅）。
     @ViewBuilder
     private func snippetBlock(_ snippet: String) -> some View {
         Text(snippet)

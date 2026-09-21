@@ -142,23 +142,64 @@ struct CodexSectionViewTests {
         #expect(!text.contains(Self.realSnippet), "D-s：mustMoveToApplications 不該畫出 snippet 內容")
     }
 
-    /// mutation④ 的守衛：**必須把字元本身插進句子**，不能只講一句籠統話——涵蓋
-    /// `CodexHookPathCheck.unsupportedCharacters` 全部八個字元（定義域推導，不手列），
-    /// 且**定義域走 `CodexState.samples(.blockedByBundlePath)`**（見 suite doc comment）。
-    @Test(".blockedByBundlePath(.unsupportedCharacter)：解釋 ＋ 指名字元 ＋ snippet（同源）＋「複製」",
+    /// mutation④⑤（**r13／T13d／D-w：期望值翻轉**，原名
+    /// `blockedUnsupportedCharacterNamesTheCharacterAndKeepsSnippet`）：**必須把字元本身插進
+    /// 句子**，不能只講一句籠統話——涵蓋 `CodexHookPathCheck.unsupportedCharacters` 全部八個
+    /// 字元（定義域推導，不手列），且**定義域走 `CodexState.samples(.blockedByBundlePath)`**
+    /// （見 suite doc comment）。**r13**：`.unsupportedCharacter` 那個路徑雖然不會消失，但
+    /// `command` 是裸路徑不加引號，那份設定檔仍然不敢給（同 `.mustMoveToApplications` 的理由，
+    /// 見 `CodexHooksJSON.withheldSnippet` doc comment）——**不再給 snippet**，改給出路句
+    /// （`L10nCodexCards.unsupportedCharacterWayOut`）。負向斷言必須餵正向輸入（plan §0）：
+    /// 這裡仍然把真的 `codexSnippet` 塞進 model，斷言的是「給了你 snippet，view 還是不畫」，
+    /// 不是「沒給你 snippet 所以不畫」——後者在任何實作下都成立。
+    /// ~~r12：斷言的是「給 snippet ＋「複製」」，`...KeepsSnippet` 這個名字現在會是一句謊~~。
+    @Test(".blockedByBundlePath(.unsupportedCharacter)：解釋 ＋ 指名字元 ＋ 出路句，不給 snippet／複製按鈕",
           arguments: CodexState.samples(.blockedByBundlePath).compactMap { state -> Character? in
               if case .blockedByBundlePath(.unsupportedCharacter(let c)) = state { return c }
               return nil
           })
-    func blockedUnsupportedCharacterNamesTheCharacterAndKeepsSnippet(character: Character) {
+    func blockedUnsupportedCharacterNamesTheCharacterAndOffersAWayOut(character: Character) {
         let rejection = CodexHookPathCheck.Rejection.unsupportedCharacter(character)
+        // 負向斷言餵正向輸入：真的 codexSnippet，不是 nil。
         let m = Self.model(codex: .blockedByBundlePath(rejection), codexSnippet: Self.realSnippet, codexPathRejection: rejection)
         let text = Self.dumped(m)
         #expect(text.contains(String(character)), """
             字元「\(character)」沒有出現在畫面裡：\(text) —— 只講了一句籠統話，使用者猜不到是哪一個
             """)
-        #expect(text.contains(Self.realSnippet), "unsupportedCharacter 應該給 snippet（D-s），且要跟產生器同源")
-        #expect(text.contains(L10nCodex.copyButtonLabel.text(.traditionalChinese)))
+        #expect(text.contains(L10nCodexCards.unsupportedCharacterWayOut.text(.traditionalChinese)), """
+            字元「\(character)」：沒有看到出路句——只點名問題，不點名解法（persona r1 S0-2）
+            """)
+        #expect(!text.contains(Self.realSnippet), """
+            字元「\(character)」：仍然畫出 snippet（r13：有 rejection 就扣住，不分哪一種）
+            """)
+        #expect(!text.contains(L10nCodex.copyButtonLabel.text(.traditionalChinese)), """
+            字元「\(character)」：仍然畫出「複製」按鈕——沒有 snippet 時不該有東西可複製
+            """)
+    }
+
+    /// **CX49 `blockedCharacterCardWithholdsSnippetAndOffersAWayOut`**（T13d／D-w 的 view 層，
+    /// 新增）：固定用一個含空白字元的代表值（同 `CodexEvidenceRenderer` S1-6 修好之後的手法，
+    /// 用真的產生器輸出，不是隨便一句字面），比對 needle 用 snippet 的**前 40 個字元**而不是
+    /// 整串——`leafStrings` 比對的是真 `String` 值，但 needle 太長時失敗訊息不可讀。
+    /// 上面那條 `blockedUnsupportedCharacterNamesTheCharacterAndOffersAWayOut` 窮盡八個字元，
+    /// 這一條是同一件事的窄域、可讀失敗訊息版本，兩條互相點名，不是重複覆蓋。
+    @Test("CX49：.unsupportedCharacter(空白) 卡片扣住 snippet、給出路句，不給複製按鈕")
+    func blockedCharacterCardWithholdsSnippetAndOffersAWayOut() {
+        // 負向斷言餵正向輸入：真的含空白路徑的產生器輸出，不是 nil。
+        let pathWithSpace = "/Applications/Agent Aura.app/Contents/Resources/plugin/bin/aura-hook"
+        let realSnippetWithSpace = CodexHooksJSON.snippet(hookBinaryPath: pathWithSpace)
+        let rejection = CodexHookPathCheck.Rejection.unsupportedCharacter(" ")
+        let m = Self.model(codex: .blockedByBundlePath(rejection), codexSnippet: realSnippetWithSpace, codexPathRejection: rejection)
+        let text = Self.dumped(m)
+        #expect(text.contains(L10nCodex.unsupportedCharacterExplanation(" ", language: .traditionalChinese)), """
+            沒有看到指名空白字元的解釋句：\(text)
+            """)
+        #expect(text.contains(L10nCodexCards.unsupportedCharacterWayOut.text(.traditionalChinese)), """
+            沒有看到出路句：\(text)
+            """)
+        let needle = String(realSnippetWithSpace.prefix(40))
+        #expect(!text.contains(needle), "仍然畫出 snippet 的內容（前 40 字元 needle）：\(needle)")
+        #expect(!text.contains(L10nCodex.copyButtonLabel.text(.traditionalChinese)), "仍然畫出「複製」按鈕")
     }
 
     /// 正向對照：`CodexState.samples(.blockedByBundlePath)` 這一格恰好是 8 個字元
