@@ -31,6 +31,27 @@ struct UninstallerTests {
         }
     }
 
+    /// CX26 順序驗證用：同 `OrderCheckingLoginItem` 的既有形狀——`disconnect` 被呼叫的
+    /// 當下 `markerKey` 是否還在 defaults 裡（`erasePersistentDomain()` 還沒跑的話應該還在）。
+    final class OrderCheckingCodexInstaller: CodexInstalling {
+        let defaults: UserDefaults
+        let markerKey: String
+        private(set) var disconnectCallCount = 0
+        private(set) var markerPresentWhenCalled: Bool?
+        init(defaults: UserDefaults, markerKey: String) {
+            self.defaults = defaults
+            self.markerKey = markerKey
+        }
+        func probe() -> CodexObservation {
+            CodexObservation(codexHomeIsDirectory: true, entryType: .absent, contents: nil, displayPath: nil)
+        }
+        func connect(json: Data, translocated: Bool, inDownloads: Bool) throws -> Data { json }
+        func disconnect(ifContentsEqual: Data?) throws {
+            disconnectCallCount += 1
+            markerPresentWhenCalled = defaults.object(forKey: markerKey) != nil
+        }
+    }
+
     struct Rig {
         let layout: AppInstallerFixture.Layout
         let installer: Installer
@@ -120,6 +141,28 @@ struct UninstallerTests {
         #expect(orderChecker.markerPresentWhenCalled == true, """
             loginItem.set(false) 被呼叫的當下 marker 應該還在 defaults 裡——
             代表清 defaults 這步（D-3）發生在它之後，不是之前
+            """)
+    }
+
+    /// CX26：`codexInstaller.disconnect(ifContentsEqual:)`（D-n）必須早於
+    /// `erasePersistentDomain()`——比對用的內容住在 persistent domain 裡，順序反了
+    /// 就永遠比不中，Codex 那份掛載完整移除會留殘留。
+    @Test("CX26：codex disconnect 在清 defaults 之前被呼叫")
+    func uninstallRemovesCodexBeforeErasingDefaults() throws {
+        let rig = try makeRig()
+        defer { cleanup(rig) }
+        rig.defaults.set("x", forKey: "marker")
+        let orderChecker = OrderCheckingCodexInstaller(defaults: rig.defaults, markerKey: "marker")
+
+        Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
+                   bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese,
+                   codexInstaller: orderChecker, codexStore: rig.codexStore).run()
+
+        #expect(orderChecker.disconnectCallCount == 1)
+        #expect(orderChecker.markerPresentWhenCalled == true, """
+            codexInstaller.disconnect(ifContentsEqual:) 被呼叫的當下 marker 應該還在 defaults 裡——
+            代表這一步（D-n）發生在 erasePersistentDomain() 之前，不是之後
             """)
     }
 
