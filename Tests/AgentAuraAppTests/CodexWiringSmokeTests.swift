@@ -107,6 +107,67 @@ struct CodexWiringSmokeTests {
         #expect(!path.hasPrefix(NSTemporaryDirectory()), "生產 codexHome 不該落在 NSTemporaryDirectory() 下，實際 \(path)")
     }
 
+    /// 建一個 `pathRejection`／`codexState` 都可控的 delegate，供 CX35／CX39 共用。
+    private func makeDelegate(translocated: Bool, inDownloads: Bool = false,
+                              fakeInstaller: FakeCodexInstaller) throws -> (delegate: AppDelegate, spy: SpyRenderer,
+                                                                            cleanup: () -> Void) {
+        let (defaults, suite) = try freshDefaults()
+        let spy = SpyRenderer()
+        let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
+                                   codexDependencies: CodexDependencies(installer: fakeInstaller, translocated: translocated,
+                                                                        inDownloads: inDownloads, writeToPasteboard: { _ in }),
+                                   makeRenderer: { spy })
+        delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
+        return (delegate, spy, {
+            delegate.applicationWillTerminate(Notification(name: .init("test")))
+            defaults.removePersistentDomain(forName: suite)
+        })
+    }
+
+    /// CX35（前提：`pathRejection == nil`）：`.connectedStalePath` 下送 `.connectCodex`
+    /// → 呼叫順序是 `disconnect` → `connect`；`.notConnected` 下只有 `connect`。
+    @Test("CX35：.connectedStalePath 下 disconnect 先於 connect；.notConnected 下只有 connect",
+          arguments: [(CodexState.connectedStalePath, ["disconnect", "connect"]),
+                      (CodexState.notConnected, ["connect"])])
+    func stalePathReconnectDisconnectsBeforeConnecting(_ fixture: (CodexState, [String])) throws {
+        let (initialState, expectedOrder) = fixture
+        let fakeInstaller = FakeCodexInstaller(mode: .normal)
+        let (delegate, spy, cleanup) = try makeDelegate(translocated: false, fakeInstaller: fakeInstaller)
+        defer { cleanup() }
+        delegate.codexRuntime.codexState = initialState
+
+        let onAction = try #require(spy.onAction, "AppDelegate 沒有接 status.onAction")
+        onAction(.connectCodex)
+
+        #expect(fakeInstaller.callOrder.filter { $0 == "disconnect" || $0 == "connect" } == expectedOrder, """
+            初始狀態 \(initialState) 時，disconnect／connect 呼叫序應為 \(expectedOrder)，\
+            實際 \(fakeInstaller.callOrder)
+            """)
+    }
+
+    /// CX39：注入 `.connectedStalePath` ＋ `translocated: true`（r3 B1 的確切情境：路徑被拒
+    /// 且狀態是 stale）→ 送 `.connectCodex` → `disconnect` 呼叫次數必須是 0、檔案內容完全
+    /// 不動、banner 是 `.mustMoveToApplications` 那句——R-9 的 guard 必須在**任何**
+    /// `disconnect` 之前 return。
+    @Test("CX39：路徑被拒時 .connectCodex 絕不呼叫 disconnect，檔案不動，banner 是 mustMoveToApplications")
+    func codexReconnectNeverDisconnectsWhenPathIsRejected() throws {
+        let seeded = Data("stale-contents-not-touched".utf8)
+        let fakeInstaller = FakeCodexInstaller(mode: .normal, seededDiskContents: seeded)
+        let (delegate, spy, cleanup) = try makeDelegate(translocated: true, fakeInstaller: fakeInstaller)
+        defer { cleanup() }
+        delegate.codexRuntime.codexState = .connectedStalePath
+
+        let onAction = try #require(spy.onAction, "AppDelegate 沒有接 status.onAction")
+        onAction(.connectCodex)
+
+        #expect(fakeInstaller.disconnectCallCount == 0, "路徑被拒時 disconnect 呼叫次數必須是 0")
+        #expect(fakeInstaller.diskContents == seeded, "檔案內容應該完全不動")
+        let banner = try #require(delegate.banner?.text)
+        #expect(banner == L10nCodex.failureMessage(.mustMoveToApplications, language: .english), """
+            banner 應該是 .mustMoveToApplications 那句，實際「\(banner)」
+            """)
+    }
+
     /// CX25 來源掃描半——`codexHome` 的生產路徑不得用 `environment["HOME"]`（T04 review M1／M2
     /// 同一個陷阱已出現兩次：`timeout`／`agentFlag`；掃描本身不能拿產生器跟自己比，但這裡驗的
     /// 是「有沒有用這個字面」，不是「產生器輸出是否正確」，字面掃描是對的工具）。**只掃
