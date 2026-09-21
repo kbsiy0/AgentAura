@@ -3,7 +3,7 @@ change: codex-support
 release_target: softlaunch
 persona_impact: tier1
 persona_impact_reason: 動 Sources/AgentAuraApp/**（面板列標籤、Codex 區塊、Options 新列）與 AuraCore 的 PanelAction／PanelModel／面板文案；「接上 Codex」是使用者第一次見到的第二種安裝動作，而我們**無法偵測 Codex 是否已信任這個 hook**（F5），生效與否完全靠畫面把話講清楚——這是純人類面的風險，不是機器面的
-revision: r15（2026-09-21，折入 r14 review 的 1 MAJOR／3 minor：T13b→T13i 跨鏈語意依賴、CX52 兩格 pattern 不同、install 代表值改成實測最高、snippet 下限的推導層；送審）
+revision: r16（2026-09-21，r15 APPROVED 後的兩條 minor：型別名 `ConnectAffordance` 更正、`CodexSnippetSizing` 補推導守衛；implementer 已開工）
 ---
 
 # Change · `codex-support`：讓同一顆燈也照到 Codex
@@ -717,7 +717,14 @@ Codex 卡片直接掛在最外層 `VStack`、**沒有上限也沒有 `ScrollView
    沒有這條，「讓 CX56 變綠」最省事的動作就是把 snippet 壓成一條縫——那不是修好 S1-4，是換一種壞法。
    **上限與下限住在不同層，這一點要寫清楚否則會被實作成寫死常數**（r15／r14 review n4）：
    - **上限**（夾住用的那個固定高度）住 `CodexSnippetSizing`（**AuraCore，純算術**：行數估計 × 行高，
-     形狀同 `SessionsCardSizing`）。
+     形狀同 `SessionsCardSizing`）。**它的行高常數必須有自己的推導 gate**（r16／r15 review n6）：
+     照抄的先例 `SessionsCardSizing` **有**專屬的 `SessionsCardSizingDerivationTests`——離屏渲染真實
+     view、與常數比對 ±0.5pt——而那條 gate 存在的理由逐字寫在 `SessionsCardSizing.swift:15`：
+     **第一版把 `rowHeight` 寫死成 33（量測時用的是「沒有副行」的列）被 review 退回**，
+     真實有副行是 49pt，整卡只用 33 去分配會把唯一那一列裁掉。**只照抄形狀、不照抄那條 gate，
+     等於把同一個錯誤再犯一次**（CLAUDE.md gate 哲學第 2 條，也是 T16 `LEDStripView.preferredWidth` 那一族）。
+   - **上下限必須共用同一個量到的行高**：上限的「行高」與下限的「6 個視覺列」若各自用自己的數字，
+     兩者會各自漂移，而「6 列」到底是多高就變成無法回答的問題。
    - **下限（6 個視覺列）由 CX56 在 App 層用真實渲染量**——渲一段 6 行的等寬文字取它的高度當基準，
      再斷言 snippet 區塊不低於它。**不得進 AuraCore**：那一層只准 import Foundation、**量不了文字**，
      寫進去就只能是一個寫死的行高 pt 常數，正是 `LEDStripView.preferredWidth`
@@ -725,11 +732,11 @@ Codex 卡片直接掛在最外層 `VStack`、**沒有上限也沒有 `ScrollView
 
 **`install` 的代表值怎麼選**（r15／r14 review n3）：r14 寫的是「一個 `affordance == .connect` 的代表值」，
 但**沒有論證它是畫得最多的那個**——`connectCTAStyle`／`showsExplanationPanel` 讀的是 `affordance`，
-而另外兩種會畫得更多：`.replaceExternal` 的 CTA 窄條**多一行副標**（`connectCTASubtitle` → `mountTargetNote`，
+而另外兩種會畫得更多（**型別是 `ConnectAffordance`**，宣告在 `Sources/AuraCore/InstallAffordance.swift:23`——r16 更正 r15 把檔名當型別名）：`.replaceExternal` 的 CTA 窄條**多一行副標**（`connectCTASubtitle` → `mountTargetNote`，
 `.connect` 那格是 nil）；`.explainOnly` ＋ rows 空會走 `showsExplanationPanel` → `NotConnectedView` ＋
 `explanationDetail`。**挑 `.connect` 等於又挑了一個方便的代表值**，只是幅度比 r13 小很多。
 處置**不是把域擴成四倍**（離屏渲染很貴），而是照 §4.10 自己建立的「先量後定」紀律：
-**T13i 的基準表在最高的那個 `CodexState` 下，把四種 `InstallAffordance` 各量一次，
+**T13i 的基準表在最高的那個 `CodexState` 下，把四種 `ConnectAffordance` 各量一次，
 把實測最高的那個釘成 CX56 的 `install` 代表值，四個數字都寫進報告**。
 這樣代表值是**量出來的**，不是挑出來的。
 
@@ -886,7 +893,7 @@ T01 先行（測試＋compile-only stub，零生產碼，禁 `fatalError`）。s
 | **CX53 `emptyRowsMessageIsAgentAware`** | AuraCore | **D-z**。定義域 = `CodexStateKind.allCases` × 兩語言。`codex == .connected` → 含 `Agent.codex.label!`；其餘**逐位元組等於** r12 的那句（期望值**寫死字面**，不引用 `L10nPanel.emptyRowsMessage`——拿產生器跟自己比的老陷阱，本 change 已踩過兩次） | ① 一律回舊句 → `.connected` 那格紅 ② 一律回新句 → 其餘五格紅 |
 | **CX54 `occupiedCardTellsYouToMergeAndOffersHelp`** | App（view 值樹） | **D-aa**。`.occupiedByOther` ＋ 真 snippet：葉節點必須含合併指示那句；且卡片內**存在**一顆送出 `.openHelp` 的按鈕（走既有「點遍每顆按鈕收集 `PanelAction`」的手法，**不用陣列索引**）。**負向對照**：`.occupiedByOther` ＋ `codexSnippet == nil` 時**不得**有合併指示與 help 按鈕（沒有東西可併） | ① 拿掉合併指示 → 必須紅 ② 把 help 按鈕改送別的 action → 必須紅 ③ 讓 `codexSnippet == nil` 那格也畫合併指示 → 負向那格必須紅 |
 | **CX55 `helpDocsExplainMergingIntoExistingHooks`** | 文件 | **D-aa 的落點**：`Resources/help-english.html` 與 `help-traditionalChinese.html` **兩份都**必須有「併進既有 hooks 物件、不要整份取代」的說明（`@Test(arguments:)` 參數化兩份，**不是兩條各寫一遍**——CX29 的既有教訓：內容有、守衛沒有，刪掉兩邊只紅一條）。UI 把使用者指過去，那邊就必須有東西 | 從**任一份**刪掉那段 → 必須紅（兩份各試一次） |
-| **CX56 `snippetCardFitsOnA13InchScreen`**（**r14 補兩個維度**） | App（渲染後座標） | **D-ab**。`optionsExpanded == false`，定義域 = `CodexStateKind.allCases.flatMap(CodexState.samples)` × 兩語言 × {rows 空, 3 列} × **`install ∈ {.connected, 一個由 T13i 實測選出的非 connected 代表值}`** × **`banner ∈ {nil, .codexConnected}`**（**全部程式推導**，五個維度的乘積）：`preferredContentSize.height ≤ 780pt`；且在 snippet 那些態，「複製」按鈕與 footer 按鈕**轉換到 hosting 座標後**的 `minY` 都 `< 780`。按鈕身份**用點擊辨識**（`FooterPositionStabilityTests` 的既有手法），**不得用陣列索引**。**另加一格**：snippet 區塊高度**不得低於 6 個視覺列**（下限，防止「把 snippet 壓成一條縫」變成讓這條 gate 變綠的最省事動作）——**這一格的基準由本 gate 在 App 層渲一段 6 行等寬文字量出來**，不是 AuraCore 的常數（r15／n4）。**`install` 的代表值由 T13i 實測四種 affordance 之後釘死**（r15／n3），不是挑 `.connect`。**語意前置條件（r15／N1）**：`banner` 那一維**要求 `PanelBanner.Kind.codexConnected` 已經存在且 `effectiveBanner` 已依 kind 分流**（T13b）——在那之前 `.codexConnected` 仍是 `kind: .connected`，`effectiveBanner` 在 rows 非空時把它吃掉，那些格會與 `banner: nil` 量到**完全相同**的高度，**整維惰性**。doc comment 要寫「紅掉時的第一個問題是面板是不是又長高了」（§4.10）。**r14 理由**：r13 的域沒有 `install` 也沒有 `banner`，而最壞組合（整版 CTA ＋ 有 snippet 的卡片 ＋ 尚未退場的 `.codexConnected` banner）**從未被量過**——證據圖 `05`／`07` 兩張都是 `install: connected` | ① 拿掉 snippet 的固定高度（改回無上限）→ 必須紅 ② **改成 `.frame(maxHeight:)` 而不是固定高度 → `FooterPositionStabilityTests` 必須紅**（T22 的既有教訓，兩條一起看） ③ **r14：把域縮回「只有 `install: .connected` ＋ `banner: nil`」→ 必須能重現 r13 的假綠**（T13i 報告要附這一格的實跑輸出：同一個 snippet 上限下，窄域全綠、全域紅） ④ **r14：把 snippet 下限拿掉並把上限壓到 1 列 → 下限那格必須紅** |
+| **CX56 `snippetCardFitsOnA13InchScreen`**（**r14 補兩個維度**） | App（渲染後座標） | **D-ab**。`optionsExpanded == false`，定義域 = `CodexStateKind.allCases.flatMap(CodexState.samples)` × 兩語言 × {rows 空, 3 列} × **`install ∈ {.connected, 一個由 T13i 實測選出的非 connected 代表值}`** × **`banner ∈ {nil, .codexConnected}`**（**全部程式推導**，五個維度的乘積）：`preferredContentSize.height ≤ 780pt`；且在 snippet 那些態，「複製」按鈕與 footer 按鈕**轉換到 hosting 座標後**的 `minY` 都 `< 780`。按鈕身份**用點擊辨識**（`FooterPositionStabilityTests` 的既有手法），**不得用陣列索引**。**另加一格**：snippet 區塊高度**不得低於 6 個視覺列**（下限，防止「把 snippet 壓成一條縫」變成讓這條 gate 變綠的最省事動作）——**這一格的基準由本 gate 在 App 層渲一段 6 行等寬文字量出來**，不是 AuraCore 的常數（r15／n4），**而且與 `CodexSnippetSizing` 上限用的行高是同一個量到的值**（r16／n6）。**另配一支 `CodexSnippetSizingDerivationTests`**（照既有 `SessionsCardSizingDerivationTests` 的形狀：離屏渲染真實 view、與常數比對 ±0.5pt）守 `CodexSnippetSizing` 的行高常數——**先例的第一版就是寫死一個量錯的常數被 review 退回**（`SessionsCardSizing.swift:15`）。**`install` 的代表值由 T13i 實測四種 affordance 之後釘死**（r15／n3），不是挑 `.connect`。**語意前置條件（r15／N1）**：`banner` 那一維**要求 `PanelBanner.Kind.codexConnected` 已經存在且 `effectiveBanner` 已依 kind 分流**（T13b）——在那之前 `.codexConnected` 仍是 `kind: .connected`，`effectiveBanner` 在 rows 非空時把它吃掉，那些格會與 `banner: nil` 量到**完全相同**的高度，**整維惰性**。doc comment 要寫「紅掉時的第一個問題是面板是不是又長高了」（§4.10）。**r14 理由**：r13 的域沒有 `install` 也沒有 `banner`，而最壞組合（整版 CTA ＋ 有 snippet 的卡片 ＋ 尚未退場的 `.codexConnected` banner）**從未被量過**——證據圖 `05`／`07` 兩張都是 `install: connected` | ① 拿掉 snippet 的固定高度（改回無上限）→ 必須紅 ② **改成 `.frame(maxHeight:)` 而不是固定高度 → `FooterPositionStabilityTests` 必須紅**（T22 的既有教訓，兩條一起看） ③ **r14：把域縮回「只有 `install: .connected` ＋ `banner: nil`」→ 必須能重現 r13 的假綠**（T13i 報告要附這一格的實跑輸出：同一個 snippet 上限下，窄域全綠、全域紅） ④ **r14：把 snippet 下限拿掉並把上限壓到 1 列 → 下限那格必須紅** ⑤ **r16：把 `CodexSnippetSizing` 的行高常數改掉（例如 ±4pt）→ `CodexSnippetSizingDerivationTests` 必須紅**——沒有這支，改壞行高不會有任何測試變紅，那正是 `SessionsCardSizing` 第一版被退回的形狀 |
 | **CX57 `codexDisconnectGoesThroughConfirmation`** | App（接線） | **D-ac**。注入一個**不呼叫** `onConfirm` 的 `confirmDisconnectCodex` → 送 `.disconnectCodex` → `fakeInstaller.disconnectCallCount == 0`、憑證鍵位元組不變；換成**會呼叫**的 → `== 1`。**另加**：確認框文案必須含 `Agent.codex.label!`（點名 agent，對照既有 `L10nConfirmationAlerts.disconnectTitle` 已經點名 Claude Code） | ① 把 `case .disconnectCodex` 改回直接呼叫 `performDisconnectCodex()` → **第一格必須紅** ② 確認框文案拿掉 agent 名 → 第三格紅 |
 | 既有全部 gate | — | 繼續綠（尤其 `registeredEventsMatchHandledEvents`、`installerTouchesOnlyAllowedPaths`、`everyFixtureModelIsMapped`（**目前紅，本 change 必須修好**）、`fileLengthLimit`、`nonUITargetsLoadNoUIModules`、`noStrayLiteralOutsideAllowlist`、`panelModelMakeHasNoDefaults`、`RowHeightDerivationTests`、`FooterPositionStabilityTests`） | — |
 
@@ -1137,6 +1144,7 @@ r13 再加約 **270**，合計約 **+1797**（MISS 約 647）。**門檻不往�
 | **19** | **列上的「Codex」標籤與相鄰的權限文字字級／顏色完全相同**（persona r1 S2-2），Claude 那列靠「沒有標籤」辨識。**不修的理由**：改樣式會動到 `CodexRowLabelRenderTests` 從真實 view 推導的 43／59pt 列高守衛，而 P4 已 PASS | **明寫接受**；六列以上跨兩個 agent 時值得重評 |
 | **20** | **`optionsExpanded == true` ＋ snippet 卡片同時存在時的總高度不在 CX56 的天花板之內**（§4.10）。Options 展開在 Claude-only 的既有面板就已經 599pt（2026-09-15 實測），是本 change 之前就存在的條件。T13i 要量出這個組合的實際數字記在這裡 | 覆蓋缺口，明寫（數字待 T13i 填） |
 | **21** | **Claude 側 CTA 按鈕仍是泛稱「Connect」**，與具名的「Connect Codex」並排時，泛稱那顆看起來像主要動作（persona r1 P1，自評「小摩擦」）。**不修的理由**：那是 Claude-only 表面的文案變更，會動到 `L10nPanel.connectCTAConnect` 與兩份 help 的既有字面 | **明寫接受** |
+| **23** | **文件指名符號前沒有實跑確認，本 change 已發生三次**：r1 M4（`CX32` 的指名測試其實是 MARK 註解分組名，函式另有其名）、r2 n2（`healthLabel` 的 grep pattern 與同一條目的具名清單對不起來）、r3 n5（把檔名 `InstallAffordance.swift` 當成型別名，型別其實叫 `ConnectAffordance`）。三次都不是判斷錯，是**沒有花十秒 grep**。處置：plan 的 T13 共同規則第 5 條與「開工前必讀」第 5 點——**文件裡要指名任何型別／函式／測試名之前先 grep 一次，並把輸出貼進報告** | 方法論，已有處置 |
 | **22** | **`statusLabel` 變長之後三個顯示點各自的後果**（r14 擴大：r13 只寫了 footer chip）：① **footer chip**（11pt、`lineLimit(1)`、`truncationMode(.tail)`）可能截掉版本號——子句順序刻意讓 Codex 在前，**被犧牲的是尾巴的版本號，不是剛被判為 S0 的那句話**（§3.1 第 2 點）；② **標題**（`PanelView.swift:20`，13pt semibold、**沒有 `lineLimit`**）在 380pt 寬的面板裡**很可能換行**，而換行**直接增加面板高度**、回饋進 §4.10 的天花板；③ **CTA 窄條 label** 同樣沒有寬度保護。T13f 要把**三處**的渲染寬度與可用寬度都量出來寫進報告；**標題若換行，把高度增量交給 T13i 的基準表**。若量到連 agent 名都被截掉，才改用更短的子句 | 設計取捨，附量測（**三處**數字待 T13f 填；高度影響待 T13i） |
 
 ## 11. 風險

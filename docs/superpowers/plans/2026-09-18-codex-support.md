@@ -1,10 +1,10 @@
 # `codex-support` 實作計畫
 
-> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r15**）
+> spec：`docs/superpowers/specs/2026-09-18-codex-support-design.md`（**r16**）
 > 證據：`docs/2026-09-18-codex-hook-probe.md`（**F1–F15**，F15 以 `8fdce0b` 的版本為準）·
 > persona r1 報告（2026-09-21，**NO-GO 5.68／6.0**）· 證據圖 `docs/evidence/codex/INDEX.md`
 > 分支：`change/codex-support`　Tier：**1**（動 `Sources/AgentAuraApp/**` → integrator 綠後派 persona-tester）
-> 節號引用一律指 **r15** 的 spec。
+> 節號引用一律指 **r16** 的 spec。
 > **gate 編號**：本 change 新增的一律 `CX<n>`（共 **57** 條；CX37 拆成 a／b，CX43 未使用，
 > **CX47–CX57 是 T13 的 persona 修復批次**）；提到**既有** gate 一律寫測試函式名。
 
@@ -728,7 +728,7 @@ doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要�
 ——所以本 task 大部分的 diff 落在**不是這個 change 寫的碼**上（`effectiveBanner`／`PanelModel.title`／
 `PanelFooterView`／`emptyRowsMessage`）。**改既有推導時，「Codex 不在場時位元組不變」是每一條的第一個斷言**。
 
-### T13 的共同規則（在 §0 之上再加四條）
+### T13 的共同規則（在 §0 之上再加五條）
 
 1. **每個子項一個 commit**，型別 `fix(codex)` 或 `feat(codex)`；commit 訊息第一行點名它關掉哪一條
    persona finding（例如 `fix(codex): S0-1 接上 banner 不再被 Claude 的列抹掉`）。
@@ -737,7 +737,12 @@ doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要�
    任何一條「寫完測試就已經綠」的，代表它守錯了東西，**停下來重寫測試，不要往下做**。
 3. **負向斷言必須餵正向輸入**（§0 既有規則，本批特別容易踩）：CX49「不得畫 snippet」必須餵**真的**
    `codexSnippet`；CX48 的負向對照（Codex 列出現時 banner 該退場）必須真的放一列 Codex 的 session。
-4. **不新增任何 SwiftUI view 型別**（DoD #11 執行檔已超標約 3 倍、#7 已超 377 行）。
+4. **文件裡指名任何符號之前先 grep 一次**（r16／r15 review n5）。本 change 已經犯三次：
+   r1 M4 指名的「測試」其實是 MARK 註解分組名、r2 n2 的 grep pattern 與同一條目的具名清單
+   對不起來、r3 n5 把**檔名** `InstallAffordance.swift` 當成型別名（型別是 `ConnectAffordance`）。
+   三次都不是判斷錯，是沒有花十秒 grep。**寫進報告時附上那次 grep 的輸出**——
+   「這個符號叫什麼」跟「命中數是多少」一樣，是待驗證的宣稱，不是背景知識。
+5. **不新增任何 SwiftUI view 型別**（DoD #11 執行檔已超標約 3 倍、#7 已超 377 行）。
    修法只准落在四類：`PanelModel` 的推導字串／`L10n*` 的文案／既有 view 內的分支與修飾子／一個注入縫。
    **每一行都要有理由**——`Sources/` 增量逐檔記在報告裡（spec §8.1 的 r13 表是估算，報告填「實」）。
 
@@ -760,12 +765,15 @@ doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要�
 4. **兩條鏈在 `PanelModel*.swift` 與 `CodexSectionView.swift` 上各自必須序列，跨鏈並行要開
    `git worktree`。** 而且 **T13i 必須排在 T13b 之後**（N1）：在 `.codexConnected` 有自己的 kind
    之前，CX56 的 `banner` 那一維在 rows 非空的格子裡量到的是假的。
-5. **三個「現況宣稱」開工前要自己實跑一次，不要當背景知識**：
+5. **四個「現況宣稱」開工前要自己實跑一次，不要當背景知識**（含**符號叫什麼**——
+   本 change 已經三次寫錯指名的符號，見共同規則 4b）：
    ① 全 repo 對 `PanelBanner.Kind` 有沒有窮盡 `switch`（2026-09-21 兩次實跑：**沒有**，
    只有 `BannerView.swift:36`／`AppDelegate+Verification.swift:104`／`PanelModel+ConnectCTA.swift:70`
    三處 `==`，且 `Kind` 已是 `CaseIterable`）；② 兩個 `healthLabel` grep 的命中與檔案集合
    （**注意 pattern 有沒有前導點會差一個檔**，見 T13f 的 CX52）；③ `FooterPositionStabilityTests`
-   的畫布現在是推導的，**本批會改變那個自然高度，新數字要記進報告**。
+   的畫布現在是推導的，**本批會改變那個自然高度，新數字要記進報告**；
+   ④ 文件裡出現的每一個型別／函式／測試名（例如 `ConnectAffordance`、`InstallStateAllCases.all()`、
+   `SessionsCardSizingDerivationTests`）**在引用前 grep 一次**。
 
 ### 子項與依賴
 
@@ -1074,8 +1082,19 @@ doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要�
   「一個 `affordance == .connect` 的代表值」，但沒有論證它畫得最多——`.replaceExternal` 的 CTA 窄條
   **多一行副標**（`connectCTASubtitle` → `mountTargetNote`，`.connect` 那格是 nil）；
   `.explainOnly` ＋ rows 空會走 `showsExplanationPanel` → `NotConnectedView` ＋ `explanationDetail`。
-  **不擴域**（離屏渲染很貴），改成：**在最高的那個 `CodexState` 下把四種 `InstallAffordance`
+  **不擴域**（離屏渲染很貴），改成：**在最高的那個 `CodexState` 下把四種 `ConnectAffordance`
   各量一次，把實測最高的釘成 CX56 的 `install` 代表值，四個數字都寫進報告**。
+  **型別叫 `ConnectAffordance`**（宣告在 `Sources/AuraCore/InstallAffordance.swift:23`）——
+  r15 把**檔名**當成型別名了，r16 更正。
+
+- **`CodexSnippetSizing` 的行高常數要有自己的推導 gate**（r16／r15 review n6）：
+  新增一支 **`CodexSnippetSizingDerivationTests`**，照既有 **`SessionsCardSizingDerivationTests`**
+  的形狀（離屏渲染真實 view、與常數比對 **±0.5pt**）。**為什麼不能只照抄 `SessionsCardSizing` 的形狀
+  而不照抄它的 gate**：那個先例的第一版就是把 `rowHeight` 寫死成 33（量測時用的是沒有副行的列）
+  **被 review 退回**，真實有副行是 49pt，整卡用 33 去分配會把唯一那一列裁掉——理由逐字寫在
+  `Sources/AuraCore/SessionsCardSizing.swift:15`。沒有這支 gate，改壞行高不會有任何測試變紅。
+  **上限與下限必須共用同一個量到的行高**：上限的「行高」與 CX56 下限的「6 個視覺列」若各自用
+  自己的數字，兩者會各自漂移，而「6 列到底是多高」就變成無法回答的問題。
 - **⚠️ r13 的域漏了 `install` 與 `banner` 兩欄**（review M1）：persona 量到的 944pt 出自證據圖
   `05`／`07`，而 `CodexEvidenceRenderer.swift:115,131` **兩張都是 `install: connected`**。
   最壞組合是 **`install` 非 connected（整版 CTA 或窄條）＋ `.occupiedByOther` 有 snippet
