@@ -143,26 +143,9 @@ struct AppDelegatePanelActionsWiredTests {
                     #expect(rig.delegate.banner?.kind == .connected, ".connect 成功後應顯示「已接上」banner")
                 }
 
-            case .replaceExternalMount:
-                try await withFreshRig { rig in
-                    // 明確的前置條件：先 connect 一次，再送 replaceExternalMount，斷言只看
-                    // 第二次的效果——不依賴迴圈裡上一個 case 有沒有跑過、跑得快不快（T10b bug B）。
-                    await SpawnGate.shared.run { rig.onAction(.connect) }
-                    guard case .connected(.thisApp, .verified) = rig.delegate.installState else {
-                        Issue.record("前置條件失敗：先 connect 一次應該成功，實際 \(rig.delegate.installState)")
-                        return
-                    }
-                    rig.delegate.banner = nil   // 清掉前置 connect 留下的 banner，只看這個動作自己的效果
-                    await SpawnGate.shared.run {
-                        for action in samples { rig.onAction(action) }
-                    }
-                    // A5（T11 commit3）：確認框先擋一次——沒有這條，直接執行的 mutation 不會被抓到。
-                    #expect(rig.recorder.confirmedReplaceExternalMounts == 1, ".replaceExternalMount 應該先走過確認對話框閉包")
-                    #expect(rig.delegate.banner?.kind == .alreadyConnected, """
-                        對已接上的掛載送 .replaceExternalMount 應該早退成 .alreadyConnected banner，
-                        實際 \(String(describing: rig.delegate.banner?.kind))
-                        """)
-                }
+            // T10：body 搬到 +Codex.swift（純搬移，替 CX24／CX25／CX26／CX31／CX35／CX39／
+            // CX40／CX42 這批新斷言在 300 行上限的主檔裡留出空間，同 T12／T16 那幾個 case 的理由）。
+            case .replaceExternalMount: try await verifyReplaceExternalMount(samples: samples)
 
             case .disconnect:
                 try await withFreshRig { rig in
@@ -224,11 +207,7 @@ struct AppDelegatePanelActionsWiredTests {
                     #expect(rig.delegate.banner == nil, ".dismissBanner 之後 banner 應為 nil")
                 }
 
-            case .quit:
-                try await withFreshRig { rig in
-                    for action in samples { rig.onAction(action) }
-                    #expect(rig.recorder.fakeTerminator.terminateCallCount == 1, ".quit 應該呼叫注入的 terminator.terminate() 一次")
-                }
+            case .quit: try await verifyQuit(samples: samples)   // T10：body 搬到 +Codex.swift（同上）
 
             // T12（B2／B5）：case body 移到 `AppDelegatePanelActionsWiredTests+T12.swift`（避免撞 300 行上限）。
             case .reportIssue:
