@@ -50,6 +50,14 @@ struct AppDelegatePanelActionsWiredTests {
         /// T32：`.pickIconShape` 每次真的走過選單呈現閉包才 +1——同 `confirmedDisconnects`
         /// 的理由，證明這一步沒有被跳過。
         var presentedIconShapeMenuCount = 0
+        /// T10：`AppDelegate.init` 的 `codexDependencies` 預設值是**真的** `.production()`
+        /// （同 Claude 側 `installer: Installer = .production()` 的既有先例）——`withFreshRig`
+        /// 若不明確覆寫，`.connectCodex`／`.disconnectCodex` 會真的打中這台機器的
+        /// `~/.codex/hooks.json`（`reprobeCodex()` 的 `probe()` 是唯讀，可以比照
+        /// `AppDelegateCompositionInjectionTests` 的既有先例不覆寫；`connect`／`disconnect`
+        /// 會寫，不能援用那個先例）。**每個 case 全新一份**，不跨 case 共用。
+        let fakeCodexInstaller = FakeCodexInstaller(mode: .normal)
+        var pasteboardWrites: [String] = []
     }
 
     @MainActor
@@ -86,6 +94,8 @@ struct AppDelegatePanelActionsWiredTests {
             confirmReplaceExternalMount: { _, onConfirm in recorder.confirmedReplaceExternalMounts += 1; onConfirm() },
             confirmUninstall: { _, onConfirm in recorder.confirmedUninstalls += 1; onConfirm() },
             presentIconShapeMenu: { current, _, _, _, onSelect in recorder.presentedIconShapeMenuCount += 1; onSelect(current) },
+            codexDependencies: CodexDependencies(installer: recorder.fakeCodexInstaller, translocated: false, inDownloads: false,
+                                                 writeToPasteboard: { recorder.pasteboardWrites.append($0) }),
             makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
