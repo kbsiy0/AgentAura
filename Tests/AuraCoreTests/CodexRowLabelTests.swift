@@ -83,4 +83,15 @@ struct CodexRowLabelTests {
             }
         }
     }
+
+    /// T10（T09 review m3「順手清掉死分支」）：`CodexSectionView.swift` 原本寫
+    /// `Agent.codex.label ?? "Codex"`——`label` 對 `.codex` 恆為 `"Codex"`，`??` 右側
+    /// 永遠不執行，卻複製了它想避免重複的那個字面；哪天 `label` 的語意變了（例如只在
+    /// 多 agent 並存時才給值），這個 fallback 會靜默把舊字面補回去。這裡把假設釘死，
+    /// view 端已改成 `!`（見 `CodexSectionView.swift`）——這條紅了，`!` 才會如實 crash
+    /// 而不是被 `??` 悄悄接住。
+    @Test("Agent.codex.label 恆為字面 \"Codex\"（釘住 CodexSectionView 的 !）")
+    func codexLabelIsPinnedToLiteralCodex() {
+        #expect(Agent.codex.label == "Codex")
+    }
 }

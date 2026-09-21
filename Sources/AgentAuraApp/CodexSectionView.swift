@@ -105,7 +105,9 @@ struct CodexSectionView: View {
     @ViewBuilder
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(Agent.codex.label ?? "Codex").font(.system(size: 12, weight: .semibold))
+            // `Agent.codex.label` 恆非 nil（釘在 `CodexRowLabelTests.codexLabelIsPinnedToLiteralCodex`）
+            // ——不再用 `?? "Codex"` 複製它想避免重複的字面（T09 review m3）。
+            Text(Agent.codex.label!).font(.system(size: 12, weight: .semibold))
             content()
         }
         .padding(16)
