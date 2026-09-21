@@ -241,16 +241,20 @@ struct CodexWiringSmokeTests {
     /// 乘積表補回第三欄，不必再全部留給純函式半。
     private enum PathScenario: CaseIterable { case clean, mustMoveToApplications, unsupportedCharacter }
 
-    /// CX40（App 半，決策層，R-10）：`CodexRuntime.codexSnippet` 是否被扣住只看
-    /// `pathRejection`，跟 `codexState` 完全無關——乘積表跨 `CodexStateKind.allCases`
+    /// CX40（App 半，決策層，R-10／**r13／T13c／D-w：改名＋期望值整欄翻轉**，
+    /// 原名 `codexSnippetIsWithheldWhenPathWillVanish`）：`CodexRuntime.codexSnippet`
+    /// 是否被扣住只看 `pathRejection` **是不是 nil**，跟 `codexState` 完全無關、也跟
+    /// `pathRejection` 是哪一種 `Rejection` 無關——乘積表跨 `CodexStateKind.allCases`
     /// （用 `CodexState.samples(kind)` 逐一設進 `codexRuntime.codexState`，含
     /// `.occupiedByOther`）× 三個代表性 `pathRejection` 情境（`.clean`／
     /// `.mustMoveToApplications`／`.unsupportedCharacter`，`PathScenario.allCases` 推導，
     /// 不手列）。純函式半（`CodexStateTests.withheldSnippetExhaustsRepresentativeRejections`）
     /// 窮盡全部 `Rejection` 樣本；這裡只取三個代表值，兩條測試互相點名，不是重複覆蓋。
-    @Test("CX40：codexSnippet 是否被扣住只看 pathRejection，跨每個 CodexStateKind ＋ 三個代表性路徑情境都一致",
+    /// 改名理由：「會消失」不再是判準，判準是「有沒有被拒」——名字留著會變成一句謊，
+    /// 下一個人會照名字推回舊條件（同純函式半 doc comment）。
+    @Test("CX40：codexSnippet 是否被扣住只看 pathRejection 是不是 nil，跨每個 CodexStateKind ＋ 三個代表性路徑情境都一致（r13：不再只扣 .mustMoveToApplications）",
           arguments: CodexStateKind.allCases)
-    func codexSnippetIsWithheldWhenPathWillVanish(_ kind: CodexStateKind) throws {
+    func codexSnippetIsWithheldForEveryPathRejection(_ kind: CodexStateKind) throws {
         for scenario in PathScenario.allCases {
             let fakeInstaller = FakeCodexInstaller(mode: .normal)
             let translocated = scenario == .mustMoveToApplications
@@ -262,15 +266,16 @@ struct CodexWiringSmokeTests {
             defer { cleanup() }
             for state in CodexState.samples(kind) {
                 delegate.codexRuntime.codexState = state
-                if scenario == .mustMoveToApplications {
-                    #expect(delegate.codexRuntime.codexSnippet == nil, """
-                        kind=\(kind) state=\(state) scenario=\(scenario)（pathRejection ==
-                        .mustMoveToApplications）時 codexSnippet 應為 nil，實際 \
-                        \(String(describing: delegate.codexRuntime.codexSnippet))
+                if scenario == .clean {
+                    #expect(delegate.codexRuntime.codexSnippet != nil, """
+                        kind=\(kind) state=\(state) scenario=\(scenario)（pathRejection == nil）\
+                        時 codexSnippet 應非 nil
                         """)
                 } else {
-                    #expect(delegate.codexRuntime.codexSnippet != nil, """
-                        kind=\(kind) state=\(state) scenario=\(scenario) 時 codexSnippet 應非 nil
+                    #expect(delegate.codexRuntime.codexSnippet == nil, """
+                        kind=\(kind) state=\(state) scenario=\(scenario)（pathRejection ！= nil，\
+                        r13：不分哪一種 Rejection 都扣住）時 codexSnippet 應為 nil，實際 \
+                        \(String(describing: delegate.codexRuntime.codexSnippet))
                         """)
                 }
             }

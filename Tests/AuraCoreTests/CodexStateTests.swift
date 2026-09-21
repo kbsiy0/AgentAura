@@ -129,32 +129,37 @@ struct CodexStateTests {
             """)
     }
 
-    /// CX40（純函式半，R-10）：`CodexHooksJSON.withheldSnippet(hookBinaryPath:pathRejection:)`
-    /// 只看 `pathRejection`，跟 `CodexState` 完全無關——這裡先窮盡三個代表性 `pathRejection`
-    /// 值（`nil`／`.mustMoveToApplications`／`.unsupportedCharacter(" ")`）。**跨
-    /// `CodexStateKind` 的那一半**在 `CodexWiringSmokeTests.codexSnippetIsWithheldWhenPathWillVanish`
+    /// CX40（純函式半，R-10／**r13／D-w：期望值整欄翻轉**）：
+    /// `CodexHooksJSON.withheldSnippet(hookBinaryPath:pathRejection:)` 只看 `pathRejection`
+    /// **是不是 nil**，跟 `CodexState` 完全無關、也跟 `pathRejection` 是哪一種 `Rejection`
+    /// 無關——這裡先窮盡三個代表性 `pathRejection` 值（`nil`／`.mustMoveToApplications`／
+    /// `.unsupportedCharacter(" ")`）。**跨 `CodexStateKind` 的那一半**在
+    /// `CodexWiringSmokeTests.codexSnippetIsWithheldForEveryPathRejection`
     /// （App 層，透過 `CodexRuntime.codexState`／`.codexSnippet` 讀決策層真正算出來的值）——
     /// 這條純函式本身不吃 `CodexStateKind`，在這裡跨它是空轉，兩條測試互相點名見對方 doc comment。
     /// review m1：定義域改用本 codebase 既有的 `RejectionKind.allCases.flatMap(Rejection.samples)`
     /// 推導慣用法（六處在用），不再手抄三個值——新增第三個 `Rejection` case 時，這裡會被
     /// 逼著補（原本手抄的寫法不會，是個沒被撞到的缺口，見 review m1）。
+    /// **r13（D-w）**：判準從「`kind == .mustMoveToApplications`」改成「`!= nil`」——
+    /// `.unsupportedCharacter` 那個路徑不會過期，但 `command` 是裸路徑不加引號、且是同一張
+    /// 卡片剛說可能會壞的那條，遞出去的設定檔同樣不敢給（見 `CodexHooksJSON.withheldSnippet`
+    /// 的 doc comment）。
     static let representativeRejectionsIncludingNil: [CodexHookPathCheck.Rejection?] =
         [nil] + CodexHookPathCheck.RejectionKind.allCases.flatMap(CodexHookPathCheck.Rejection.samples).map(Optional.init)
 
-    @Test("CX40（純函式半）：withheldSnippet 回 nil 若且唯若 pathRejection 的 kind 是 .mustMoveToApplications",
+    @Test("CX40（純函式半）：withheldSnippet 回 nil 若且唯若 pathRejection 非 nil（r13：不再只扣 .mustMoveToApplications）",
           arguments: representativeRejectionsIncludingNil)
     func withheldSnippetExhaustsRepresentativeRejections(_ rejection: CodexHookPathCheck.Rejection?) {
         let path = "/Applications/AgentAura.app/Contents/Resources/plugin/bin/aura-hook"
         let snippet = CodexHooksJSON.withheldSnippet(hookBinaryPath: path, pathRejection: rejection)
-        if rejection?.kind == .mustMoveToApplications {
+        if rejection != nil {
             #expect(snippet == nil, """
-                pathRejection=\(String(describing: rejection)) 時應該扣住 snippet（R-10），\
-                實際 \(String(describing: snippet))
+                pathRejection=\(String(describing: rejection)) 時應該扣住 snippet（R-10／r13：\
+                有 rejection 就扣住，不分哪一種），實際 \(String(describing: snippet))
                 """)
         } else {
             #expect(snippet != nil, """
-                pathRejection=\(String(describing: rejection)) 時仍應該給 snippet——\
-                只有 .mustMoveToApplications 那個路徑會過期
+                pathRejection=nil 時仍應該給 snippet，實際 \(String(describing: snippet))
                 """)
         }
     }
