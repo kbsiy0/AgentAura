@@ -184,7 +184,11 @@ public struct PanelModel: Equatable, Sendable {
     ///
     /// T26（i18n）：D-1 示範 3/3（純靜態、非 Options 列標題）——搬進 `L10nPanel` 字串表，
     /// 隨 `language` 換語言（同一個 oracle：`L10nPanel.emptyRowsMessage.text(_:)`）。
+    ///
+    /// T13g（S1-2，D-z）：`codex == .connected` 時改讀 `emptyRowsMessageWithCodex`——
+    /// 同時點名兩個 agent。其餘 codex 狀態（含 `.unavailable`）逐位元組維持原句，
+    /// 這是 CX53 的第一條斷言（D-j：沒裝 Codex 的人零 diff）。
     public var emptyRowsMessage: String {
-        L10nPanel.emptyRowsMessage.text(language)
+        codex == .connected ? L10nPanel.emptyRowsMessageWithCodex.text(language) : L10nPanel.emptyRowsMessage.text(language)
     }
 }

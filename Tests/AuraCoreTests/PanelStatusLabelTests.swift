@@ -102,4 +102,36 @@ struct PanelStatusLabelTests {
             statusLabel="\(model.statusLabel(language))"
             """)
     }
+
+    // MARK: - CX53（T13g，S1-2，D-z）：emptyRowsMessage 依 codex 分兩句
+
+    /// 只在 `connected && rows.isEmpty` 這一種組合會被顯示到（見 `PanelModel.emptyRowsMessage`
+    /// doc comment 的 `PanelView` 路由說明），這裡固定用這個代表值——CX53 的域本身
+    /// （spec §3.1 矩陣）只有 `codex × language` 兩維，不含 `install`。
+    static let emptyRowsMessageInstall = InstallState.connected(owner: .thisApp, verified: .verified)
+
+    /// 期望值**寫死字面**，不引用 `L10nPanel.emptyRowsMessage`／`.emptyRowsMessageWithCodex`
+    /// ——拿產生器輸出跟產生器自己的常數比，本 change 已踩過兩次（`timeout`／`agentFlag`）。
+    @Test("CX53：emptyRowsMessage 依 codex 分兩句，期望值寫死字面",
+          arguments: CodexStateKind.allCases, Language.allCases)
+    func emptyRowsMessageIsAgentAware(codexKind: CodexStateKind, language: Language) {
+        let codex = CodexState.samples(codexKind).first!
+        let model = Self.model(install: Self.emptyRowsMessageInstall, codex: codex, language: language)
+        let expected: String
+        if codexKind == .connected {
+            switch language {
+            case .english: expected = "Once Claude Code or Codex starts running, each session will show up here."
+            case .traditionalChinese: expected = "Claude Code 或 Codex 開起來、開始跑之後，這裡會列出每個 session。"
+            }
+        } else {
+            switch language {
+            case .english: expected = "Once Claude Code starts running, each session will show up here."
+            case .traditionalChinese: expected = "Claude Code 開起來、開始跑之後，這裡會列出每個 session。"
+            }
+        }
+        #expect(model.emptyRowsMessage == expected, """
+            codex=\(codexKind) 時 emptyRowsMessage 應該逐位元組等於「\(expected)」，
+            實際「\(model.emptyRowsMessage)」
+            """)
+    }
 }
