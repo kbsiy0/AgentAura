@@ -39,7 +39,7 @@ struct AppDelegateFirstRunTests {
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
                                    installer: installer, makeLoginItem: { FakeLoginItem() },
-                                   codexDependencies: .inert(), makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -62,7 +62,7 @@ struct AppDelegateFirstRunTests {
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
                                    installer: installer, makeLoginItem: { FakeLoginItem() },
-                                   codexDependencies: .inert(), makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -81,7 +81,7 @@ struct AppDelegateFirstRunTests {
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
                                    installer: installer, makeLoginItem: { FakeLoginItem() },
-                                   codexDependencies: .inert(), makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

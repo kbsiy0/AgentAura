@@ -45,6 +45,7 @@ struct CodexWiringSmokeTests {
         let fakeInstaller = FakeCodexInstaller(mode: .normal)
 
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() },
                                    codexDependencies: CodexDependencies(installer: fakeInstaller, translocated: false,
                                                                         inDownloads: false, writeToPasteboard: { _ in },
                                                                         hookBinaryPath: AppDelegate.productionHookBinaryPath()),
@@ -144,7 +145,7 @@ struct CodexWiringSmokeTests {
     @Test("productionCodexHomeIsRealHome：顯式傳 .production() 時，codexHome 是真的 ~/.codex")
     func productionCodexHomeIsRealHome() throws {
         // 不需要 launch——codexRuntime 是 init 就算好的欄位，建構完就在。
-        let delegate = AppDelegate(root: FileManager.default.temporaryDirectory, codexDependencies: .production())
+        let delegate = AppDelegate(root: FileManager.default.temporaryDirectory, confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .production())
         guard let installer = delegate.codexRuntime.installer as? CodexInstaller else {
             Issue.record("""
                 生產注入的 codexRuntime.installer 型別是 \(type(of: delegate.codexRuntime.installer))，\

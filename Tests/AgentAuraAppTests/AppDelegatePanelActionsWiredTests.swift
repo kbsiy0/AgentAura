@@ -276,7 +276,7 @@ struct AppDelegatePanelActionsWiredTests {
         let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults, installer: installer,
                                    makeLoginItem: { FakeLoginItem() },
                                    confirmDisconnect: { _, onConfirm in onConfirm() },
-                                   codexDependencies: .inert(), makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

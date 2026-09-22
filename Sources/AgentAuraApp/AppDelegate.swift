@@ -100,8 +100,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              { language, onConfirm in ReplaceMountConfirmation.present(language: language, onConfirm: onConfirm) },
          confirmUninstall: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
              { language, onConfirm in UninstallConfirmation.present(language: language, onConfirm: onConfirm) },
-         confirmDisconnectCodex: @escaping @MainActor (Language, @escaping () -> Void) -> Void =
-             { language, onConfirm in CodexDisconnectConfirmation.present(language: language, onConfirm: onConfirm) },
+         // r1 review M4：無預設值，漏傳即編譯錯——同 `codexDependencies`（review M3）的既有
+         // 理由，本 change 第三次同型。原本的預設值指向真 `NSAlert().runModal()`，
+         // headless 測試若漏注入會永久卡住主執行緒（`disconnectClaimsSuccessButFileRemainsBecomesOccupied`
+         // 已經撞過一次），只補撞到的那個呼叫點不是結構性防線——拿掉預設值讓編譯器
+         // 帶路更新每一個 `AppDelegate(...)` 建構點。真的彈框只在 `main.swift` 明傳。
+         confirmDisconnectCodex: @escaping @MainActor (Language, @escaping () -> Void) -> Void,
          presentIconShapeMenu: @escaping @MainActor (IconShape, Language, IconAppearance, Bool, @escaping (IconShape) -> Void) -> Void =
              { current, language, appearance, showsPlate, onSelect in
                  IconShapeMenu.present(current: current, language: language,

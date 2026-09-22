@@ -73,6 +73,7 @@ struct CodexCredentialSequenceTests {
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults, installer: installer,
                                    makeLoginItem: { FakeLoginItem() },
                                    confirmDisconnect: { _, onConfirm in onConfirm() },
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() },
                                    codexDependencies: CodexDependencies(installer: fakeCodexInstaller, translocated: false,
                                                                         inDownloads: false, writeToPasteboard: { _ in },
                                                                         hookBinaryPath: AppDelegate.productionHookBinaryPath()),

@@ -64,6 +64,7 @@ struct IconShapeMenuReduceMotionWiringTests {
 
         let delegate = AppDelegate(
             root: root, livenessInterval: 0.05, defaults: defaults,
+            confirmDisconnectCodex: { _, onConfirm in onConfirm() },
             presentIconShapeMenu: { _, _, appearance, _, onSelect in
                 presented.appearances.append(appearance)
                 onSelect(.ledStrip)
