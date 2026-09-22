@@ -32,13 +32,13 @@ struct IdlePromptTests {
             HookPayload(json: json.merging(["session_id": "s-idle"]) { a, _ in a })!
         }
         var s = MergeRules.merge(p(["hook_event_name": "Stop", "last_message": "做完了"]),
-                                 into: nil, pid: 1, pidStartedAt: 1, now: t0)
+                                 into: nil, pid: 1, pidStartedAt: 1, agent: .claude, now: t0)
         #expect(s.mainActivity == .done, "前提：Stop → done")
 
         s = MergeRules.merge(p(["hook_event_name": "Notification",
                                 "notification_type": "idle_prompt",
                                 "message": "Claude is waiting for your input"]),
-                             into: s, pid: 1, pidStartedAt: 1, now: t0.addingTimeInterval(60))
+                             into: s, pid: 1, pidStartedAt: 1, agent: .claude, now: t0.addingTimeInterval(60))
         #expect(s.mainActivity == .done, """
             idle_prompt 把 done 改成了 \(s.mainActivity)。使用者會在每一個講完話的 session
             60 秒後看到橘燈，而那個 session 根本沒有在等任何批准。

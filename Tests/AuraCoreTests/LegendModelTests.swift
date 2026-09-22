@@ -90,7 +90,7 @@ struct LegendModelTests {
         let model = PanelModel.make(icon: icon, sessions: sessions, palette: palette,
                                     install: .connected(owner: .thisApp, verified: .verified),
                                     version: "1.0", optionsExpanded: false,
-                                    launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, now: now)
+                                    launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil, now: now)
 
         #expect(model.palette == palette, "model.palette 應等於傳入的 palette，實際 \(model.palette)")
         #expect(model.legend.count == 4, "圖例應恆為四項，實際 \(model.legend.count)")

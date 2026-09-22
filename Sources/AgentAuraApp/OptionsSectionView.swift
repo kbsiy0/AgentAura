@@ -16,11 +16,17 @@ struct OptionsSectionView: View {
     let onAction: (PanelAction) -> Void
 
     private var rows: [OptionsRow] {
+        // T08b（T07 review 回頭補的裂縫）：這裡曾經暫時硬編 `.unavailable`／`nil`
+        // （`PanelModel` 那時還沒有這兩個欄位）——那個 stub 忘了在本 task 換掉的話，
+        // 是靜默失效：`.unavailable` 正好是所有既有測試期待的值，854 條全綠而 Codex
+        // 的 Options 列永遠不出現。改讀 `model.codex`／`model.codexPathRejection`——
+        // 唯一生產呼叫點，見 `OptionsMenuModelRowsCallSiteSourceScanTests`（守住不能再退回字面）。
         OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                               isDefaultPalette: model.isDefaultPalette,
                               systemReduceMotion: model.systemReduceMotion, userReduceMotion: model.userReduceMotion,
                               iconPlate: model.iconPlate, iconShape: model.iconShape,
-                              palette: model.palette, language: model.language)
+                              palette: model.palette, language: model.language,
+                              codex: model.codex, codexPathRejection: model.codexPathRejection)
     }
 
     var body: some View {
@@ -144,6 +150,14 @@ private struct OptionsRowIconView: View {
         case .dismissBanner: "xmark"
         case .replaceExternalMount: "arrow.2.squarepath"
         case .setLanguage: "globe"
+        // T09：以真實作取代 T07 的暫定 icon（三者皆 macOS 13 可用的 SF Symbol），
+        // 跟 Options 選單其他列（`.connect` 用 `arrow.triangle.2.circlepath`）刻意不同形狀：
+        // Codex 這兩個 action 不是「重試」，是「接上／拆掉」一條掛載——`link`／
+        // `link.badge.minus` 是更貼切的既有 SF Symbol 字面（A6：中文說明統一用「掛載」，
+        // 見 `TerminologyUnificationSourceScanTests`）。
+        case .connectCodex: "link"
+        case .disconnectCodex: "link.badge.minus"
+        case .copyCodexSnippet: "doc.on.doc"
         }
     }
 }

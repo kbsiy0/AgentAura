@@ -31,6 +31,27 @@ struct UninstallerTests {
         }
     }
 
+    /// CX26 順序驗證用：同 `OrderCheckingLoginItem` 的既有形狀——`disconnect` 被呼叫的
+    /// 當下 `markerKey` 是否還在 defaults 裡（`erasePersistentDomain()` 還沒跑的話應該還在）。
+    final class OrderCheckingCodexInstaller: CodexInstalling {
+        let defaults: UserDefaults
+        let markerKey: String
+        private(set) var disconnectCallCount = 0
+        private(set) var markerPresentWhenCalled: Bool?
+        init(defaults: UserDefaults, markerKey: String) {
+            self.defaults = defaults
+            self.markerKey = markerKey
+        }
+        func probe() -> CodexObservation {
+            CodexObservation(codexHomeIsDirectory: true, entryType: .absent, contents: nil, displayPath: nil)
+        }
+        func connect(json: Data, translocated: Bool, inDownloads: Bool) throws -> Data { json }
+        func disconnect(ifContentsEqual: Data?) throws {
+            disconnectCallCount += 1
+            markerPresentWhenCalled = defaults.object(forKey: markerKey) != nil
+        }
+    }
+
     struct Rig {
         let layout: AppInstallerFixture.Layout
         let installer: Installer
@@ -41,6 +62,11 @@ struct UninstallerTests {
         let stateDirectory: URL
         let recycler: FakeRecycler
         let terminator: FakeTerminator
+        /// T10（D-n／CX26）：`Uninstaller` 現在多吃兩個 Codex 依賴——全記憶體 fake，
+        /// 不落地任何檔案，同其餘欄位的既有理由（這條測試只驗 Claude 側五步＋順序，
+        /// Codex 那一步的正確性由 `CodexWiringSmokeTests`／`CodexHookStoreTests` 各自守）。
+        let codexInstaller: FakeCodexInstaller
+        let codexStore: CodexHookStore
     }
 
     func makeRig(linked: Bool = true) throws -> Rig {
@@ -56,7 +82,8 @@ struct UninstallerTests {
                                                 withIntermediateDirectories: true)
         return Rig(layout: layout, installer: installer, loginItem: FakeLoginItem(), defaults: defaults,
                   suite: suite, stateHome: stateHome, stateDirectory: stateDirectory,
-                  recycler: FakeRecycler(), terminator: FakeTerminator())
+                  recycler: FakeRecycler(), terminator: FakeTerminator(),
+                  codexInstaller: FakeCodexInstaller(mode: .normal), codexStore: CodexHookStore(defaults: defaults))
     }
 
     func cleanup(_ rig: Rig) {
@@ -86,7 +113,7 @@ struct UninstallerTests {
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
                    recycler: rig.recycler, bundleURL: URL(fileURLWithPath: "/tmp/fake.app"),
-                   terminator: rig.terminator, language: .traditionalChinese).run()
+                   terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore).run()
 
         #expect(rig.loginItem.setCallCount == 1, "應該呼叫 loginItem.set(false) 一次")
         #expect(rig.loginItem.isEnabled == false)
@@ -108,12 +135,34 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: orderChecker, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese).run()
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore).run()
 
         #expect(orderChecker.setCallCount == 1)
         #expect(orderChecker.markerPresentWhenCalled == true, """
             loginItem.set(false) 被呼叫的當下 marker 應該還在 defaults 裡——
             代表清 defaults 這步（D-3）發生在它之後，不是之前
+            """)
+    }
+
+    /// CX26：`codexInstaller.disconnect(ifContentsEqual:)`（D-n）必須早於
+    /// `erasePersistentDomain()`——比對用的內容住在 persistent domain 裡，順序反了
+    /// 就永遠比不中，Codex 那份掛載完整移除會留殘留。
+    @Test("CX26：codex disconnect 在清 defaults 之前被呼叫")
+    func uninstallRemovesCodexBeforeErasingDefaults() throws {
+        let rig = try makeRig()
+        defer { cleanup(rig) }
+        rig.defaults.set("x", forKey: "marker")
+        let orderChecker = OrderCheckingCodexInstaller(defaults: rig.defaults, markerKey: "marker")
+
+        Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
+                   bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese,
+                   codexInstaller: orderChecker, codexStore: rig.codexStore).run()
+
+        #expect(orderChecker.disconnectCallCount == 1)
+        #expect(orderChecker.markerPresentWhenCalled == true, """
+            codexInstaller.disconnect(ifContentsEqual:) 被呼叫的當下 marker 應該還在 defaults 裡——
+            代表這一步（D-n）發生在 erasePersistentDomain() 之前，不是之後
             """)
     }
 
@@ -125,7 +174,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: nil, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese).run()
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore).run()
 
         #expect(rig.defaults.object(forKey: "someKey") as? String == "x", """
             bundleIdentifier 為 nil 時不該呼叫 removePersistentDomain——那會是清掉一個
@@ -141,7 +190,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese).run()
+                   recycler: rig.recycler, bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore).run()
 
         #expect(rig.recycler.recycledURLs.isEmpty, "bundleURL 為 nil 時不該呼叫 recycler")
         #expect(rig.terminator.terminateImmediatelyCallCount == 1)
@@ -156,7 +205,7 @@ struct UninstallerTests {
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
                    recycler: rig.recycler, bundleURL: URL(fileURLWithPath: "/tmp/fake.app"),
-                   terminator: rig.terminator, language: .traditionalChinese).run()
+                   terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore).run()
 
         #expect(rig.recycler.recycledURLs.count == 1, "應該已經呼叫 recycler.recycle")
         #expect(rig.terminator.terminateImmediatelyCallCount == 0, """
@@ -183,7 +232,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator, language: .traditionalChinese).run()
+                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore).run()
 
         await wait(upTo: 2) { rig.terminator.terminateImmediatelyCallCount == 1 }
         #expect(rig.terminator.terminateImmediatelyCallCount == 1, "recycle 失敗不該卡住 terminate")
@@ -204,7 +253,7 @@ struct UninstallerTests {
 
         Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                    bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory, homeDirectory: rig.stateHome,
-                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator, language: .traditionalChinese).run()
+                   recycler: rig.recycler, bundleURL: bundleURL, terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore).run()
 
         await wait(upTo: 2) { rig.terminator.terminateImmediatelyCallCount == 1 }
         let logURL = rig.stateHome.appendingPathComponent(UninstallFailureLog.filename)
@@ -219,7 +268,7 @@ struct UninstallerTests {
         let uninstaller = Uninstaller(installer: rig.installer, loginItem: rig.loginItem, defaults: rig.defaults,
                                       bundleIdentifier: rig.suite, stateDirectory: rig.stateDirectory,
                                       homeDirectory: rig.stateHome, recycler: rig.recycler,
-                                      bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese)
+                                      bundleURL: nil, terminator: rig.terminator, language: .traditionalChinese, codexInstaller: rig.codexInstaller, codexStore: rig.codexStore)
         uninstaller.run()
         uninstaller.run()   // 全部東西都已經不在了
 

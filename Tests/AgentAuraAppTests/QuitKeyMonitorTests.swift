@@ -141,7 +141,7 @@ struct QuitKeyMonitorTests {
 
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
                                    makeLoginItem: { FakeLoginItem() }, terminator: fakeTerminator,
-                                   makeRenderer: { controller })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { controller })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer {
             delegate.applicationWillTerminate(Notification(name: .init("test")))

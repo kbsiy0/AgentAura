@@ -4,6 +4,11 @@
 /// 的暫時允許清單（T27 搬）。
 public enum L10nPanel: L10nCatalog, Sendable {
     case emptyRowsMessage
+    /// T13g（S1-2，D-z）：`codex == .connected` 時的空列句——同時點名兩個 agent。
+    /// 「已接上 Codex」banner 正下方先前寫的是只提 Claude Code 的那句，跟剛接上的訊號
+    /// 矛盾（persona r1 S1-2）。只在 `.connected` 分岔是為了守 D-j：沒裝 Codex 的人，
+    /// `emptyRowsMessage` 逐位元組不變。
+    case emptyRowsMessageWithCodex
     /// T27：`PanelModel.notConnectedDetailText` 的通用兜底句（沒有 `mountTargetNote`
     /// 也沒有 `install.explanationDetail` 時）。
     case notConnectedGenericFallback
@@ -20,6 +25,11 @@ public enum L10nPanel: L10nCatalog, Sendable {
             switch language {
             case .english: return "Once Claude Code starts running, each session will show up here."
             case .traditionalChinese: return "Claude Code 開起來、開始跑之後，這裡會列出每個 session。"
+            }
+        case .emptyRowsMessageWithCodex:
+            switch language {
+            case .english: return "Once Claude Code or Codex starts running, each session will show up here."
+            case .traditionalChinese: return "Claude Code 或 Codex 開起來、開始跑之後，這裡會列出每個 session。"
             }
         case .notConnectedGenericFallback:
             switch language {

@@ -26,7 +26,7 @@ struct FooterPixelTests {
         let icon = IconState(activity: .working, counts: [.working: 1], liveCount: 1)
         return PanelModel.make(icon: icon, sessions: [session("a", .working)], palette: PanelPixelTests.wildPalette,
                                install: install, version: version, optionsExpanded: false,
-                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     func renderPanel(_ m: PanelModel) throws -> OffscreenRender.Bitmap {

@@ -5,7 +5,15 @@ import Foundation
 /// 只准經下列 public static 建構——與 `PanelModel.make` 同一個理由：任何呼叫端
 /// 想顯示 banner 就只能挑這幾句，不能手搓文案（避免下一個人寫出「立即生效」那種謊，D-m）。
 public struct PanelBanner: Equatable, Sendable {
-    public enum Kind: String, Sendable, Equatable, CaseIterable { case connected, alreadyConnected, disconnected, error }
+    public enum Kind: String, Sendable, Equatable, CaseIterable {
+        case connected, alreadyConnected, disconnected, error
+        /// D-v（T13b，S0-1）：`.codexConnected(language:)` 的專屬 kind——`.connected` 的
+        /// 退場條件（出現任何一列就退場）是為 Claude banner 推導的，出現一列 Claude 的
+        /// session 對「Codex 會問你一次是否信任」這句話什麼都沒兌現。獨立 kind 讓
+        /// `effectiveBanner`（`PanelModel+ConnectCTA.swift`）能依 kind 各自判斷退場條件，
+        /// 不用共用 `.connected` 那組退場邏輯。
+        case codexConnected
+    }
     public let kind: Kind
     public let text: String
 
@@ -40,6 +48,20 @@ public struct PanelBanner: Equatable, Sendable {
 
     public static func error(_ message: String) -> PanelBanner {
         PanelBanner(kind: .error, text: message)
+    }
+
+    /// T09（D-m）：Codex 接上成功的固定文案——同 `.connected(language:)` 對 Claude 側的既有
+    /// 理由（忘了傳 `language` 要是編譯錯，不是靜默吃到中文），但兩者**不是同一句**：
+    /// Codex 額外要求「Codex 會問你一次是否信任」（F5，P4 硬下限），Claude 側沒有這件事。
+    /// `AppDelegate+Codex.swift`（T10）是唯一預期呼叫點。
+    public static func codexConnected(language: Language) -> PanelBanner {
+        PanelBanner(kind: .codexConnected, text: L10nCodex.connectedBanner.text(language))
+    }
+
+    /// T10：`performDisconnectCodex()` 成功時的固定文案——同 `.codexConnected(language:)`
+    /// 的既有理由，`.disconnected` kind（視覺上是「已移除」樣式，同 Claude 側 `.disconnect`）。
+    public static func codexDisconnected(language: Language) -> PanelBanner {
+        PanelBanner(kind: .disconnected, text: L10nCodex.disconnectedBanner.text(language))
     }
 
     private init(kind: Kind, text: String) {
@@ -90,6 +112,25 @@ public struct PanelModel: Equatable, Sendable {
     /// D-3（i18n）：顯示層參數，不是全域狀態——唯一來源是 `AppDelegate.language`
     /// （落盤預設英文，見 `LanguagePreference`），往下傳給 `OptionsSectionView` 等消費端。
     public let language: Language
+    /// T08（spec §3／§4.6）：Codex 掛載六態，唯一來源是 `AppDelegate+Codex.reprobeCodex()`
+    /// 的行程常數（D-t）——`PanelModel` 只是原封不動帶著走，不在這裡重新判定。
+    /// `CodexSectionView`（T09）依這個欄位分支；`OptionsMenuModel.rows(codex:)`
+    /// 走的是同一個值（`AppDelegate.refreshPanel` 只算一次、兩處都傳）。
+    public let codex: CodexState
+    /// T08（R-10／D-s）：`(pathRejection == .mustMoveToApplications) ? nil : CodexHooksJSON.snippet(...)`
+    /// 的產出——**穿過路徑判定**才拿到，不是 `CodexHooksJSON.snippet` 的直接輸出，
+    /// `PanelModel` 一樣只是帶著走。`nil` 時面板卡片改顯示「先把 App 移到『應用程式』」
+    /// 那句（見 `CodexSectionView`），不是省略整塊。
+    public let codexSnippet: String?
+    /// T08b（T07 review 回頭補的裂縫，R-9）：`CodexHookPathCheck.rejection(...)` 的行程常數
+    /// （D-t），橫跨 `.connectedStalePath`（要不要給「重新接上」按鈕）與 `.occupiedByOther`
+    /// （snippet 要不要被扣住，見 `codexSnippet`）兩個 case，不是任何一個 `CodexState`
+    /// case 自己的欄位——`CodexState.swift` 的 doc comment 已經寫明這件事，這裡只是把
+    /// 那個外部輸入原封不動帶到 `OptionsMenuModel.rows(codex:codexPathRejection:)`。
+    /// `OptionsSectionView.rows` 是唯一生產消費點——忘了從這裡讀（改用字面 `nil`），
+    /// 就是「重新接上」按鈕永遠不出現的那個 tested≠wired 坑，見
+    /// `OptionsMenuModelRowsCallSiteSourceScanTests`。
+    public let codexPathRejection: CodexHookPathCheck.Rejection?
 
     /// `rows`／`title` 借用既有的 `PanelViewModel`（已測過的純函式）；`palette` 直接帶入、
     /// `legend` 經 `LegendModel.items(for:)` 組裝、`isDefaultPalette` = `palette.isDefault`。
@@ -101,8 +142,9 @@ public struct PanelModel: Equatable, Sendable {
                             install: InstallState, version: String, optionsExpanded: Bool,
                             launchAtLogin: Bool?, externalTargetPath: String?, banner: PanelBanner?,
                             systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
-                            language: Language, now: Date = Date()) -> PanelModel {
-        PanelModel(title: title(for: icon, install: install, language: language),
+                            language: Language, codex: CodexState, codexSnippet: String?,
+                            codexPathRejection: CodexHookPathCheck.Rejection?, now: Date = Date()) -> PanelModel {
+        PanelModel(title: title(for: icon, install: install, codex: codex, language: language),
                   rows: PanelViewModel.rows(from: sessions, now: now, language: language),
                   palette: palette,
                   legend: LegendModel.items(for: palette, language: language),
@@ -110,16 +152,27 @@ public struct PanelModel: Equatable, Sendable {
                   install: install, version: version, optionsExpanded: optionsExpanded,
                   launchAtLogin: launchAtLogin, externalTargetPath: externalTargetPath, banner: banner,
                   systemReduceMotion: systemReduceMotion, userReduceMotion: userReduceMotion, iconPlate: iconPlate,
-                  iconShape: iconShape, language: language)
+                  iconShape: iconShape, language: language, codex: codex, codexSnippet: codexSnippet,
+                  codexPathRejection: codexPathRejection)
     }
 
     /// T11 commit2（S0-2）：非 `connected` 時面板標題改用 `install.healthLabel`——與
     /// footer chip／`NotConnectedView` 的說明句同一個 oracle。舊行為（`PanelViewModel.title`，
     /// 純算 session 計數）留給 `connected` 用，否則標題會在還沒接上時說「沒有活著的
     /// session」，跟面板本體的「還沒接上」自相矛盾（persona S0-2：同一張畫面兩句互相打架）。
-    private static func title(for icon: IconState, install: InstallState, language: Language) -> String {
+    ///
+    /// T13f（D-y，S1-1）：非 `connected` 分支改讀 `PanelModel.statusLabel(install:codex:language:)`
+    /// 這個共用 static 核心（`PanelModel+ConnectCTA.swift`）——**修的是同一族毛病的下一個
+    /// 實例**：標題只反映 Claude 時，Codex 已接上且正在跑會全部寫「Not connected yet」，
+    /// 跟面板本體另外兩處（footer chip／CTA 窄條）矛盾。`title` 在這裡（`make(...)` 建構
+    /// `PanelModel` 實例之前）就要算好，還沒有 `self` 能呼叫 instance 版的
+    /// `statusLabel(_:)`，因此吃 `codex` 參數、直接呼叫共用核心——這保證了 CX50④
+    /// 「`title` 在 `install` 非 connected 時逐位元組等於 `statusLabel(l)`」是結構性的，
+    /// 不是兩處各自抄一份湊出來的巧合。`connected` 分支維持既有語意不變（session 計數句，
+    /// 本來就不分 agent，見 §3.1「標題那一欄的不對稱是刻意的」）。
+    private static func title(for icon: IconState, install: InstallState, codex: CodexState, language: Language) -> String {
         if case .connected = install { return PanelViewModel.title(for: icon, language: language) }
-        return install.healthLabel(language)
+        return statusLabel(install: install, codex: codex, language: language)
     }
 
     /// A11（T11 A9–A11 批次）：`connected` ＋ rows 空時的本體訊息——**不得跟 `title` 撞字**。
@@ -131,7 +184,11 @@ public struct PanelModel: Equatable, Sendable {
     ///
     /// T26（i18n）：D-1 示範 3/3（純靜態、非 Options 列標題）——搬進 `L10nPanel` 字串表，
     /// 隨 `language` 換語言（同一個 oracle：`L10nPanel.emptyRowsMessage.text(_:)`）。
+    ///
+    /// T13g（S1-2，D-z）：`codex == .connected` 時改讀 `emptyRowsMessageWithCodex`——
+    /// 同時點名兩個 agent。其餘 codex 狀態（含 `.unavailable`）逐位元組維持原句，
+    /// 這是 CX53 的第一條斷言（D-j：沒裝 Codex 的人零 diff）。
     public var emptyRowsMessage: String {
-        L10nPanel.emptyRowsMessage.text(language)
+        codex == .connected ? L10nPanel.emptyRowsMessageWithCodex.text(language) : L10nPanel.emptyRowsMessage.text(language)
     }
 }

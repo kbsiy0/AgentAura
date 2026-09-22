@@ -18,7 +18,7 @@ struct MergeRulesCodableTests {
     }
 
     func merge(_ p: HookPayload, into s: SessionSnapshot?) -> SessionSnapshot {
-        MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111, now: t0)
+        MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111, agent: .claude, now: t0)
     }
 
     /// **CodingKeys 完整性 gate。**
@@ -35,6 +35,7 @@ struct MergeRulesCodableTests {
         s.writtenAt           = Date(timeIntervalSince1970: 1_788_628_111)
         s.pid                 = 4242
         s.pidStartedAt        = 1_757_352_011
+        s.agent               = "codex"
         s.cwd                 = "/Users/you/專案 🚀/payments-api"
         s.permissionMode      = "default"
         s.effort              = "xhigh"

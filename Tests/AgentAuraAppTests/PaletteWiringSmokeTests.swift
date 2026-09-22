@@ -61,7 +61,8 @@ struct PaletteWiringSmokeTests {
         let (defaults, suiteName) = try freshDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults, makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -90,7 +91,8 @@ struct PaletteWiringSmokeTests {
         let (defaults, suiteName) = try freshDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults, makeRenderer: { spy })
+        let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         // 行程級單例：不清會讓後面的測試收到這裡的 willClose／target（review-t01 I1）
@@ -184,7 +186,8 @@ struct PaletteWiringSmokeTests {
         try writeSnapshot("persist1", .error, to: root)
 
         let spy = SpyRenderer()
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults, makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -207,7 +210,8 @@ struct PaletteWiringSmokeTests {
         let (defaults, suiteName) = try freshDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults, makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -238,7 +242,8 @@ struct PaletteWiringSmokeTests {
         let spy = SpyRenderer()
         let (defaults, suiteName) = try freshDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults, makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         await wait(upTo: 5) { spy.applied.last?.activity == .waiting }

@@ -75,6 +75,15 @@ extension AppDelegate {
                                           self.iconPlate) { [weak self] chosen in
                     self?.performSetIconShape(chosen)
                 }
+            case .connectCodex:
+                self.performConnectCodex()
+            case .disconnectCodex:
+                // T13j（S1-5，D-ac）：同 .disconnect 的既有注入縫——只有使用者確認才真的
+                // 呼叫 performDisconnectCodex()（一下點擊直接刪 ~/.codex/hooks.json 的舊行為
+                // 與相鄰的 Claude 列不對稱，persona r1 S1-5）。
+                self.confirmDisconnectCodex(self.language) { [weak self] in self?.performDisconnectCodex() }
+            case .copyCodexSnippet:
+                self.performCopyCodexSnippet()
             }
         }
     }
@@ -86,12 +95,16 @@ extension AppDelegate {
     func refreshPanel(icon: IconState? = nil) {
         let icon = icon ?? graph.iconState
         // 使用者偏好讀 `userReduceMotion`（唯一寫入點是 `performSetReduceMotion`）。
+        // T10：codex／codexSnippet／codexPathRejection 一律讀 `codexRuntime`（reprobeCodex()
+        // 四個時機之一算好的值）——不得寫死字面（CX46 掃描守）。
         let model = PanelModel.make(icon: icon, sessions: graph.visibleSessions, palette: paletteStore.palette,
                                     install: installState, version: appVersion, optionsExpanded: optionsExpanded,
                                     launchAtLogin: launchAtLogin, externalTargetPath: externalTargetPath, banner: banner,
                                     systemReduceMotion: driver.systemReduceMotion,
                                     userReduceMotion: userReduceMotion, iconPlate: iconPlate, iconShape: iconShape,
-                                    language: language)
+                                    language: language, codex: codexRuntime.codexState,
+                                    codexSnippet: codexRuntime.codexSnippet,
+                                    codexPathRejection: codexRuntime.pathRejection)
         status.setPanel(model)
         // T11（S0-2）：installState 唯一的傳遞路徑——tooltip 才能反映「還沒接上」而不是
         // 一律說「沒有活著的 session」。`refreshPanel()` 是每次 install 可能改變後都會呼叫的
@@ -142,12 +155,6 @@ extension AppDelegate {
         refreshPanel()
     }
 
-    /// B2：Amphetamine 的 Feedback & Support 對應——走既有注入的 `openURL`（測試斷言拿到
-    /// 正確的 URL，不得真的開瀏覽器，spec §6.4）。
-    func reportIssue() {
-        openURL(ProjectLinks.newIssue)
-    }
-
     /// `store.set` 先 `onChange`（driver.setPalette + refreshPanel 立刻反映）再落盤。
     /// 搬自 `AppDelegate.swift`（T32，為 composition root 的新增欄位騰行數，同 T16／T26
     /// 把 key／preference／load／perform 都放在這個檔案的既有慣例）。
@@ -168,33 +175,4 @@ extension AppDelegate {
         refreshPanel()
     }
 
-    /// `NSWorkspace` 的呼叫走注入的 `openURL` 閉包（測試斷言「真的拿那個 URL 去開」，
-    /// 不是真的開瀏覽器）。`help.html` 的實際內容是 T09 的工作；T30（i18n）改成依
-    /// `self.language` 選檔——bundle 內找不到對應語言的檔案時安全地什麼都不做。
-    func openHelp() {
-        guard let url = Self.helpURL(for: language) else { return }
-        openURL(url)
-    }
-
-    /// T30（i18n）：檔名規則——`help-<Language.rawValue>.html`（`rawValue` 已被
-    /// `LanguageTests.rawValuesArePinned` 釘死為 `"english"`／`"traditionalChinese"`）。
-    /// 純函式、不摸 `Bundle`，`scripts/build-app.sh` 的 `Resources/help-*.html` glob
-    /// 各自從同一條命名規則推導要複製／要找哪些檔，不手抄「有哪些語言」這份清單——
-    /// 哪天 `Language` 真的加第三個 case，兩邊都不必改，只要多放一個對應檔名的資源檔。
-    nonisolated static func helpResourceName(for language: Language) -> String {
-        "help-\(language.rawValue)"
-    }
-
-    /// E3（/simplify 波次2，struct#E2）：`??` 右邊原本只拼路徑、不驗存在性——只要
-    /// `Bundle.main.resourceURL != nil`（app bundle 與 `swift test` 皆成立）就必定非 nil，
-    /// 上面 `openHelp` 那句「找不到就什麼都不做」的 fail-soft guard 因此在生產路徑上恆真、
-    /// 從未真的擋下任何東西（CLAUDE.md「八族空轉的守衛」）。補一次 `fileExists` 讓 guard
-    /// 真的有牙齒——不改變其餘行為：找得到（多數情況）回同一個 URL，只是現在真的驗過。
-    private static func helpURL(for language: Language) -> URL? {
-        let name = helpResourceName(for: language)
-        if let url = Bundle.main.url(forResource: name, withExtension: "html") { return url }
-        guard let fallback = Bundle.main.resourceURL?.appendingPathComponent("\(name).html"),
-              FileManager.default.fileExists(atPath: fallback.path) else { return nil }
-        return fallback
-    }
 }

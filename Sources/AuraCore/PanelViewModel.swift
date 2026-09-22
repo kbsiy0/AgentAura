@@ -3,6 +3,9 @@ import Foundation
 public struct PanelRow: Equatable, Sendable, Identifiable {
     public let id: String
     public let projectName: String
+    /// 產生這個 session 的來源 agent 標籤（`Agent.label`；codex-support §3）。
+    /// `.claude` 是 `nil`（不顯示任何標籤——維持既有面板長相），`.codex` 是 `"Codex"`。
+    public let agentLabel: String?
     public let activity: Activity
     public let headline: String
     public let detail: String
@@ -50,6 +53,7 @@ public enum PanelViewModel {
     static func row(for s: SessionState, now: Date, language: Language) -> PanelRow {
         PanelRow(id: s.id,
                  projectName: s.projectName,
+                 agentLabel: s.agent.label,
                  activity: s.activity,
                  headline: headline(for: s, language: language),
                  detail: detail(for: s, now: now, language: language),

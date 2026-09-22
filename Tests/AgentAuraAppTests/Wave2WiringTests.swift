@@ -67,7 +67,8 @@ struct Wave2WiringTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
         await SpawnGate.shared.run {
@@ -100,7 +101,8 @@ struct Wave2WiringTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   installer: installer, makeLoginItem: { FakeLoginItem() }, makeRenderer: { spy })
+                                   installer: installer, makeLoginItem: { FakeLoginItem() },
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
         #expect(delegate.installState == .claudeNotFound, "前提：不存在的 claudeHome 應該 probe 成 .claudeNotFound")
@@ -125,7 +127,7 @@ struct Wave2WiringTests {
                                         install: .connected(owner: .external, verified: .verified), version: "1.0",
                                         optionsExpanded: true, launchAtLogin: nil,
                                         externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
-                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         let note = try #require(connected.mountTargetNote, "前提：connected(.external) 應該有 mountTargetNote")
 
         var dumped = ""
@@ -142,7 +144,7 @@ struct Wave2WiringTests {
                                              install: .broken(.hookMissing, owner: .external), version: "1.0",
                                              optionsExpanded: true, launchAtLogin: nil,
                                              externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
-                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                             systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         var dumpedBroken = ""
         dump(OptionsSectionView(model: brokenExternal, onAction: { _ in }).body, to: &dumpedBroken)
         #expect(!dumpedBroken.contains(note), """

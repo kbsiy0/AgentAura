@@ -73,7 +73,7 @@ struct FooterPositionStabilityTests {
         return PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                                install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
                                optionsExpanded: optionsExpanded, launchAtLogin: true, externalTargetPath: nil,
-                               banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                               banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     /// footer 的「Options」按鈕在真的 `NSHostingController.view` 座標系裡的 `minY`
@@ -159,6 +159,47 @@ struct FooterPositionStabilityTests {
 
         #expect(collapsedTop == expandedTop, """
             理想尺寸下 footer 位置也不該變，實際 collapsed=\(collapsedTop)pt expanded=\(expandedTop)pt
+            """)
+    }
+
+    /// T13i（CX56 mutation②）：`CodexSectionView.snippetBlock` 的 snippet 區塊也包了一層
+    /// `ScrollView`。`PanelView.body` 頂層已經有 `.frame(maxHeight: .infinity, alignment:
+    /// .top)`（T22 修法，本檔開頭 doc comment），把「外層畫布比理想高度寬裕」的情況整個
+    /// 吸收在最外層、不會傳到子 view——**用「外層畫布超過自然高度」的既有技巧量不到**
+    /// `CodexSectionView` 內層的 `.frame(maxHeight:)` 洞（已實測確認：即使故意改成
+    /// `.frame(maxHeight:)`，`surplusCanvasHeight` 那招仍然 0 diff）。
+    ///
+    /// 真正會露餡的是**同一份 model、只有 snippet 內容長度不同**：`.frame(height:)`
+    /// 是「不論內容多短都固定吃這麼高」，`.frame(maxHeight:)` 是「跟著內容縮，封頂在上限」——
+    /// 短 snippet 配 `.frame(maxHeight:)` 會讓卡片變矮、footer 跟著往上移；配 `.frame(height:)`
+    /// 則兩種內容長度下 footer 位置**恆等**。這才是「固定高度」在使用者機器上真正要保護的
+    /// 不變式：不同使用者的 `hookBinaryPath` 長度不同（安裝在 `/Applications/` 或
+    /// `~/Applications/` 或更深的路徑），snippet 內容長度因此不同，footer 不該跟著使用者的
+    /// 安裝路徑漂移。
+    func modelWithCodexSnippet(_ snippet: String, sessionCount: Int = 3) -> PanelModel {
+        let icon = IconState(activity: .working, counts: [.working: sessionCount], liveCount: sessionCount)
+        let sessions = (0..<sessionCount).map { session("s\($0)", .working) }
+        return PanelModel.make(icon: icon, sessions: sessions, palette: .default,
+                               install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
+                               optionsExpanded: false, launchAtLogin: true, externalTargetPath: nil, banner: nil,
+                               systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip,
+                               language: .traditionalChinese, codex: .occupiedByOther, codexSnippet: snippet, codexPathRejection: nil)
+    }
+
+    @Test("T13i（CX56 mutation②）：snippet 內容長度不同時，footer 位置不該跟著變")
+    func footerTopUnchangedAcrossDifferentSnippetLengths() throws {
+        let controller = StatusItemController()
+        defer { controller.removeFromStatusBar() }
+        let shortSnippet = "{}"
+        let longSnippet = CodexHooksJSON.snippet(hookBinaryPath: AppDelegate.productionHookBinaryPath())
+        #expect(longSnippet.count > shortSnippet.count * 10, "前提：長 snippet 真的比短 snippet 長很多")
+        let shortTop = try footerButtonTop(controller, modelWithCodexSnippet(shortSnippet), height: nil)
+        let longTop = try footerButtonTop(controller, modelWithCodexSnippet(longSnippet), height: nil)
+        #expect(shortTop == longTop, """
+            snippet 內容從 \(shortSnippet.count) 字元換成 \(longSnippet.count) 字元，footer 位置\
+            不該改變，實際 short=\(shortTop)pt long=\(longTop)pt（差 \(longTop - shortTop)pt）\
+            —— snippet 區塊若用 .frame(maxHeight:)（跟著內容縮）而不是固定 .frame(height:)，\
+            footer 就會依使用者安裝路徑長度（因此 snippet 內容長度）而上下漂移。
             """)
     }
 

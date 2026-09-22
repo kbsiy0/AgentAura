@@ -75,6 +75,25 @@ right away.
 
 You do **not** need to restart AgentAura itself.
 
+## Using it with Codex
+
+AgentAura also works with OpenAI's Codex CLI, using the same mount-and-notify model as Claude
+Code.
+
+1. Open the panel. If you have `~/.codex` on your machine, there's a second card for Codex.
+   Click **Connect Codex**.
+2. AgentAura writes `~/.codex/hooks.json` so Codex notifies it too. It **never touches
+   `~/.codex/config.toml`**, and it only writes `hooks.json` if that file doesn't already exist.
+3. Start (or restart) Codex. **It will ask you once whether to trust this hook** — you have to
+   say yes for the light to move. AgentAura has no way to detect whether you said yes or no; it
+   can only tell you to expect the prompt.
+
+If you already have your own `~/.codex/hooks.json`, AgentAura leaves it alone and shows a
+snippet in the panel that you can copy and add to it by hand instead.
+
+To disconnect, use **Remove Codex mount…** in Options. It only deletes the entry AgentAura
+wrote itself — verified byte-for-byte first, never a file that turned out to be someone else's.
+
 ## Can't see the icon in the menu bar?
 
 The icon is a small LED strip, not a picture. If you can't find it after installing:
@@ -245,10 +264,40 @@ move the app into Applications and open it again, or allow it under
 The mount points at where the app was when you connected. Move it or rename it and the light
 stays dark. Put the app back, or click **Reconnect** in the panel from its new location.
 
+### Codex: the light never moves
+
+Check whether Codex has actually asked you to trust the hook yet. An untrusted hook is skipped
+**completely silently** — no error, no message, nothing in Codex's own output at all. If you
+don't remember seeing the trust prompt, start a new Codex session and watch for it.
+
+If you already trusted it and the light still won't turn red on a failure, that's a separate,
+expected gap — see
+[Codex: a command failed but the light never turned red](#codex-a-command-failed-but-the-light-never-turned-red)
+below.
+
+### Codex: a command failed but the light never turned red
+
+That's expected, not a bug. Codex's hooks don't report tool failures — there is no
+`PostToolUseFailure` or `StopFailure` event, and a tool's result arrives as plain text with no
+exit code. AgentAura therefore has nothing to turn the error light on with for a Codex-only
+session; a failed command looks like any other finished command. The other three lights
+(working, waiting, done) work the same way they do for Claude Code.
+
+### Codex: is it actually reading the hooks file?
+
+There's no visible confirmation that Codex parsed `~/.codex/hooks.json` when the timeout is 3
+seconds — that's short enough that Codex never complains about it. To check for yourself:
+temporarily change `"timeout": 3` to `"timeout": 5` for one event in that file, start a new
+Codex session, and watch its stderr. If Codex read the file, it prints a warning like
+`clamping ... hook timeout to 3s`. Change the value back to `3` afterward — AgentAura will
+overwrite the whole file the next time you reconnect, but there's no need to wait for that.
+
 ## State directory
 
-`~/.agentaura/sessions/<session_id>.json` — one file per Claude Code session, holding its
-current state. Safe to delete at any time; the app rebuilds it on the next hook event.
+`~/.agentaura/sessions/<session_id>.json` — one file per session, holding its current state.
+**Claude Code and Codex sessions both land in this one directory**, told apart by the `agent`
+field inside each file (absent means Claude Code). Safe to delete at any time; the app rebuilds
+it on the next hook event.
 
 ## Upgrading from an older version
 

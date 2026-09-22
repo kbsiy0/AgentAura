@@ -21,7 +21,7 @@ import Foundation
 struct SubagentSessionEndVisibilityTests {
 
     static func merge(_ p: HookPayload, into s: SessionSnapshot?) -> SessionSnapshot {
-        MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111, now: .distantPast)
+        MergeRules.merge(p, into: s, pid: 4242, pidStartedAt: 111, agent: .claude, now: .distantPast)
     }
 
     @Test("已修：具名 subagent 沒送 SubagentStop 就 SessionEnd，該 session 仍留在 visible 裡")

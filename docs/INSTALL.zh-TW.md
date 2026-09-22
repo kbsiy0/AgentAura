@@ -75,6 +75,22 @@ curl -fsSL https://raw.githubusercontent.com/kbsiy0/AgentAura/main/scripts/insta
 
 接上完成不會、也不需要叫你重開 `AgentAura.app` 這個 App 本身。
 
+## 搭配 Codex 使用
+
+AgentAura 也支援 OpenAI 的 Codex CLI，用的是跟 Claude Code 同一套「掛載＋通知」模型。
+
+1. 打開面板——如果機器上有 `~/.codex`，這裡會多一張 Codex 的卡片。按**「接上 Codex」**。
+2. AgentAura 會寫入 `~/.codex/hooks.json`，讓 Codex 也通知它。**絕不碰
+   `~/.codex/config.toml`**，而且只在 `hooks.json` 原本不存在時才寫。
+3. 開啟（或重開）Codex。**它會問你一次是否信任這個 hook**——要按同意，燈才會動。
+   AgentAura 沒辦法偵測你按了同意還是拒絕，只能先講清楚會有這個提示。
+
+如果你本來就有自己的 `~/.codex/hooks.json`，AgentAura 不會動它，會在面板顯示一段可以
+複製、手動貼進去的設定。
+
+要斷開，用 Options 裡的**「移除 Codex 掛載…」**。它只刪掉 AgentAura 自己寫的那個項目——
+刪除前一定先逐位元組比對內容，不會刪到後來變成別人的檔案。
+
 ## 安裝後 AgentAura 沒反應？先看 `/plugin`
 
 在 Claude Code 裡輸入 `/plugin`，找 `agentaura` 那一項。如果看到
@@ -204,8 +220,9 @@ app bundle 本身這五個位置，任何一項還在就非零退出並印出是
 
 ## 狀態目錄
 
-`~/.agentaura/sessions/<session_id>.json` —— 每個 Claude Code session 一個檔，
-內容是瞬時狀態，可隨時安全刪除（app 會在下一個 hook 事件時重建）。
+`~/.agentaura/sessions/<session_id>.json` —— 每個 session 一個檔，內容是瞬時狀態。
+**Claude Code 與 Codex 的 session 都落在這同一個目錄**，靠檔案裡的 `agent` 欄位區分
+（沒有這個欄位就是 Claude Code）。可隨時安全刪除（app 會在下一個 hook 事件時重建）。
 
 ## 從舊版升級
 
@@ -253,3 +270,27 @@ echo '{"hook_event_name":"Stop","session_id":"t1"}' | ./plugin/bin/aura-hook; ec
 
 接上的掛載指向當時那個 App 檔案的實際位置，搬動或改名後燈會停在暗的。
 把 App 放回原位，或移到新位置後在面板按「重新接上」。
+
+**Codex：燈完全不動**
+
+先確認 Codex 有沒有真的問過你信任這個 hook。沒有被信任的 hook 會**完全靜默地**被跳過——
+沒有錯誤、沒有訊息，Codex 自己的輸出裡什麼都不會出現。如果你不記得看過信任提示，
+開一個新的 Codex session 留意看看。
+
+已經信任過、但失敗時燈還是不會變紅，那是另一個獨立且預期中的落差——見下方
+「**Codex：指令失敗了，但燈沒有變紅**」。
+
+**Codex：指令失敗了，但燈沒有變紅**
+
+這是預期行為，不是 bug。Codex 的 hook 不會回報 tool 失敗——沒有 `PostToolUseFailure`、
+沒有 `StopFailure`，tool 的結果只是一段純文字、沒有 exit code。所以只用 Codex 的 session，
+AgentAura 沒有任何東西可以拿來點亮錯誤燈；失敗的指令看起來跟其他跑完的指令一樣。
+另外三顆燈（執行中、等你、已完成）跟 Claude Code 一樣正常。
+
+**Codex：想確認它有沒有真的讀到這個檔**
+
+`timeout` 設成 3 秒時，Codex 不會抱怨——短到不會觸發任何警告，所以沒有直接的訊號可看。
+想自己確認的話：把 `~/.codex/hooks.json` 裡任一個事件的 `"timeout": 3` 暫時改成
+`"timeout": 5`，開一個新的 Codex session，看它的 stderr。如果 Codex 真的讀到這個檔，
+會印出類似 `clamping ... hook timeout to 3s` 的警告。確認完把值改回 `3`——下次重新接上時
+AgentAura 會整份覆寫回去，不改回去也沒關係，只是不必特意等那一刻。

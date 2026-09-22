@@ -37,7 +37,7 @@ struct Phase3EvidenceRenderer {
         let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                     install: .connected(owner: .thisApp, verified: .verified), version: "0.1.0",
                                     optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil,
-                                    systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                    systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         try Phase2EvidenceRenderer.renderPair(dir: dir, name: "B1-B2-B4-options-expanded", model: model, render: render)
         try Phase2EvidenceRenderer.rebuildIndex(dir: dir)
     }
@@ -52,13 +52,13 @@ struct Phase3EvidenceRenderer {
         let userOn = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                      install: .connected(owner: .thisApp, verified: .verified), version: "0.1.0",
                                      optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil,
-                                     systemReduceMotion: false, userReduceMotion: true, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                     systemReduceMotion: false, userReduceMotion: true, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         try Phase2EvidenceRenderer.renderPair(dir: dir, name: "B5-reduceMotion-userOn", model: userOn, render: render)
 
         let systemForced = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                            install: .connected(owner: .thisApp, verified: .verified), version: "0.1.0",
                                            optionsExpanded: true, launchAtLogin: true, externalTargetPath: nil, banner: nil,
-                                           systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                           systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         try Phase2EvidenceRenderer.renderPair(dir: dir, name: "B5-reduceMotion-systemForced", model: systemForced, render: render)
 
         try Phase2EvidenceRenderer.rebuildIndex(dir: dir)
@@ -76,11 +76,13 @@ struct Phase3EvidenceRenderer {
                                     install: .connected(owner: .external, verified: .unknown), version: "0.1.0",
                                     optionsExpanded: true, launchAtLogin: true,
                                     externalTargetPath: "/Users/dev/repo/plugin", banner: nil,
-                                    systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                    systemReduceMotion: true, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
+        // T07：PanelModel 還沒有 codex 欄位（T08 才加），先傳 .unavailable/nil。
         let rows = OptionsMenuModel.rows(install: model.install, launchAtLogin: model.launchAtLogin,
                                          isDefaultPalette: model.isDefaultPalette,
                                          systemReduceMotion: model.systemReduceMotion,
-                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, iconShape: .ledStrip, palette: model.palette, language: .traditionalChinese)
+                                         userReduceMotion: model.userReduceMotion, iconPlate: model.iconPlate, iconShape: .ledStrip, palette: model.palette, language: .traditionalChinese,
+                                         codex: .unavailable, codexPathRejection: nil)
 
         func renderView(_ view: some View, over background: NSColor, appearance: NSAppearance.Name) throws -> CGImage {
             let hosting = NSHostingView(rootView: view)

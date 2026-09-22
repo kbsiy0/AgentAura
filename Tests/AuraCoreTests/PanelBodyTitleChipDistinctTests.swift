@@ -25,7 +25,7 @@ struct PanelBodyTitleChipDistinctTests {
             let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: install, version: "1.0", optionsExpanded: false,
                                         launchAtLogin: nil, externalTargetPath: nil, banner: nil,
-                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
             let title = model.title
             let body = model.notConnectedDetailText
             let chip = Self.chipText(model)
@@ -49,7 +49,7 @@ struct PanelBodyTitleChipDistinctTests {
                 let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                             install: install, version: "1.0", optionsExpanded: false,
                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil,
-                                            systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                            systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
                 let title = model.title
                 let body = model.emptyRowsMessage
                 let chip = Self.chipText(model)

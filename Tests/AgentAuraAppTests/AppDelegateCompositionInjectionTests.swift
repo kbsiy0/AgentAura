@@ -32,7 +32,7 @@ struct AppDelegateCompositionInjectionTests {
     @Test("productionUsesRealInstaller：預設 installer.claudeHome 以 /.claude 結尾，不含 temp 前綴")
     func productionUsesRealInstaller() {
         // 不需要 launch——installer 是 init 參數，建構完就在，且值就是「沒被覆寫的預設值」。
-        let delegate = AppDelegate(root: FileManager.default.temporaryDirectory)
+        let delegate = AppDelegate(root: FileManager.default.temporaryDirectory, confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert())
         let path = delegate.installer.claudeHome.path
         #expect(path.hasSuffix("/.claude"), "生產 claudeHome 應以 /.claude 結尾，實際 \(path)")
         #expect(!path.hasPrefix("/var/folders/"), """
@@ -49,6 +49,7 @@ struct AppDelegateCompositionInjectionTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(),
                                    makeRenderer: { spy })   // installer／makeLoginItem 皆用生產預設值
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
@@ -66,7 +67,7 @@ struct AppDelegateCompositionInjectionTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 0.05, defaults: defaults,
-                                   makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

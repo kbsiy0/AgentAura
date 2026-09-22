@@ -38,7 +38,8 @@ struct PanelView: View {
                 // （`connectCTAStyle == .banner` 依 `PanelModel` 的定義恆搭配非空 rows）。
                 if model.connectCTAStyle == .banner,
                    let cta = model.connectCTAText, let action = model.connectCTAAction {
-                    ConnectCTABannerView(label: model.install.healthLabel(model.language), subtitle: model.connectCTASubtitle,
+                    // T13f（D-y，S1-1）：改讀 model.statusLabel（不是 model.install.healthLabel）。
+                    ConnectCTABannerView(label: model.statusLabel(model.language), subtitle: model.connectCTASubtitle,
                                         ctaText: cta, action: action, onAction: onAction)
                 }
                 if model.rows.isEmpty {
@@ -55,6 +56,12 @@ struct PanelView: View {
                     sessionsCard
                 }
             }
+
+            // T09（P1）：Codex 的提示永遠在 Claude 側內容**下面**——同一張畫面兩個 agent
+            // 疊在一起時，使用者第一次看得懂哪個按鈕對應哪個 agent。`.unavailable`／
+            // `.connected` 回 `EmptyView()`，這裡零版面代價（CX36）。
+            CodexSectionView(model: model, onAction: onAction)
+
             LegendRowView(legend: model.legend, onAction: onAction, language: model.language)
 
             PanelFooterView(model: model, onAction: onAction)
@@ -132,8 +139,21 @@ struct PanelRowView: View {
                 .overlay(DotRing())
                 .frame(width: 8, height: 8).padding(.top, 6).frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
+                // D-l／CX23：標籤放在**既有第一行**，不另起一行——另起一行會撐高列高，
+                // `RowHeightDerivationTests`（43／59pt）會紅。`.claude` 的 `agentLabel`
+                // 是 nil（D-b），這裡不畫任何東西，維持既有面板長相。
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(row.projectName).font(.system(size: 13, weight: .semibold))
+                    if let agentLabel = row.agentLabel {
+                        // 實測（CodexRowLabelRenderTests）：加 padding／背景圓角會讓這個
+                        // view 自己的 frame 高度多出 ~1pt，即使仍在同一個 `.firstTextBaseline`
+                        // HStack 裡也會把整列量到的高度從 43/59pt 撐成 44/60pt——CX23 的
+                        // ±0.5pt 容差抓得到。改成跟 `row.meta` 一樣的裸 `Text`（無 padding／
+                        // 無背景），量到的高度才不變。
+                        Text(agentLabel)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
                     Text(row.meta).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 // T15：headline 拿掉等寬（V1 token「headline 12 非等寬」——六個現況問題之一

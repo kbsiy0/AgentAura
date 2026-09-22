@@ -15,7 +15,7 @@ struct OptionsExpandTests {
         return PanelModel.make(icon: icon, sessions: [], palette: .default,
                                install: .connected(owner: .thisApp, verified: .verified),
                                version: "1.0", optionsExpanded: optionsExpanded,
-                               launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                               launchAtLogin: launchAtLogin, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     @Test("同一個 hostingController：collapsed → setPanel(expanded) 後 preferredContentSize.height 變高")
@@ -76,14 +76,17 @@ struct OptionsExpandTests {
         let install = InstallState.connected(owner: .external, verified: .unknown)
         let launchAtLogin = true
         let systemReduceMotion = true
+        // T07：PanelModel 還沒有 codex 欄位（T08 才加），先傳 .unavailable/nil——這條 gate
+        // 驗的是「worst-case 高度不超過從 rowCount 推導的門檻」，Codex 目前零列不影響 worst-case。
         let rowCount = OptionsMenuModel.rows(install: install, launchAtLogin: launchAtLogin, isDefaultPalette: true,
                                              systemReduceMotion: systemReduceMotion, userReduceMotion: false,
-                                             iconPlate: false, iconShape: .ledStrip, palette: .default, language: .traditionalChinese).count
+                                             iconPlate: false, iconShape: .ledStrip, palette: .default, language: .traditionalChinese,
+                                             codex: .unavailable, codexPathRejection: nil).count
         let worstCase = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: install, version: "1.0",
                                         optionsExpanded: true, launchAtLogin: launchAtLogin,
                                         externalTargetPath: "/Users/dev/some/very/long/path/to/repo/plugin", banner: nil,
-                                        systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: false, iconShape: .ledStrip, language: .traditionalChinese)
+                                        systemReduceMotion: systemReduceMotion, userReduceMotion: false, iconPlate: false, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         controller.setPanel(worstCase)
         let height = try #require(controller.hostingController).preferredContentSize.height
         let ceiling = OptionsPanelSizing.heightCeiling(forRowCount: rowCount)

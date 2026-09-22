@@ -28,6 +28,43 @@ public enum EventMapping {
         "PostModelSwitch",
     ]
 
+    /// Codex CLI 自己的 hook 事件全集（`docs/2026-09-18-codex-hook-probe.md` F2，共 12 個）——
+    /// **與 `handledEvents` 是兩個獨立的集合，不可合併**：`handledEvents` 是「Claude Code
+    /// plugin 必須且只能註冊這些」的清單，Claude Code 對 hooks.json 是全有全無解析
+    /// （見 `codexOnlyEvents` 的 doc comment 與 CX2）。
+    ///
+    /// 兩種證據強度不可混為一談：
+    /// - **有真實 payload**（探針 `codex exec` 實抓到 24 筆樣本、涵蓋這六個）：
+    ///   `SessionStart` `UserPromptSubmit` `PreToolUse` `PostToolUse` `Stop` `SessionEnd`。
+    /// - **只有二進位字串證據**（`strings` 掃出的 `HookEventsToml` 列舉，探針 session 從未
+    ///   實際觸發過）：`PermissionRequest` `Interrupt` `SubagentStart` `SubagentStop`
+    ///   `PreCompact` `PostCompact`。
+    public static let codexEvents: Set<String> = [
+        "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd",
+        "PermissionRequest", "Interrupt", "SubagentStart", "SubagentStop", "PreCompact", "PostCompact",
+    ]
+
+    /// `codexEvents` 裡 Codex 獨有、Claude Code 完全不認得的事件——目前只有 `Interrupt`。
+    ///
+    /// **絕不可以把這裡的任何一個加進 `handledEvents`**（CX2）：Claude Code 對 hooks.json
+    /// 是全有全無解析，`registeredEventsMatchHandledEvents`（`PluginWiringTests.swift`）那條
+    /// 雙向等式會因此要求 Claude 側 `plugin/hooks/hooks.json` 也註冊它——而 Claude Code
+    /// 從未認得過 `Interrupt`（`handledEvents` 19 個名字裡沒有它、hooks.json 從未註冊過它），
+    /// 那份 hooks.json 會被 Claude Code 整份拒載，產品對 Claude 使用者完全停止運作。
+    ///
+    /// **注意**：本機 `claude plugin validate --strict` 對未知 event 只給 warning
+    /// 「entry ignored at runtime」，看起來像只有那一條被忽略。整份拒載是 2026-09-15
+    /// 在同事機器上實測到的（`PostModelSwitch` 讓整個 plugin 不運作），與 Claude Code
+    /// 版本有關；本機驗證器通過不構成反證。
+    ///
+    /// 順帶一提：`claude plugin validate --strict`（DoD 要求零 warning）對註冊 `Interrupt`
+    /// 會直接失敗——這是不靠我們自己斷言的第四道防線。
+    ///
+    /// `Interrupt` **事件**與 `HookPayload.isInterrupt` **欄位**是兩件不同的事：前者是整輪
+    /// Codex session 被中斷（見 `effect(forEvent:)` 的對應 case），後者是使用者用 Ctrl+C
+    /// 中斷了單一個 tool、且刻意不計入 `tool_failures`（見該欄位的 doc comment）。
+    public static let codexOnlyEvents: Set<String> = ["Interrupt"]
+
     /// `handledEvents` 中刻意不改變 activity 的 event。
     ///
     /// 它們仍必須註冊，因為帶了別的必要資訊：`PostModelSwitch` 帶 `to_model`
@@ -67,6 +104,12 @@ public enum EventMapping {
 
         case "Notification":
             return notificationEffect(notificationType)
+
+        case "Interrupt":
+            // Codex-only 事件（見 `codexOnlyEvents`）——整輪 Codex session 被中斷，不是
+            // 「使用者中斷一個 tool」那個 `HookPayload.isInterrupt` 欄位（見它的 doc comment）。
+            // 中斷後 session 沒有「進行中」的意義了，回到與 SessionStart 相同的靜止態。
+            return .setActivity(.idle)
 
         default:
             // 上游新增 event 時必須靜默忽略，不得改變 activity 也不得爆掉。

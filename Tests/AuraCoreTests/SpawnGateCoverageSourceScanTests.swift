@@ -26,6 +26,16 @@ import Foundation
 /// `AppDelegateUnknownNeverTerminalTests`／`AppDelegatePanelActionsWiredTests`），沒有簡單
 /// 的字面樣式能可靠涵蓋，誠實承認比假裝涵蓋更好（同一個 change 裡
 /// `InstallerConstructionSourceScanTests` 也有一樣的性質限制）。
+///
+/// **2026-09-18（`codex-support` T06，spec-reviewer m3）**：`connectNeedle` 綁的是**區域
+/// 變數的命名**（字面 `"installer" + ".connect("`），不是型別。`CodexCoexistenceSequenceTests`
+/// 一度把持有 `CodexInstaller`（不會 spawn）的區域變數也叫 `installer`，`installer.connect(
+/// json:...)` 因此被誤判成需要 `SpawnGate`——處置是把那三個檔案裡的變數改名成
+/// `codexInstaller`，**不是**放寬或改寫這條 needle。這也暴露一個目前還沒發生但值得記著
+/// 的偽陰性：反過來若有人把**真的會 spawn** 的 `Installer` 變數取名成 `codexInstaller`／
+/// `sut` 之類，這條 needle 會**掃不到**它——口徑鬆在兩個方向，只是這次先撞到的是誤判
+/// 那一邊。收窄成「型別建構＋`.connect(` 同檔」（比照 `InstallerConstructionSourceScanTests`
+/// 已經在做的型別掃描）留給下一次真的改這條 gate 時再處理，這裡先如實記下來。
 @Suite("Spawn 一律經過 SpawnGate（T10b）")
 struct SpawnGateCoverageSourceScanTests {
 

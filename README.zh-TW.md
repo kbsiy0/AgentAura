@@ -29,6 +29,10 @@
 AgentAura 在選單列放一顆燈，代表你全部的 session。點開它會列出每一個 session 的細節。
 抬頭看一眼就好，不必翻。
 
+它也用同一套方式認得 OpenAI 的 Codex CLI——一顆燈、一份面板，兩邊共用。Codex 的 session
+在面板上會多一個「Codex」標籤，但 Codex 本身沒有錯誤訊號可以回報，所以只跑 Codex 的時候，
+那顆紅燈永遠不會亮。
+
 ## 唯一的規則：只有需要你的才會動
 
 一個一直在動的指示器，只是第二個跟你搶注意力的東西。所以動畫是配額制的，
@@ -155,7 +159,8 @@ git clone https://github.com/kbsiy0/AgentAura.git && cd AgentAura
 
 - **它從不連網。** 沒有遙測、沒有更新檢查、沒有當機回報。
 - **它只寫兩個東西：** `~/.agentaura/` 底下的 session 狀態，以及一條
-  `~/.claude/skills/agentaura` symlink。
+  `~/.claude/skills/agentaura` symlink。如果你也接上 Codex，會多寫第三個：
+  `~/.codex/hooks.json`，只在那個檔案原本不存在時才寫，刪除前也一定先逐位元組比對內容。
 - **它從不碰 `~/.claude/settings.json`。** 一個位元組都沒有。
 - **它不讀你的工作內容。** 不讀 transcript、不讀 prompt、不讀你的程式碼。
 - **它會執行一個東西：** `aura-hook`，用來確認 hook 真的能動。執行前會先清掉那個檔的隔離標記。

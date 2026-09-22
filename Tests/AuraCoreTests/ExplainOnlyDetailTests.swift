@@ -114,16 +114,16 @@ struct ExplainOnlyDetailTests {
         for state in Self.explainOnlyStates {
             let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: state, version: "1.0", optionsExpanded: false,
-                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
             #expect(model.showsExplanationPanel, "\(state) 的 showsExplanationPanel 應為 true")
         }
         let connected = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: .connected(owner: .thisApp, verified: .verified), version: "1.0",
-                                        optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        optionsExpanded: false, launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         #expect(!connected.showsExplanationPanel, "已接上不該走說明樣式")
         let notConnected = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                            install: .notConnected, version: "1.0", optionsExpanded: false,
-                                           launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                           launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         #expect(!notConnected.showsExplanationPanel, "notConnected 走的是有 CTA 按鈕的 .fullPanel，不是純說明樣式")
     }
 }

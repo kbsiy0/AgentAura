@@ -25,7 +25,7 @@ struct PanelModelBannerTests {
     static func model(sessions: [SessionState], banner: PanelBanner?) -> PanelModel {
         PanelModel.make(icon: icon, sessions: sessions, palette: .default,
                         install: .notConnected, version: "1.0", optionsExpanded: false,
-                        launchAtLogin: nil, externalTargetPath: nil, banner: banner, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                        launchAtLogin: nil, externalTargetPath: nil, banner: banner, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     @Test("前提：rows 空、無 banner → .fullPanel；有列、無 banner → .banner")
@@ -55,7 +55,7 @@ struct PanelModelBannerTests {
         let model = PanelModel.make(icon: Self.icon, sessions: [], palette: .default,
                                     install: .connected(owner: .thisApp, verified: .verified),
                                     version: "1.0", optionsExpanded: false,
-                                    launchAtLogin: nil, externalTargetPath: nil, banner: .connected(language: .traditionalChinese), systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                    launchAtLogin: nil, externalTargetPath: nil, banner: .connected(language: .traditionalChinese), systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         #expect(model.connectCTAStyle == .none)
     }
 
@@ -89,12 +89,12 @@ struct PanelModelBannerTests {
         let replaceExternal = PanelModel.make(icon: Self.icon, sessions: [], palette: .default,
                                               install: .broken(.hookMissing, owner: .external), version: "1.0",
                                               optionsExpanded: false, launchAtLogin: nil,
-                                              externalTargetPath: "/Users/dev/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                              externalTargetPath: "/Users/dev/repo/plugin", banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         #expect(replaceExternal.connectCTASubtitle == "現有掛載指向：/Users/dev/repo/plugin")
 
         let connect = PanelModel.make(icon: Self.icon, sessions: [], palette: .default,
                                       install: .notConnected, version: "1.0", optionsExpanded: false,
-                                      launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                      launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         #expect(connect.connectCTASubtitle == nil, ".connect affordance 沒有「現有掛載指向」可顯示")
     }
 

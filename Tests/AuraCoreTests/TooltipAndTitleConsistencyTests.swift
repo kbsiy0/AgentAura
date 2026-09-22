@@ -32,7 +32,7 @@ struct TooltipAndTitleConsistencyTests {
                                            language: .traditionalChinese)
             let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                         install: install, version: "1.0", optionsExpanded: false,
-                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
 
             #expect(tooltip != Self.connectedEmptyText, """
                 \(install) 的 tooltip 是「\(tooltip)」—— 不得等於 connected 時的字串
@@ -75,7 +75,7 @@ struct TooltipAndTitleConsistencyTests {
                 let install = InstallState.connected(owner: owner, verified: verified)
                 let model = PanelModel.make(icon: .empty, sessions: [], palette: .default,
                                             install: install, version: "1.0", optionsExpanded: false,
-                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                            launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
                 let tooltip = TooltipText.text(appearance: Self.emptyAppearance, install: install,
                                            language: .traditionalChinese)
 

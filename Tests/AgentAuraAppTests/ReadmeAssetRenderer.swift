@@ -64,7 +64,7 @@ struct ReadmeAssetRenderer {
                                version: Self.bundleVersion, optionsExpanded: optionsExpanded,
                                launchAtLogin: true, externalTargetPath: nil, banner: nil,
                                systemReduceMotion: false, userReduceMotion: false,
-                               iconPlate: true, iconShape: .ledStrip, language: language)
+                               iconPlate: true, iconShape: .ledStrip, language: language, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     static func renderPanel(_ m: PanelModel, over bg: NSColor, _ appearance: NSAppearance.Name) throws -> CGImage {

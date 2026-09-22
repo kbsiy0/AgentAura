@@ -23,6 +23,12 @@ extension AppDelegatePanelActionsWiredTests {
                 Issue.record("前置條件失敗：先 connect 一次應該成功，實際 \(rig.delegate.installState)")
                 return
             }
+            // review M2：Codex 側也要先有真的東西可拆，否則下面的 disconnectCallCount／
+            // store.contents 斷言測不到「performUninstall() 真的把 codexRuntime.installer／
+            // store 傳進 Uninstaller(...)」這件事——生產呼叫點（AppDelegate+Connect.swift）
+            // 的兩個新參數目前沒有任何 gate 守，這是唯一的接線測試。
+            rig.onAction(.connectCodex)
+            #expect(rig.recorder.fakeCodexInstaller.connectCallCount == 1, "前置條件失敗：先 connectCodex 一次應該成功")
             let loginItemSetCountBefore = rig.recorder.fakeLoginItem.setCallCount
 
             for action in samples { rig.onAction(action) }
@@ -47,6 +53,23 @@ extension AppDelegatePanelActionsWiredTests {
                 .uninstall 最後應該呼叫注入的 terminator.terminateImmediately() 一次（不是 terminate()——
                 那條會經過 NSApp 的 teardown，team-lead 真機實測抓到它把剛清空的 defaults 寫回去）。
                 bundleURL 在 swift test 下是 nil，走的是「沒東西可搬垃圾桶、直接終止」那條分支。
+                """)
+            // review M2：唯一守住「performUninstall() 真的把 codexRuntime.installer／store
+            // 傳進 Uninstaller(...)」這件事的斷言——這是本次 review 新開的 tested≠wired 面。
+            #expect(rig.recorder.fakeCodexInstaller.disconnectCallCount == 1, """
+                .uninstall 應該連帶呼叫 Codex 側的 disconnect(ifContentsEqual:) 一次，\
+                否則完整移除不移除 Codex hook（verify-uninstall.sh 第 7 項的實機情境）
+                """)
+            // **不用 `codexRuntime.store.contents == nil`**：`Uninstaller.run()` 靠
+            // `erasePersistentDomain()`（不是額外呼叫 `codexStore.clear()`）連帶清空整個
+            // persistent domain，但這條路徑在 `swift test` 下因為 `bundleIdentifier == nil`
+            // 天生跳過（同既有 `skipsDefaultsErasureWhenBundleIdentifierNil` 驗證的那個早退），
+            // 那樣斷言在這個 rig 裡永遠假。用 fake 自己的 `diskContents` 驗證
+            // `disconnect(ifContentsEqual:)` 真的用「相符的內容」被呼叫、真的清空成功——
+            // 傳錯 store 或內容不符時，fake 會 throw 而不清空，這裡才測得到。
+            #expect(rig.recorder.fakeCodexInstaller.diskContents == nil, """
+                .uninstall 之後 fake 的磁碟內容應該被清空——disconnect(ifContentsEqual:) 若收到
+                不相符的 store（傳錯物件）會 throw 而不清空，這裡才測得到「傳的是同一個 store」
                 """)
         }
     }

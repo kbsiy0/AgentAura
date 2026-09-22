@@ -207,6 +207,26 @@
   </section>
 
   <section>
+    <h2>搭配 Codex 使用</h2>
+    <p>AgentAura 也認得 OpenAI 的 Codex CLI，用同一套方式運作——一顆燈、一份面板，兩邊共用。
+      如果你的機器上有 <span class="mono">~/.codex</span>，裝了 Codex 之後這裡會多出第二張卡片。</p>
+    <ul>
+      <li><strong>接上 Codex</strong>—— 寫入 <span class="mono">~/.codex/hooks.json</span>，讓 Codex 也通知
+        AgentAura。絕不碰 <span class="mono">~/.codex/config.toml</span>，而且只在那個檔案還不存在時才寫。</li>
+      <li>下次開啟 Codex 時，它會問你一次是否信任這個 hook，要按同意燈才會動——AgentAura
+        沒辦法知道你按了同意還是拒絕，只能先講清楚會有這個提示。</li>
+      <li><strong>重新接上 Codex</strong>—— 如果 App 在接上之後被搬走，這裡會換成這一列，
+        按下去用 App 現在的位置重建同一份掛載。</li>
+      <li><strong>移除 Codex 掛載…</strong>—— 只刪掉 AgentAura 自己寫的那份
+        <span class="mono">hooks.json</span> 項目。如果你本來就有自己的
+        <span class="mono">~/.codex/hooks.json</span>，AgentAura 不會動它，只會顯示一段可以手動貼上的設定。</li>
+      <li>把這些 entry 併進你現有的 hooks 物件，不要整份取代。</li>
+    </ul>
+    <p class="muted">Codex 的 session 沒有專門的「錯誤」訊號可以回報給 AgentAura——只跑 Codex 的時候，
+      那顆紅燈永遠不會亮，只有 Claude Code 的 session 才會。</p>
+  </section>
+
+  <section>
     <h2>Options 選單在做什麼</h2>
     <p>點面板底部的「Options ⌄」（或直接在選單列圖示上按右鍵）會展開這些項目：</p>
     <ul>

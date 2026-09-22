@@ -35,14 +35,14 @@ struct CTAAffordanceRenderTests {
     func fullPanelModel() -> PanelModel {
         PanelModel.make(icon: .empty, sessions: [], palette: .default,
                         install: .notConnected, version: "1.0", optionsExpanded: false,
-                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                        launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     func bannerModel() -> PanelModel {
         let icon = IconState(activity: .working, counts: [.working: 1], liveCount: 1)
         return PanelModel.make(icon: icon, sessions: [session("a", .working)], palette: .default,
                                install: .notConnected, version: "1.0", optionsExpanded: false,
-                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                               launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
     func render(_ m: PanelModel, appearance: NSAppearance.Name = .aqua) throws -> OffscreenRender.Bitmap {

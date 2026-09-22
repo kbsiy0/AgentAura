@@ -29,10 +29,10 @@ struct PanelHostingTests {
         let icon = IconState(activity: .working, counts: [.working: 1], liveCount: 1)
         let m1 = PanelModel.make(icon: icon, sessions: [session("a")], palette: .default,
                                  install: .notConnected, version: "1.0", optionsExpanded: false,
-                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
         let m3 = PanelModel.make(icon: icon, sessions: [session("a"), session("b"), session("c")], palette: .default,
                                  install: .notConnected, version: "1.0", optionsExpanded: false,
-                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese)
+                                 launchAtLogin: nil, externalTargetPath: nil, banner: nil, systemReduceMotion: false, userReduceMotion: false, iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
 
         controller.setPanel(m1)
         let first = try #require(controller.hostingController, "第一次 setPanel 之後 hostingController 應該非 nil")
@@ -130,7 +130,7 @@ struct PanelHostingTests {
                                             install: .notConnected, version: "1.0", optionsExpanded: false,
                                             launchAtLogin: nil, externalTargetPath: nil, banner: nil,
                                             systemReduceMotion: false, userReduceMotion: false,
-                                            iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese))
+                                            iconPlate: true, iconShape: .ledStrip, language: .traditionalChinese, codex: .unavailable, codexSnippet: nil, codexPathRejection: nil))
 
         let empty = AppearancePolicy.appearance(for: .empty, reduceMotion: true)
         controller.apply(empty, phase: 0)

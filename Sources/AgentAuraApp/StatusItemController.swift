@@ -112,7 +112,8 @@ final class StatusItemController: IconRendering {
                                  install: .notConnected, version: "", optionsExpanded: false,
                                  launchAtLogin: nil, externalTargetPath: nil, banner: nil,
                                  systemReduceMotion: false, userReduceMotion: false, iconPlate: true,
-                                 iconShape: .ledStrip, language: .english))
+                                 iconShape: .ledStrip, language: .english,
+                                 codex: .unavailable, codexSnippet: nil, codexPathRejection: nil))
     }
 
     /// 首次建 `NSHostingController` 並設 `sizingOptions = [.preferredContentSize]`
