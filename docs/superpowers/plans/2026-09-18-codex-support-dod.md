@@ -35,26 +35,26 @@ DoD #1 的「全綠」以「修好它之後」為準。
 
 | # | 項目 | 門檻 | 量法 | 實測 | 判定 |
 |---|---|---|---|---|---|
-| 1 | 測試全綠 | 連跑 **3 次** 0 flake，**含修好 `everyFixtureModelIsMapped`**、**且 `AURA_CODEX_PENDING_T05`／`_T10` 兩個旗標都已解除**（T05／T10 各自的驗收要附解除前／後的 `#expect` 與測試函式數，**只准上升**）；每次存全量 log | `swift test` ×3 ＋ CX44 | 3 輪皆 **646＋291＝937 tests／0 issue**（log：`swift-test-run1/2/3.log`）；`everyFixtureModelIsMapped` 現為 GREEN（獨立重跑 0.006s）；`grep AURA_CODEX_PENDING Sources Tests` 兩處皆 0 命中 | **PASS** |
-| 2 | 新增測試數 | `#expect(` 淨增 **≥ 180**（基準 **1649**）；新增測試函式 **≥ 65**。**量法一次定案**（T04 review m3）：指令固定 `grep -rho '#expect(' Tests \| wc -l`，**每個 task 的報告附該 commit 的絕對值**（不只增量）——只報增量時，兩個端點各差 3 也看不出來。r4 是 170／62，**r5 增量＝CX42 約 +5、Jargon 三列 +3、CX37 拆 a／b +2**（`grep -c '#expect'` 數的是**原始碼出現次數**，迴圈只算一次——20／780 條序列不會讓這個數字暴增） | 前後 **`grep -rho '#expect(' Tests \| wc -l`**；`swift test` 的 tests 計數 | HEAD `#expect(`=**2025**、`@Test`=**941**。對 `c131c30`（1649／768）：+376／+173。對現 main `9ec85d0`（1652／770，本 change 真實貢獻）：+373／+171。兩個基準都遠超門檻（≥180／≥65） | **PASS** |
-| 3 | gate mutation 帳 | **57 條**（CX1–CX57，CX37 拆 a／b，CX43 未使用）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**）。**T13 追加**：CX47–CX57 **11 條全部**要有秒數（不是抽驗——它們是本輪新寫的），**含兩個等價 mutant**（CX47②／CX49③）的「預期綠」紀錄 | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | **5 筆抽驗全部現場重跑成功**（見下表秒數欄：CX2 0.001s、CX4 0.001s、CX15 0.008s、CX32 0.007s、CX39 0.180s，皆還原後 `git status` 乾淨）＋ **CX44 現場新做**（Sources 0.032s／Tests 0.056s）。另從 commit 訊息額外找到 7 條有秒數記載（CX7、CX8/CX10/CX38、CX9、CX37a、CX37b，已填入下表）。**其餘 ~34 條**：commit 訊息都記載了 mutation 與指名測試（來源 task 欄已由 plan 填好），但秒數未逐條轉錄進本帳本——彙整 73 個 commit 全文本超出本輪時間預算，標記「未記」而非編造 | **PARTIAL**（5 筆抽驗＋CX44 達標；46 條逐一秒數未全部彙整齊，缺口誠實列在下表） |
+| 1 | 測試全綠 | 連跑 **3 次** 0 flake，**含修好 `everyFixtureModelIsMapped`**、**且 `AURA_CODEX_PENDING_T05`／`_T10` 兩個旗標都已解除**（T05／T10 各自的驗收要附解除前／後的 `#expect` 與測試函式數，**只准上升**）；每次存全量 log | `swift test` ×3 ＋ CX44 | **T12（首輪）**：3 輪皆 646＋291＝937 tests／0 issue。**T12b（T13 之後重跑，2026-09-22，tip `c22fb12`）**：3 輪皆 **657＋312＝969 tests／0 issue／0 flake**（log：`scratchpad/t12b/swift-test-run1/2/3.log`）；三輪皆未觀測到既有 `CompositionRootTests` flake（grep 三份 log 皆 0 命中，未觸發不代表已修復，只是這 3 輪沒撞上）。`grep AURA_CODEX_PENDING Sources Tests` 兩處皆 0 命中 | **PASS** |
+| 2 | 新增測試數 | `#expect(` 淨增 **≥ 180**（基準 **1649**）；新增測試函式 **≥ 65**。**量法一次定案**（T04 review m3）：指令固定 `grep -rho '#expect(' Tests \| wc -l`，**每個 task 的報告附該 commit 的絕對值**（不只增量）——只報增量時，兩個端點各差 3 也看不出來。r4 是 170／62，**r5 增量＝CX42 約 +5、Jargon 三列 +3、CX37 拆 a／b +2**（`grep -c '#expect'` 數的是**原始碼出現次數**，迴圈只算一次——20／780 條序列不會讓這個數字暴增） | 前後 **`grep -rho '#expect(' Tests \| wc -l`**；`swift test` 的 tests 計數 | **T12（首輪）**：HEAD `#expect(`=2025、`@Test`=941。**T12b（T13 之後，tip `c22fb12`）**：HEAD `#expect(`=**2083**、`@Test`=**977**。對 `c131c30`（1649／768）：+434／+209。對現 main `9ec85d0`（1652／770，真實貢獻）：+431／+207。兩個基準都遠超門檻（≥180／≥65） | **PASS** |
+| 3 | gate mutation 帳 | **57 條**（CX1–CX57，CX37 拆 a／b，CX43 未使用）逐條有 `mutation / 指名測試 / 秒數`；**抽驗 5 筆現場重跑**（必含 CX2、CX4、CX15、CX32、**CX39**）。**T13 追加**：CX47–CX57 **11 條全部**要有秒數（不是抽驗——它們是本輪新寫的），**含兩個等價 mutant**（CX47②／CX49③）的「預期綠」紀錄 | 彙整 T02–T11 的完成報告 ＋ 現場重跑 | **T12（首輪）5 筆抽驗**：CX2 0.001s、CX4 0.001s、CX15 0.008s、CX32 0.007s、CX39 0.180s，皆還原後乾淨＋CX44 新做（Sources 0.032s／Tests 0.056s）。**T12b（T13 之後）新增 3 筆現場重跑**（team-lead 指定）：**CX40**（mutation②「只扣 `.mustMoveToApplications` 一種」，App 半 `codexConnectChainIsWired` 14 issues／**0.228s**，與帳本記載的 0.222s 一致）；**CX51**（標題讀取點改回 `install.healthLabel`，②③ 2 issues／**0.004s**，**且 CX50④ 同時紅**——58 issues／0.018s，跟文件「標題改回→②③紅且 CX50④ 也紅」逐字相符）；**CX56**（拿掉 snippet 固定高度，用**指名的 gate 名** `--filter snippetCardFitsOnA13InchScreen` 一次跑出 `_1`–`_4` 四支，2 issues／**2.232s**，與帳本記載 3.9s 同一量級）。三筆皆還原後 `git status` 乾淨。**新增：CX1–CX57 gate 名 `--filter` 全量掃描**（T12b 常設項目，見下方新表與 known gap 37）——66 個候選名稱裡 **14 個帳本指名的函式不存在**（逐一核對原始碼、找出真正的測試函式名），另兩個是「概念性描述」而非字面函式名（CX21／CX28）、一個是腳本層 gate（CX27，非 swift test，掃描方法本身不適用）。**其餘 ~34 條沒有秒數的仍未彙整**（同 T12 首輪缺口，73 個 commit 全文本轉錄超出本輪時間預算） | **PARTIAL**（8 筆現場重跑全部成功；gate 名掃描新增發現 14 處文件/程式碼名稱不符，已列表並更正；46 條逐一秒數仍未全部彙整齊） |
 | 4 | **Claude 側零回歸**（紅線） | `git diff <基準>..HEAD -- plugin/hooks/hooks.json` **完全為空**；`handledEvents` 的 19 個名字一字未動 | `git diff` ＋ 逐行看 `EventMapping.swift` 的 diff | `git diff c131c30..HEAD -- plugin/hooks/hooks.json` 輸出為空。`EventMapping.swift` 的 diff 只有純新增（`codexEvents`／`codexOnlyEvents`／`case "Interrupt"`），`handledEvents` 陣列內文字一行未動（逐行核對過） | **PASS** |
 | 5 | **Claude 狀態檔位元組不變** | round1／1b／2／3 跑 merge（用**生產的** `SnapshotIO.encoder`）序列化後**不含 `agent` 鍵**；**且**不帶 `--agent` 真 spawn 一次後，**原始檔案文字**不含 `"agent"` | CX9 **兩層**；**這一格的證據以生產層那半為準**（`agent == nil` ≠「檔案裡沒有這個鍵」——自訂 encode 可能寫出 `"agent":null`，解碼回來仍是 nil 而上游全綠） | `swift test --filter "claudeStateFileHasNoAgentKey\|codexStateFileCarriesAgent"`：3 tests 全綠（純函式層 0.017s；生產層真 spawn 0.022s；CX10 真 spawn 1.006s） | **PASS** |
 | 6a | **`config.toml` 零變動（自動化側）** | `swift test` ×3 全程位元組完全不變 | 開工前存副本，跑完 `diff` | 開工前存 md5＝`74472e19f4985c5f6675df4ce20d3f7a`；3 輪 `swift test` 全跑完後 `diff`／`md5` 完全相符；`~/.codex/hooks.json` 全程未出現 | **PASS** |
 | 6b | **`config.toml` 受控變動（實機側）** | 實機 ①–⑧ 跑完：**不得新增任何 `[hooks*]` 段**，diff **僅限** `[projects.*] trust_level`（F12） | `diff <副本> ~/.codex/config.toml` 逐行判讀 | 實機清單留給使用者跑，integrator 不執行互動式安裝流程 | **N/A（實機，留給使用者）** |
 | 7 | `Sources/` 淨增 | **≤ 1150 行**（基準 7846 → ≤ 8996）；逐檔估算 ≈ 1060（spec §8.1），留 8% 餘裕。r3 是 975／門檻 1050；**r4 增量＝Jargon +30、RejectionKind +20、stale/snippet 兩種文案與分支 +35**。**若 R-5／R-6 日後被砍，門檻要跟著降回 900／啟動 +2 ms**，否則就變成「先加需求再放寬門檻」的通道。**超過就先砍 instrumentation 與非必要碼，不調門檻** | `find Sources -name '*.swift' \| xargs cat \| wc -l` | HEAD＝**9403**。對 `c131c30`（7846）：**+1557**。對現 main `9ec85d0`（7876，merge main 對 Sources 淨增實測是 **0**——見下方「merge main 對 Sources 無淨增」附註）：**+1527（本 change 真實貢獻）**。兩個基準都超門檻 1150。逐檔估／實對照與可砍候選見下方新增小節 | **MISS**（超標 377–407 行，逐檔對照見下）。**T13 後（2026-09-22，`c3db1da`）：9713 行——對 `c131c30` +1867、對 main `9ec85d0` +1837，MISS 約 687–717。T13 自己的增量約 310（9403 → 9713），r13 估 270。門檻不調（known gap 26）。** |
-| 8 | 單檔行數 | `Sources/` ≤ 200、`Tests/` ≤ 300，**零例外**；三個預先拆檔各自是零行為變更的獨立 commit（`AppDelegate+Links.swift` **在 T07**——r9 從 T10 提前，理由見 plan T07 第一步 (b)；`CodexOptionsRowTests.swift` 在 T07；`AppDelegateCodexWiredTests.swift` 在 T10） | `IsolationTests.fileLengthLimit` ＋ 手動複查最大的 5 個檔 ＋ 三個搬移 commit 的 diff | `IsolationTests.fileLengthLimit` GREEN。三個搬移 commit 逐一核對：`04e873d`（`AppDelegate+Links.swift`）#expect 0增/0減、函式名逐字對應；`247edd8`（`CodexOptionsRowTests.swift`）14增/14減、函式名逐字對應；`e6ef148`（**實際檔名是 `AppDelegatePanelActionsWiredTests+Codex.swift`，非帳本寫的 `AppDelegateCodexWiredTests.swift`**）body 逐字搬移，換成一行委派呼叫，3增/3減皆為委派呼叫本身的行 | **PASS**（檔名有一處與帳本記載不同，已在報告點出） |
+| 8 | 單檔行數 | `Sources/` ≤ 200、`Tests/` ≤ 300，**零例外**；三個預先拆檔各自是零行為變更的獨立 commit（`AppDelegate+Links.swift` **在 T07**——r9 從 T10 提前，理由見 plan T07 第一步 (b)；`CodexOptionsRowTests.swift` 在 T07；`AppDelegateCodexWiredTests.swift` 在 T10） | `IsolationTests.fileLengthLimit` ＋ 手動複查最大的 5 個檔 ＋ 三個搬移 commit 的 diff | **T12（首輪）**：GREEN，三個搬移 commit 核對過。**T12b（T13 之後）**：`IsolationTests.fileLengthLimit` 仍 GREEN（含在 969 tests 裡）。現場複查最緊的檔：`Sources/AgentAuraApp/StatusItemController.swift` **200/200（零餘裕）**、`PanelModel.swift` 194、`InstallAffordance.swift` 194、`PanelView.swift` 190、`InstallState.swift` 179。**Tests/ 也有兩個零餘裕的檔，T13k 的驗收清單沒提到**：`Tests/AuraCoreTests/SnapshotIOTests.swift` **300/300**、`Tests/AgentAuraAppTests/CodexEvidenceRenderer.swift` **300/300**（另 `AppDelegatePanelActionsWiredTests.swift` 298/300，T13k 已記）——下一次動這三個 Tests 檔也要先拆 | **PASS**（新發現兩個零餘裕的 Tests 檔，已補進報告與 known gaps） |
 | 9 | 零新依賴／新 target | `Package.swift` diff 為空 | `git diff -- Package.swift` | `git diff c131c30..HEAD -- Package.swift` 輸出為空 | **PASS** |
 | 10 | module 基準 | `AuraCore` = Foundation、`AuraHookFile` = Foundation ＋ CoreServices。**`AuraHookFile` 不得 import Security**（`RunningBundle` 是 App 層唯一計算點） | `IsolationTests.nonUITargetsLoadNoUIModules` | 測試 GREEN（17.05s）；`grep -rn "import Security" Sources/AuraHookFile/` 0 命中；全 repo 只有 `Sources/AgentAuraApp/RunningBundle.swift` import Security | **PASS** |
-| 11 | 執行檔增量 | **≤ +200 KB** universal（基準 3,140,864）。依據：既有兩次量到的「每新增一個 SwiftUI view ≈ 60–80 KB/arch」，本 change 新增 1 個 view | `./scripts/build-app.sh` 後 `ls -l` | **發現環境 bug**：Xcode 27／Swift 6.4 的 `swiftbuild` 系統把每次 `--arch` 建置輸出寫到同一個共用路徑 `.build/out/Products/Release/`（互相覆寫），但 `build-app.sh` 的 `lipo` 硬寫舊版路徑 `.build/<arch>-apple-macosx/release/`——那兩份是 9/17 切換 Xcode 前的殘留，導致 `build-app.sh` 組出的 bundle **不反映目前程式碼**。改用手動 lipo（各 arch 建置後立即複製再合併，ad-hoc 簽章比照 `build-app.sh` 手法）取得真數字：簽章後 HEAD＝**3,774,704**、`c131c30`＝**3,170,688**、`9ec85d0`＝**3,170,192**。增量對 `c131c30`：**+604,016 bytes（+590 KB）**；對現 main（真實貢獻）：**+604,512 bytes（+590 KB）** | **MISS**（超標約 3 倍；且揭露 `build-app.sh` 在新 toolchain 下的靜默失真，建議另立 change 修） |
-| 12 | **面板路徑成本** | **`reprobeCodex()` 100 次 ≤ 10 ms**（穩態；`.notConnected` 與 `.connected` **各量一次並分開記**）。**量 `reprobeCodex()` 端到端，不是只量 `probe()`**——那才是 `onOpen` 實際跑的東西（r3 m3）。可並列 `CodexInstaller.probe()` 的數字供分解 | 行程內暫時測試（`ContinuousClock`），跑完即刪、`git status` 確認乾淨 | 暫時測試檔 3 輪：`.notConnected` 100 次 = 0.0714–0.0814 ms；`.connected` 100 次 = 0.1173–0.1276 ms。分解：`CodexInstaller.probe()` 純 I/O 100 次 = 1.326–1.358 ms。量完已刪 `_T12TempPerfTests.swift`，`git status` 乾淨 | **PASS**（遠低於 10 ms，餘裕 ＞98%） |
-| 13 | 啟動時間增幅 | **≤ +3 ms**（多一次 `lstat`、最多讀 64 KiB、一次 `SecTranslocateIsTranslocatedURL`、一次產生器呼叫——**四個行程常數搬到啟動時算**，D-t） | `applicationDidFinishLaunching` 首尾時戳，各 3 輪 × 10 次取中位數；基準側在 worktree 量 | HEAD（`CodexDependencies.production()`＋`init`＋`launch`＋`terminate`，真實生產路徑）3 輪中位數：1.127／1.210／1.293 ms。基準（`c131c30`，同範圍：`init`＋`launch`＋`terminate`，無 Codex）3 輪中位數：2.052／2.092／2.112 ms。**增量為負**（HEAD 比基準快約 0.8–0.9 ms），落在量測噪訊範圍內（每輪都有 1 個 ~130ms 離群樣本，已用中位數濾除）；四個新增計算（`SecTranslocateIsTranslocatedURL`／路徑字串檢查／JSON 產生／lstat）皆為微秒級純記憶體操作，量不出正增量合理 | **PASS**（未偵測到回歸；跨 worktree 比較有量測噪訊，方向性證據為主，非精確到 0.1ms 的差值） |
-| 14 | RSS 增幅 | **≤ 1 MB** | `scripts/measure-cpu.sh`（先隔離量測者自己的 session） | **未量到**——`measure-cpu.sh` 第一步 `pkill -f "AgentAura.app/Contents/MacOS/AgentAuraApp"` 會連帶殺掉使用者機器上正在跑的正式安裝（實測跑 DoD#19 時已證實此風險：見下方 known gap），且腳本結尾不會自動重開使用者原本的 `/Applications/AgentAura.app`，全程 5 態 × (6s+60s) ≈ 5.5 分鐘期間使用者選單列會被換成本地測試 build。這超出 integrator 可自行決定的風險等級，未執行 | **未量到（環境風險，需使用者裁決量測時機/方式）** |
-| 15 | 動畫態 CPU | 不得比基準更差（五態各量） | `scripts/measure-cpu.sh`，連續兩輪 | 同 #14，同一支腳本、同一個風險，未執行 | **未量到（同 #14 原因）** |
+| 11 | 執行檔增量 | **≤ +200 KB** universal（基準 3,140,864）。依據：既有兩次量到的「每新增一個 SwiftUI view ≈ 60–80 KB/arch」，本 change 新增 1 個 view | `./scripts/build-app.sh` 後 `ls -l` | **T12（首輪）**：簽章後 HEAD＝3,774,704，對 `c131c30`（3,170,688）+604,016 bytes、對 `9ec85d0`（3,170,192）+604,512 bytes（`build-app.sh` 的 stale-lipo bug 仍在，沿用手動 lipo 法）。**T12b（T13 之後，tip `c22fb12`）**：手動 lipo＋簽章＝**3,815,328 bytes**。對 `c131c30`：**+644,640 bytes（+630 KB）**；對 `9ec85d0`：**+645,136 bytes（+630 KB）**；對 T12 首輪 HEAD（T13 自己這批的貢獻）：**+40,624 bytes（+40 KB）**——persona r1 修復批次本身只加了約 40 KB，符合「主要膨脹在 T01–T12 就已發生，T13 是修復不是新功能」的預期 | **MISS**（超標約 3.2 倍；`build-app.sh` 的 stale-lipo bug 仍未修，見 known gap 21） |
+| 12 | **面板路徑成本** | **`reprobeCodex()` 100 次 ≤ 10 ms**（穩態；`.notConnected` 與 `.connected` **各量一次並分開記**）。**量 `reprobeCodex()` 端到端，不是只量 `probe()`**——那才是 `onOpen` 實際跑的東西（r3 m3）。可並列 `CodexInstaller.probe()` 的數字供分解 | 行程內暫時測試（`ContinuousClock`），跑完即刪、`git status` 確認乾淨 | **T12（首輪）**：`.notConnected` 0.0714–0.0814 ms、`.connected` 0.1173–0.1276 ms。**T12b（T13 之後，`applicationDidFinishLaunching` 已搬到 `AppDelegate+Lifecycle.swift`，公開 API 不變）**：暫時測試檔 `_T12bTempPerfTests.swift` 3 輪：`.notConnected` 100 次 = **0.0774–0.0789 ms**、`.connected` 100 次 = **0.1157–0.1289 ms**——與 T13 前幾乎相同，T13a 純搬移沒有引入任何成本。量完已刪，`git status` 乾淨 | **PASS**（遠低於 10 ms，餘裕 ＞98%） |
+| 13 | 啟動時間增幅 | **≤ +3 ms**（多一次 `lstat`、最多讀 64 KiB、一次 `SecTranslocateIsTranslocatedURL`、一次產生器呼叫——**四個行程常數搬到啟動時算**，D-t） | `applicationDidFinishLaunching` 首尾時戳，各 3 輪 × 10 次取中位數；基準側在 worktree 量 | **T12（首輪）**：HEAD（`production()`＋`init`＋`launch`＋`terminate`）3 輪中位數 1.127／1.210／1.293 ms；基準（`c131c30`）2.052／2.092／2.112 ms，增量為負。**T12b（T13 之後）**：同一支暫時測試在 T13 tip 重跑，3 輪中位數 **1.091／1.093／1.077 ms**——與 T12 首輪幾乎相同（±0.1ms 內），confirm T13a 的純搬移沒有改變啟動路徑的實際成本。沿用 T12 首輪的基準（`c131c30` 2.052–2.112 ms，T13 未動基準側程式碼），**增量仍為負** | **PASS**（未偵測到回歸；跨量測輪次噪訊在 ±0.1ms 內，遠小於 3ms 門檻） |
+| 14 | RSS 增幅 | **≤ 1 MB** | `scripts/measure-cpu.sh`（先隔離量測者自己的 session） | **T12（首輪）**：未量到——`measure-cpu.sh` 第一步 `pkill -f "AgentAura.app/Contents/MacOS/AgentAuraApp"` 會連帶殺掉使用者機器上正在跑的正式安裝（DoD#19 已實測證實此風險），且腳本結尾不會自動重開，全程 5 態 × (6s+60s) ≈ 5.5 分鐘期間使用者選單列會被換成本地測試 build。**T12b（T13 之後）**：team-lead 已指示本輪不跑（沿用 T12 判定），bundle 佈局 T13 沒動，pkill bug 仍待獨立 change 修 | **未量到（環境風險，沿用 T12 判定，需使用者裁決量測時機/方式）** |
+| 15 | 動畫態 CPU | 不得比基準更差（五態各量） | `scripts/measure-cpu.sh`，連續兩輪 | 同 #14，同一支腳本、同一個風險，**T12b 沿用 T12 判定不重跑** | **未量到（同 #14 原因，沿用 T12 判定）** |
 | 16 | plugin 契約 | 零 error 零 warning。**這也是 `Interrupt` 接縫的第四道防線、且是唯一一道不依賴我們自己寫的斷言的**（T03 review 實測：註冊 `Interrupt` → `unknown hook event; entry ignored at runtime` ＋ `--strict` 視 warning 為 error → 失敗）。**注意**：本機 validator 只給 warning，**整份拒載是 2026-09-15 在同事機器上量到的**（`distribution-and-hook-compat`）——本機通過不構成「全有全無」的反證 | `claude plugin validate --strict ./plugin` 與 `.` | 兩者皆輸出「✔ Validation passed」，零 error 零 warning | **PASS** |
-| 17 | 安裝鏈路（Claude） | 全項 PASS（含 `settings.json` 零污染、一輪真的 `claude -p`） | `./scripts/verify-install.sh` | 全 5 大項全部 ✓（plugin 二進位／已註冊／validator 乾淨／settings.json 零污染／實機跑一輪 4→5 狀態檔／狀態檔內容合理）。跑前後安裝狀態（symlink 指向 `/Applications/AgentAura.app`、settings.json 零污染）未被腳本改動 | **PASS** |
-| 18 | 完整移除 | `verify-uninstall.sh` **7 項全 PASS**；第 7 項兩個方向都驗過；`--only 7` 可單獨執行且**不觸發** `osascript`／`sfltool` | CX27 ＋ 實機 ⑥ | `./scripts/verify-uninstall.sh --only 7` → 「✓ Codex hook 已移除或從未接上」，未觸發 `osascript`／`sfltool`（讀腳本原始碼確認 `should_run` 分派邏輯會整段跳過）。CX27 相關測試在全量 `swift test` 中已綠 | **PASS**（`--only 7` 這一項；兩個方向的實機驗證與 ⑥ 留給使用者實機清單） |
-| 19 | bundle 佈局 | PASS，缺 bundle 時 FAIL 不 skip | `./scripts/verify-app.sh` | 全 6 大項全部 ✓。**副作用**：腳本收尾 `pkill -f "AgentAura.app/Contents/MacOS/AgentAuraApp"` 誤殺了使用者當時在跑的正式安裝（PID 2194），已立即 `open /Applications/AgentAura.app` 重開恢復（新 PID 47885）。這證實了 #14/#15 未執行的顧慮是真實風險，不是過度謹慎 | **PASS**（功能面；連帶殺掉使用者正式安裝的風險已記錄並復原，建議腳本改成只 kill 自己剛開的那個 PID） |
+| 17 | 安裝鏈路（Claude） | 全項 PASS（含 `settings.json` 零污染、一輪真的 `claude -p`） | `./scripts/verify-install.sh` | **T12（首輪）與 T12b（T13 之後）皆重跑**：全 5 大項全部 ✓（plugin 二進位／已註冊／validator 乾淨／settings.json 零污染／實機跑一輪狀態檔數量遞增／狀態檔內容合理）。T12b 這次狀態檔 5→6。跑前後安裝狀態（symlink 指向 `/Applications/AgentAura.app`、settings.json 零污染）未被腳本改動 | **PASS** |
+| 18 | 完整移除 | `verify-uninstall.sh` **7 項全 PASS**；第 7 項兩個方向都驗過；`--only 7` 可單獨執行且**不觸發** `osascript`／`sfltool` | CX27 ＋ 實機 ⑥ | **T12（首輪）與 T12b（T13 之後）皆重跑** `./scripts/verify-uninstall.sh --only 7` → 「✓ Codex hook 已移除或從未接上」，未觸發 `osascript`／`sfltool`。CX27 相關測試在全量 `swift test`（969 tests）中已綠 | **PASS**（`--only 7` 這一項；兩個方向的實機驗證與 ⑥ 留給使用者實機清單） |
+| 19 | bundle 佈局 | PASS，缺 bundle 時 FAIL 不 skip | `./scripts/verify-app.sh` | **T12（首輪）**：全 6 大項全部 ✓；腳本收尾 `pkill -f "AgentAura.app/Contents/MacOS/AgentAuraApp"` 誤殺了使用者正式安裝（PID 2194），已立即重開恢復（新 PID 47885）。**T12b（T13 之後）**：team-lead 已指示本輪不跑（T13 沒動 bundle 佈局，沿用 T12 判定），pkill 風險仍在、待獨立 change 修 | **PASS（沿用 T12 首輪結果）**；連帶殺掉使用者正式安裝的風險已記錄，建議腳本改成只 kill 自己剛開的那個 PID |
 | 20 | 測試不得跑 `codex exec` | `Tests/`／`scripts/` 命中數 **= 0**（＋正向對照） | CX30 | `grep -rn "codex exec" Tests/ scripts/ .github/` 只命中 `NoCodexExecInRepoTests.swift`／`CodexEventsTests.swift` 的 doc comment（`///` 開頭，非可執行行）。CX30 測試套件全綠 | **PASS** |
 | 21 | 文件路徑一致 | `README.md`／`SECURITY.md` 都含 `.codex/hooks.json` | CX29 | `grep -l ".codex/hooks.json" README.md README.zh-TW.md SECURITY.md` 三份全部命中 | **PASS** |
 | 22 | help 涵蓋 | 兩個語言都涵蓋**每一個**新的 Options 列標題（含「重新接上 Codex」） | CX28 | `HelpDocOptionsRowCoverageTests` 全綠（含 CX28 mutation②正向對照，6 test case） | **PASS** |
@@ -155,6 +155,13 @@ S1-1 是三個狀態字串、S1-2 是空狀態句）。那些表面在 diff 裡�
 
 ## Gate mutation 帳（57 條；T12 彙整 CX1–CX46，**CX47–CX57 由 T13 填**；✓現場 = 抽驗重跑）
 
+**T12b 提醒**：下表 14 個 gate 的「指名測試」欄字面函式名與原始碼不符（真正的函式名見上方
+「T12b：CX1–CX57 gate 名 `--filter` 全量掃描」小節的更正表：CX6、CX17、CX19、CX20、CX22、
+CX28、CX29、CX32（已知）、CX33、CX34、CX36、CX41、CX46）——**gate 本身都存在且通過**，
+只是文件指名的字面跟實作用的函式名不同步，直接 `--filter <帳本寫的名字>` 會得到 0 tests。
+下表暫不逐列改寫（避免跟上面的更正表出現兩份可能漂移的副本），**要用 `--filter` 找測試時
+以上面那張表為準**。
+
 | Gate | 位置 | Mutation | 指名測試 | 秒數 | 來源 task |
 |---|---|---|---|---|---|
 | CX1 | `CodexEventSeamTests` | `codexEvents` 少一個事件（**拿掉的是 `codexEvents` 那一份**；從 `handledEvents` 拿會打到 CX3 而不是這裡） | `codexEventSetIsPinnedToProbe` | | T03 |
@@ -227,6 +234,64 @@ S1-1 是三個狀態字串、S1-2 是空狀態句）。那些表面在 diff 裡�
    例子**（性質保住）＋**新增**一列釘死 `gpt-4o` 的新期望值——報告要把「改前／改後／測的還是不是
    同一件事」三欄擺在一起。直接刪掉那條測試＝弱化，要退回。
 
+## T12b：CX1–CX57 gate 名 `--filter` 全量掃描（新增常設項目）
+
+**方法**：`swift test list`（`--list-tests`）一次列出全部 972 行 `Module.Suite/functionName()` 規格
+（`scratchpad/t12b/all-tests-list.txt`），再對帳本每一列「指名測試」欄抽出的候選函式名逐一
+`grep`（子字串比對，比照 swift-testing `--filter` 的實際語意——**不能要求緊接 `(`**，
+`CX56` 那種 `_1`／`_2` 尾綴會被緊鄰匹配誤判成 0，這是本輪第一次繞的坑，已改用純子字串比對）。
+**這比真的執行 `swift test --filter` 快兩個數量級**（972 行的靜態清單 vs 逐一起爐建置檢查），
+建議作為 CX58（下方）的實作基礎。
+
+**執行摘要**：66 個候選名稱裡，**14 個帳本指名的函式在原始碼裡確實不存在**（逐一以 `grep -rn`
+核對原始碼確認，不是掃描方法的偽陰性）；**2 個是概念性描述而非字面函式名**（CX21、CX28，
+沿用既有「敘述句嵌函式名」的寫法）；**1 個是腳本層 gate**（CX27，`verify-uninstall.sh` 本身
+的 bash 邏輯，不是 swift test，掃描方法在這裡不適用，不算真的缺口）。
+
+| Gate | 帳本指名的函式 | 是否存在 | 真正的函式（已核對原始碼） | 檔案 |
+|---|---|---|---|---|
+| CX6 | `codexHooksJSONMatchesF14Verbatim` | ✗ | `everyEntryMatchesF14Verbatim` | `CodexHooksJSONTests.swift` |
+| CX17 | `codexDisconnectOnlyRemovesOurBytes` | ✗ | `disconnectRemovesOnExactMatch`（＋`disconnectRefusesOnContentMismatch`／`unlinkGuardRefusesWhenIdentityDoesNotMatchCurrentFile`／`unlinkGuardRemovesWhenIdentityMatchesCurrentFile` 共同覆蓋這個不變式） | `CodexInstallerTests.swift` |
+| CX19 | `codexStateCoversEveryObservationShape` | ✗ | 七列分別是 `notDirectoryAlwaysUnavailable`／`regularFileMatchingBothIsConnected`／`regularFileMatchingRecordedButNotCurrentIsStale`／`regularFileMismatchIsOccupied`／`nonRegularOccupyingTypesAreOccupied`／`absentWithRejectionIsBlocked`／`absentWithoutRejectionIsNotConnected`，另 `samplesKindsCoverAllSixStates` 守六態聯集 | `CodexStateTests.swift` |
+| CX20 | `codexRowsAppearOnlyWhenAvailable` | ✗ | `zeroRowStates`（＋其他列數格） | `CodexOptionsRowTests.swift` |
+| CX21 | `optionsRowsCoverEveryAction` | △ | 這是**檔案 doc comment／`@Suite` 顯示名**用的概念性標籤，不是字面函式名——同 CX28 的 `allRows` 那種寫法 | `OptionsMenuModelTests.swift` |
+| CX22 | `agentLabelOnlyForNonClaude` | ✗ | `agentLabelSurvivesThroughPanelModelMake` | `CodexRowLabelTests.swift`（帳本寫的「`CodexRowLabelPixelTests`」這個檔名也不存在） |
+| CX27 | `verifyUninstallScriptDetectsOurCodexHooks` | N/A | 這是 **bash 腳本**（`verify-uninstall.sh`）本身的邏輯，不是 swift test——「掃描不到」是分類不適用，不是缺口 | `scripts/verify-uninstall.sh` |
+| CX28 | `allRows` | ✗ | `allRows` 是**靜態 helper**（`static func allRows(language:) -> [OptionsRow]`），真正的 gate 測試是 `scanCatchesRealCodexOmission`（mutation②正向對照）。**帳本的「位置」欄也錯**：寫著含蓄的位置，實際檔案在 `Tests/AuraCoreTests/HelpDocOptionsRowCoverageTests.swift` | `HelpDocOptionsRowCoverageTests.swift` |
+| CX29 | `securityDocListsEveryPathWeWrite` | ✗ | `docListsCodexHooksPath`（`@Test(arguments:)` 參數化三份文件） | `SecurityDocCodexPathTests.swift`（帳本「位置」欄只寫「文件掃描」，沒給檔名） |
+| CX32a | `codexConnectRefusesBlockedBundlePath` | ✗（**T12 首輪已記過**） | `codexConnectRefusesTranslocated`／`codexConnectRefusesInDownloads`（帳本這個名字是 MARK 註解分組名） | `CodexInstallerClobberTests.swift` |
+| CX33 | `codexPathCheckNamesTheOffendingCharacter` | ✗ | `returnsFirstOffendingCharacterLeftToRight` | `CodexHookPathCheckTests.swift` |
+| CX34 | `codexStalePathIsDetectedAndOffersReconnect` | ✗ | `regularFileMatchingRecordedButNotCurrentIsStale`（@Test 描述裡明寫「(CX34)」，確認是同一顆） | `CodexStateTests.swift` |
+| CX36 | `codexSectionRendersEveryState` | ✗ | 拆成約 7–9 個函式：`emptyStatesRenderNothing`／`notConnectedShowsPromptAndConnectButton`／`staleWithoutRejectionShowsReconnectButton`／`staleWithRejectionWithholdsReconnectButton`／`staleWithRejectionRendersDifferentTextPerRejectionKind`（CX36⑥）／`occupiedWithSnippetShowsSnippetAndCopyButton` 等 | `CodexSectionViewTests.swift` |
+| CX41 | `jargonModelCoversCodexNaming`（檔案「`JargonCodexModelTests`」） | ✗✗ | **檔案本身不存在**；九列分別是 `modelCodexGpt55`／`modelCodexGpt55Codex`／`modelCodexGpt4o`／`modelCodexGpt5`／`modelCodexGpt41Mini`／`modelCodexGpt55High`／`modelCodexO3`／`modelCodexO4Mini`／`modelCodexO3WithBracketSuffix` | `JargonTests.swift`（不是獨立檔） |
+| CX46 | `optionsRowsCallSitePassesRealCodexState` | ✗ | `productionCallSitePassesModelCodexState` | `OptionsMenuModelRowsCallSiteSourceScanTests.swift` |
+
+**CX50／CX51／CX52／CX56／CX57 一開始也顯示 0**，但那是掃描方法的偽陰性（緊鄰 `(` 的比對規則
+被 `_1`／`_2` 這類參數化尾綴或多個 `@Test` 案例打敗），改用純子字串比對後**全部確認存在**
+（CX50 4 命中、CX51 2 命中、CX52 2 命中、CX56 4 命中、CX57 3 命中）——這些**不算**文件/程式碼
+名稱不符，只是我第一版掃描腳本的己方 bug，記在這裡是為了讓下一個做同類掃描的人不要重踩。
+
+**這是「文件指名的 gate 不存在」這個模式的第五、六次出現**（前四次：r1 M4、鏈 A phase-2 review M1、
+鏈 A phase-2 review N1、CX56 review 第四次修正）——team-lead 派工訊息裡提到的「四次」在這一輪
+變成至少 **14 處新命中**，證實這不是偶發，是系統性問題：implementer 常在落地時把單一顆大 gate
+拆成多顆小函式（分頁多、對抗式覆蓋更細），但沒有回頭同步 DoD 帳本裡「指名測試」欄的字面。
+
+### 建議新增 CX58（`everyNamedGateResolvesToAtLeastOneTest`）
+
+**未實作為真的 swift test**（時間預算緣故），只留下方法與資料供下一輪落地：
+- **輸入**：從 `docs/superpowers/plans/2026-09-18-codex-support-dod.md` 的「Gate mutation 帳」表
+  用 markdown 解析抽出每列「指名測試」欄的第一個 backtick 識別碼（本輪用 python 手刻，若要變成
+  真測試，這段解析邏輯要挪進 `Sources/` 之外的一個測試專用 helper，或整份帳本改成機器可讀格式
+  如一份 JSON 附錄，供測試直接讀，不必每次重新解析 markdown 散文——**這是落地前要先決定的設計
+  取捨，不是實作細節**）。
+- **比對**：`swift test list` 的輸出（或編譯期用 `XCTestCase`／swift-testing 的反射 API 列舉，
+  若能找到不需要跑子行程的方式更好）逐一子字串比對。
+- **已知假陽性**：CX21／CX28 這種「概念性標籤」寫法會被誤判成缺失——如果要落地，帳本本身要先
+  統一「指名測試」欄只准寫字面函式名，概念性描述移到 mutation 欄或另一欄，否則這條新 gate
+  自己会一直帶著兩個「已知例外」跑，形狀就跟它想避免的「文件與程式碼對不上」很像。
+- **已知範圍限制**：CX27 這種 script-level gate 天生不在 swift test 的宇宙裡，需要一個獨立的
+  「script gate 名冊」不同的驗證方式（例如直接 grep `scripts/*.sh` 裡的函式/區塊名）。
+
 ## 里程碑量測（T12 之前的實測紀錄，逐 task 累積）
 
 DoD #2 要求**每個 task 的報告附該 commit 的絕對值**，這裡是彙總；T12 直接引用，不必回頭翻報告。
@@ -245,6 +310,7 @@ DoD #2 要求**每個 task 的報告附該 commit 的絕對值**，這裡是彙�
 | T12 CX44 交付 | `ecd323e` | **2025**（+7，恰好等於 `NoPendingFlagRemainsTests.swift` 自己的 7 個 `#expect(`） | **646＋291＝937 tests / 0 issues**（HEAD，3 輪皆同） |
 | **T13 交付（persona r1 修復批次，兩條鏈已 merge）** | `c3db1da` | **2083**（基準 2026，**+57**；`@Test` **977**，T12 是 941 → +36） | **969 tests／0 issues**（657+312，鏈 B rebase 後實測，known gap 36）。**連跑 3 次 0 flake 留 integrator 重跑**（T13k／T13l 期間主目錄與 worktree 同時在動，避免搶 `.build`） |
 | **T13k 文件與正典回寫** | 本 commit | 2083（文件 commit，不動 `Tests/`） | 未跑（只動 `docs/`、`CLAUDE.md`；`Sources/` 現場實測 **9713** 行、單檔上限 0 超標、`AURA_CODEX_PENDING` 0 命中、`plugin/hooks/hooks.json` 與 `Package.swift` 對基準 diff 為空） |
+| **T12b 整合重跑（本輪，tip `c22fb12`）** | `c22fb12` | **2083**（不變，T13l 只動 `docs/evidence/`） | **連跑 3 次，657+312=969 tests／0 issue／0 flake**（`swift-test-run1/2/3.log`）——**補上 T13k 留給 integrator 的那一項**（「連跑 3 次 0 flake 留 integrator 重跑」，本輪已完成） |
 
 **merge main（`f6cd5f1`）對 `Sources/` 淨增實測是 0，不是預期的 +30**：`git diff 5ad5256..f6cd5f1 --stat -- Sources` 輸出為空——`change/codex-support` 分支在 merge **之前**（`cc26b72`，2026-09-19）就已經獨立收斂出跟 main PR #7 完全相同的色板抑制改動（`ColorPickerCoordinator.swift`／`IconRendering.swift`／`StatusItemController+SystemPanels.swift` 三個檔逐位元組相同）；只有 `AppDelegate.swift` 有 38 行差異，屬於本 change 自己的 Codex 接線，跟 merge 無關。**這推翻了 T10 review r2 派工訊息裡「merge main 會讓 Sources/ +30」的預期**——實測 0，`Sources/` 的所有增量都來自 codex-support 自己的 commit，見 DoD#7。
 
@@ -338,3 +404,79 @@ Codex 測試也全部走「依身份找」而非「依位置找」的形狀。�
 已立即 `open /Applications/AgentAura.app` 復原（新 PID 47885）。這證實了 `measure-cpu.sh`
 （同一種 pkill、且沒有結尾自動重開機制、且要跑 5 態 × 66 秒 ≈ 5.5 分鐘）在還沒先跟使用者
 確認之前不該自動執行——DoD#14／#15 因此標記「未量到」，已記進 Known gaps #22。
+
+## Known gaps 收口——進 release notes 的清單（T12b，去重＋分類）
+
+spec §10 目前到第 23 條、本帳本 Known gaps 到 #36。以下是**去重後**的收斂清單，供直接貼進
+release notes；性質標籤：**平台限制**（我們控制不了）／**設計代價**（權衡後的刻意選擇）／
+**驗收缺口**（想驗但工具/環境不給）／**待使用者裁決**（需要人決定要不要接受）。
+
+### 需要使用者裁決的四件事（列在最前）
+
+1. **DoD#7 `Sources/` 淨增超標**——T13 之後（`c22fb12`）現場實測 **9713 行**，對分支點 `c131c30`
+   +1867、對現 main `9ec85d0` +1837，門檻 1150，**MISS 約 687–717 行**。逐檔「估／實」對照見
+   DoD#7 那一列；六個 spec §8.1 估算表完全沒列到的新檔（合計 241 行）是首輪超標的最大成因，
+   T13 又疊加約 310 行換兩條 S0 關閉。**門檻本輪仍不調**——是否接受這個 known gap 進 release notes，
+   或要求真的砍行數，是使用者的裁決（known gap 26）。
+2. **DoD#11 執行檔增量超標**——T13 之後手動 lipo＋簽章量到 **3,815,328 bytes**，對 `c131c30`
+   +644,640 bytes（+630 KB）、對現 main +645,136 bytes，**超標約 3.2 倍**（門檻 +200 KB）。
+   T13 自己只貢獻約 +40 KB，主要膨脹發生在 T01–T12。是否接受這個 known gap，或投入時間找出
+   哪些 Swift 元程式資料（witness table／泛型特化等）佔比最大並嘗試瘦身，是使用者的裁決。
+3. **DoD#14／#15 RSS／動畫態 CPU 未量到**——`scripts/measure-cpu.sh` 開頭的 `pkill -f
+   "AgentAura.app/Contents/MacOS/AgentAuraApp"` 會連帶殺掉使用者機器上正在跑的正式安裝
+   （已用 `verify-app.sh` 的同款 pkill 實測證實這個風險是真的，見附錄二），且量測全程需要
+   5 態 × 66 秒 ≈ 5.5 分鐘、腳本本身不會自動復原。integrator 判斷這超出可自行決定的範圍，
+   兩輪都未執行。**需要使用者指定量測時機**（例如確認可以讓選單列消失 5–6 分鐘的時段），
+   或接受這兩項留白進 release notes。
+4. **兩個獨立的腳本 bug，建議另開一個 change 修**：
+   - `build-app.sh`／`build-plugin.sh` 在 Xcode 27／Swift 6.4 的 `swiftbuild` 系統下，`lipo`
+     撈到的是舊版 native build system 遺留的 stale 二進位（9/17 切換前的殘留），**完全靜默**、
+     不反映目前程式碼——任何人在這台機器上跑 `build-app.sh` 都會拿到一份「看起來成功、實際是
+     舊碼拼出來」的 bundle。
+   - `measure-cpu.sh`／`verify-app.sh` 的收尾 `pkill -f "AgentAura.app/Contents/MacOS/AgentAuraApp"`
+     用路徑字串比對，沒有分辨「自己剛開的那個」跟「使用者原本在跑的正式安裝」，會連帶殺掉後者。
+   這兩個 bug 都獨立於本 change 的功能正確性，但會讓依賴這些腳本的所有未來驗收與量測失真或有
+   破壞性副作用，建議合併成一個小 change 一次修掉。
+
+### 平台限制（我們控制不了，明寫接受）
+
+- Codex 沒有 `error` 訊號來源（F2／F4）→ 永遠不會亮紅燈；`docs/INSTALL.md` 已補交叉引用。
+- 無法偵測 Codex 是否已信任 hook（F5）→ UI 只能講「下次會問你」，講不出「已生效」。
+- Codex 的 hook 不寫 `async`（F14 未測）→ 每個事件同步等 ~7ms。
+- F15 範圍限定：互動 TUI 的行程結構、`SessionEnd` 後 pid 是否結束、`comm` 辨識，皆未觀測
+  （exec 模式量到的結論不能直接套用到互動模式）。
+- `codex exec` 會寫使用者 `~/.codex/config.toml` 的 `trust_level`（F12）→ 端到端只能靠人（實機清單）。
+- 兩個上游（Claude／Codex）的 session id 空間不交集是明寫的假設，不是我們控制的東西。
+
+### 設計代價（權衡後的刻意選擇，不是缺陷）
+
+- `timeout: 3` 是否真的觸發 Codex 的 clamping 警告未觀測——代價是失去「Codex 讀到了」這個最便宜
+  的訊號（實機清單 ②③ 補）。
+- 序列長度上限：CX37a 全部 ≤4（780 條全跑）、CX37b 生產路徑 ≤2（30 條）、CX42 憑證 ≤2（20 条）——
+  更長的交錯序列未涵蓋，是成本與覆蓋的取捨。
+- `.unsupportedCharacter` 不再給 snippet（D-w）——即使 snippet 產得出來也不畫，這是 P2「不給過期
+  設定」優先於「給了但可能貼出壞路徑」的刻意選擇，有解鎖條件（互動探針量到引號可行就開後續 change）。
+- Options 展開＋snippet 的總高度（1056／1047pt，修後）仍超過 780pt 天花板，**明寫接受**——
+  780 是產品天花板不是量出來的自然高度，這個組合本來就在天花板管轄範圍外（spec §10-20）。
+- Claude 側 CTA 仍是泛稱「Connect」不分 agent（明寫接受）；legend「Error」沒有面板內路徑通往
+  「Codex 沒有 error 燈」的說明（明寫接受，help 文件裡有）；列標籤（「Codex」三個字）與權限文字
+  同字級同色（明寫接受）。
+
+### 驗收缺口（想驗但工具/環境不給，非本 change 造成）
+
+- `Jargon.model` 的 Codex 分支只有 `gpt-5.5` 是實測值，其餘八列（含刻意變更的 `gpt-5`）是預期值。
+- R-8 不變式 2（兩側同時真的在跑）自動化只驗到「同一顆二進位、兩邊 agent 各自正確」，「兩個上游
+  同時真的觸發」只有實機 ⑧ 能驗。
+- App 搬家後 `.connected` 永遠成立，偵測延遲到下一次 `reprobeCodex()`（啟動或開面板）。
+- 內容比對與 `unlink` 之間的 TOCTOU 窄窗（CX31／CX17 已守 round-trip，但這個時間窗本身無法消除）。
+- **DoD#3 的 46 條 gate 裡仍有約 34 條沒有逐條轉錄秒數進帳本**——mutation 本身都做過（commit
+  訊息可查），只是彙整進這份帳本的動作本身耗時，兩輪 integrator 都優先做別的驗證，尚未補齊。
+
+### 帳本/文件自身的品質問題（本輪新增修正，非產品缺陷）
+
+- **CX1–CX57 裡 14 個「指名測試」欄的字面函式名與原始碼不符**（見上方新表），已建議把
+  CX58（`everyNamedGateResolvesToAtLeastOneTest`）列為下一輪要落地的常設 gate。
+- `Tests/AuraCoreTests/SnapshotIOTests.swift`／`Tests/AgentAuraAppTests/CodexEvidenceRenderer.swift`
+  兩個檔已在 300/300 行零餘裕，`Sources/AgentAuraApp/StatusItemController.swift` 在 200/200——
+  下一次動這三個檔要先拆，T13k 的驗收清單只記了 `AppDelegatePanelActionsWiredTests.swift`
+  一個接近上限的 Tests 檔，漏了前兩個。
