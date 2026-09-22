@@ -27,9 +27,10 @@ extension CodexWiringSmokeTests {
         let onAction = try #require(spy.onAction, "AppDelegate 沒有接 status.onAction")
         onAction(.connectCodex)
 
-        #expect(delegate.banner?.kind == .connected, """
+        #expect(delegate.banner?.kind == .codexConnected, """
             connect() 沒有 throw，banner 仍應顯示「已接上」（這是設計裁決的前半——banner 只反映
-            connect() 呼叫本身的結果，不是 probe 的結果），實際 \(String(describing: delegate.banner?.kind))
+            connect() 呼叫本身的結果，不是 probe 的結果）。T13b（D-v）之後這句 banner 走它自己的
+            `.codexConnected` kind，不再沿用 Claude 側共用的 `.connected`，實際 \(String(describing: delegate.banner?.kind))
             """)
         #expect(delegate.codexRuntime.codexState == .notConnected, """
             但緊接著的 reprobeCodex() 必須照 probe() 的真相走，codexState 應該是 .notConnected，\

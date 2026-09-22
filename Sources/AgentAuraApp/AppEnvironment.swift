@@ -88,6 +88,21 @@ enum ReplaceMountConfirmation {
     }
 }
 
+/// T13j（S1-5，D-ac）：`.disconnectCodex`——同 `DisconnectConfirmation` 的既有形狀
+/// （測試不真的彈 `NSAlert`，spec §6.4），文案點名 Codex。完整移除路徑（`Uninstaller`）
+/// 呼叫的是 `codexInstaller.disconnect` 本身，**不經過**這個確認框——那是使用者已經在
+/// 完整移除確認框裡同意過的動作，不該在那條路徑上再問一次（見 `UninstallerTests`）。
+@MainActor
+enum CodexDisconnectConfirmation {
+    static func present(language: Language, onConfirm: () -> Void) {
+        ConfirmationAlert.present(
+            title: L10nConfirmationAlerts.disconnectCodexTitle.text(language),
+            body: L10nConfirmationAlerts.disconnectCodexBody.text(language),
+            confirmTitle: L10nConfirmationAlerts.disconnectCodexConfirmButton.text(language),
+            language: language, onConfirm: onConfirm)
+    }
+}
+
 /// T24（D-1）：`.uninstall`——比 `.disconnect` 更進一步。文案是使用者原話要求改過的
 /// 第二版：條列、短句、講**使用者感受得到的後果**，不寫技術名詞（不提 symlink／
 /// persistent domain／`~/.claude/skills/agentaura` 這類字面）。`title`／`body` 拆成

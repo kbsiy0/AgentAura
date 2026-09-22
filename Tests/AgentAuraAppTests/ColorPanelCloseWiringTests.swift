@@ -35,7 +35,7 @@ struct ColorPanelCloseWiringTests {
         let (defaults, suiteName) = try freshDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 60, defaults: defaults,
-                                   codexDependencies: .inert(), makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -60,7 +60,7 @@ struct ColorPanelCloseWiringTests {
         let (defaults, suiteName) = try freshDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let delegate = AppDelegate(root: try makeRoot(), livenessInterval: 60, defaults: defaults,
-                                   codexDependencies: .inert(), makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

@@ -5,7 +5,15 @@ import Foundation
 /// 只准經下列 public static 建構——與 `PanelModel.make` 同一個理由：任何呼叫端
 /// 想顯示 banner 就只能挑這幾句，不能手搓文案（避免下一個人寫出「立即生效」那種謊，D-m）。
 public struct PanelBanner: Equatable, Sendable {
-    public enum Kind: String, Sendable, Equatable, CaseIterable { case connected, alreadyConnected, disconnected, error }
+    public enum Kind: String, Sendable, Equatable, CaseIterable {
+        case connected, alreadyConnected, disconnected, error
+        /// D-v（T13b，S0-1）：`.codexConnected(language:)` 的專屬 kind——`.connected` 的
+        /// 退場條件（出現任何一列就退場）是為 Claude banner 推導的，出現一列 Claude 的
+        /// session 對「Codex 會問你一次是否信任」這句話什麼都沒兌現。獨立 kind 讓
+        /// `effectiveBanner`（`PanelModel+ConnectCTA.swift`）能依 kind 各自判斷退場條件，
+        /// 不用共用 `.connected` 那組退場邏輯。
+        case codexConnected
+    }
     public let kind: Kind
     public let text: String
 
@@ -47,7 +55,7 @@ public struct PanelBanner: Equatable, Sendable {
     /// Codex 額外要求「Codex 會問你一次是否信任」（F5，P4 硬下限），Claude 側沒有這件事。
     /// `AppDelegate+Codex.swift`（T10）是唯一預期呼叫點。
     public static func codexConnected(language: Language) -> PanelBanner {
-        PanelBanner(kind: .connected, text: L10nCodex.connectedBanner.text(language))
+        PanelBanner(kind: .codexConnected, text: L10nCodex.connectedBanner.text(language))
     }
 
     /// T10：`performDisconnectCodex()` 成功時的固定文案——同 `.codexConnected(language:)`
@@ -136,7 +144,7 @@ public struct PanelModel: Equatable, Sendable {
                             systemReduceMotion: Bool, userReduceMotion: Bool, iconPlate: Bool, iconShape: IconShape,
                             language: Language, codex: CodexState, codexSnippet: String?,
                             codexPathRejection: CodexHookPathCheck.Rejection?, now: Date = Date()) -> PanelModel {
-        PanelModel(title: title(for: icon, install: install, language: language),
+        PanelModel(title: title(for: icon, install: install, codex: codex, language: language),
                   rows: PanelViewModel.rows(from: sessions, now: now, language: language),
                   palette: palette,
                   legend: LegendModel.items(for: palette, language: language),
@@ -152,9 +160,19 @@ public struct PanelModel: Equatable, Sendable {
     /// footer chip／`NotConnectedView` 的說明句同一個 oracle。舊行為（`PanelViewModel.title`，
     /// 純算 session 計數）留給 `connected` 用，否則標題會在還沒接上時說「沒有活著的
     /// session」，跟面板本體的「還沒接上」自相矛盾（persona S0-2：同一張畫面兩句互相打架）。
-    private static func title(for icon: IconState, install: InstallState, language: Language) -> String {
+    ///
+    /// T13f（D-y，S1-1）：非 `connected` 分支改讀 `PanelModel.statusLabel(install:codex:language:)`
+    /// 這個共用 static 核心（`PanelModel+ConnectCTA.swift`）——**修的是同一族毛病的下一個
+    /// 實例**：標題只反映 Claude 時，Codex 已接上且正在跑會全部寫「Not connected yet」，
+    /// 跟面板本體另外兩處（footer chip／CTA 窄條）矛盾。`title` 在這裡（`make(...)` 建構
+    /// `PanelModel` 實例之前）就要算好，還沒有 `self` 能呼叫 instance 版的
+    /// `statusLabel(_:)`，因此吃 `codex` 參數、直接呼叫共用核心——這保證了 CX50④
+    /// 「`title` 在 `install` 非 connected 時逐位元組等於 `statusLabel(l)`」是結構性的，
+    /// 不是兩處各自抄一份湊出來的巧合。`connected` 分支維持既有語意不變（session 計數句，
+    /// 本來就不分 agent，見 §3.1「標題那一欄的不對稱是刻意的」）。
+    private static func title(for icon: IconState, install: InstallState, codex: CodexState, language: Language) -> String {
         if case .connected = install { return PanelViewModel.title(for: icon, language: language) }
-        return install.healthLabel(language)
+        return statusLabel(install: install, codex: codex, language: language)
     }
 
     /// A11（T11 A9–A11 批次）：`connected` ＋ rows 空時的本體訊息——**不得跟 `title` 撞字**。
@@ -166,7 +184,11 @@ public struct PanelModel: Equatable, Sendable {
     ///
     /// T26（i18n）：D-1 示範 3/3（純靜態、非 Options 列標題）——搬進 `L10nPanel` 字串表，
     /// 隨 `language` 換語言（同一個 oracle：`L10nPanel.emptyRowsMessage.text(_:)`）。
+    ///
+    /// T13g（S1-2，D-z）：`codex == .connected` 時改讀 `emptyRowsMessageWithCodex`——
+    /// 同時點名兩個 agent。其餘 codex 狀態（含 `.unavailable`）逐位元組維持原句，
+    /// 這是 CX53 的第一條斷言（D-j：沒裝 Codex 的人零 diff）。
     public var emptyRowsMessage: String {
-        L10nPanel.emptyRowsMessage.text(language)
+        codex == .connected ? L10nPanel.emptyRowsMessageWithCodex.text(language) : L10nPanel.emptyRowsMessage.text(language)
     }
 }

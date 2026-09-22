@@ -61,7 +61,10 @@ struct L10nCodexCardTextTests {
     func panelBannerCodexConnectedUsesTheSameOracle() {
         let banner = PanelBanner.codexConnected(language: .english)
         #expect(banner.text == L10nCodex.connectedBanner.text(.english))
-        #expect(banner.kind == .connected, "D-m 的 banner 視覺樣式應該跟成功色（.connected）一致")
+        // T13b（D-v）：走它自己的 `.codexConnected` kind（不再沿用 `.connected`）才有自己的
+        // 退場條件——`BannerView.background` 只把 `.error` 特判成紅色，其餘 kind（含這個新的）
+        // 一律走同一套成功色（`Color.accentColor.opacity(0.12)`），視覺樣式不受影響。
+        #expect(banner.kind == .codexConnected, "D-v 之後應該是它自己的 kind，不是共用 .connected")
     }
 
     /// `CodexFailure` 七個 case 的窮盡 dispatcher——涵蓋每一個 case，錯誤碼／字元有插值。

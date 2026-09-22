@@ -78,7 +78,10 @@ extension AppDelegate {
             case .connectCodex:
                 self.performConnectCodex()
             case .disconnectCodex:
-                self.performDisconnectCodex()
+                // T13j（S1-5，D-ac）：同 .disconnect 的既有注入縫——只有使用者確認才真的
+                // 呼叫 performDisconnectCodex()（一下點擊直接刪 ~/.codex/hooks.json 的舊行為
+                // 與相鄰的 Claude 列不對稱，persona r1 S1-5）。
+                self.confirmDisconnectCodex(self.language) { [weak self] in self?.performDisconnectCodex() }
             case .copyCodexSnippet:
                 self.performCopyCodexSnippet()
             }

@@ -101,7 +101,7 @@ struct CompositionSmokeTests {
         try writeSnapshot("wait1", .waiting, to: root)
 
         let spy = SpyRenderer()
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, codexDependencies: .inert(), makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -122,7 +122,7 @@ struct CompositionSmokeTests {
         try writeSnapshot("wait2", .waiting, to: root)
 
         let spy = SpyRenderer()
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, codexDependencies: .inert(), makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -151,7 +151,7 @@ struct CompositionSmokeTests {
             s.mainActivity = .done; s.terminated = true; s.writtenAt = Date(); return s
         }
         let spy = SpyRenderer()
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, codexDependencies: .inert(), makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -241,7 +241,7 @@ struct CompositionSmokeTests {
     func appDelegateWiresInstallStateToRenderer() async throws {
         let root = try makeRoot()
         let spy = SpyRenderer()
-        let delegate = AppDelegate(root: root, livenessInterval: 0.05, codexDependencies: .inert(), makeRenderer: { spy })
+        let delegate = AppDelegate(root: root, livenessInterval: 0.05, confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 
@@ -272,7 +272,7 @@ struct CompositionSmokeTests {
 
         let spy = SpyRenderer()
         let delegate = AppDelegate(root: root, livenessInterval: 0.05, defaults: defaults,
-                                   codexDependencies: .inert(), makeRenderer: { spy })
+                                   confirmDisconnectCodex: { _, onConfirm in onConfirm() }, codexDependencies: .inert(), makeRenderer: { spy })
         delegate.applicationDidFinishLaunching(Notification(name: .init("test")))
         defer { delegate.applicationWillTerminate(Notification(name: .init("test"))) }
 

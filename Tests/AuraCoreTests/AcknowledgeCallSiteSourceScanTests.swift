@@ -3,7 +3,10 @@ import Foundation
 
 /// G12（spec §6.2／§6.3，T08）：`acknowledgeAllHasExactlyOneCallSite`——`Sources/AgentAuraApp/`
 /// 內樣式 `.acknowledgeAll(`（**帶點**，排除宣告與註解裡的反引號提及）恰好 1 個命中，
-/// 且命中在 `AppDelegate.swift`。CLAUDE.md invariant：「acknowledge 只在 onClose」——
+/// 且命中在 `AppDelegate+Lifecycle.swift`（T13a：`applicationDidFinishLaunching` 連同它裡面的
+/// `status.onClose` 閉包一起做零行為變更的純搬移，唯一呼叫點跟著搬過去——性質沒變，
+/// 還是「acknowledge 只准在 onClose 發生」這件事，只是物理檔名跟著移動）。
+/// CLAUDE.md invariant：「acknowledge 只在 onClose」——
 /// 少了這條，往任何地方（`connect`／`disconnect`／`onOpen`）補一次呼叫都不會被抓到。
 ///
 /// N4（r2 教訓）：掃 `Sources/` 整個對 `acknowledgeAll(`（不帶點）會命中宣告本身
@@ -29,7 +32,7 @@ struct AcknowledgeCallSiteSourceScanTests {
         return (files.count, hits)
     }
 
-    @Test("Sources/AgentAuraApp/ 內 .acknowledgeAll( 恰好 1 個命中，且在 AppDelegate.swift")
+    @Test("Sources/AgentAuraApp/ 內 .acknowledgeAll( 恰好 1 個命中，且在 AppDelegate+Lifecycle.swift")
     func exactlyOneCallSiteInAppDelegate() throws {
         let root = Gate.repoRoot().appendingPathComponent("Sources/AgentAuraApp")
         let (scanned, hits) = try Self.scan(under: root)
@@ -42,8 +45,8 @@ struct AcknowledgeCallSiteSourceScanTests {
             ——acknowledge 只准在 onClose 發生（CLAUDE.md invariant），多一個呼叫點就是
             「已結束但未確認的尾巴」提早消失的 bug。
             """)
-        #expect(hits.first?.0.lastPathComponent == "AppDelegate.swift", """
-            唯一的命中應該在 AppDelegate.swift，實際在 \(hits.map(\.0.lastPathComponent))
+        #expect(hits.first?.0.lastPathComponent == "AppDelegate+Lifecycle.swift", """
+            唯一的命中應該在 AppDelegate+Lifecycle.swift（T13a 純搬移之後），實際在 \(hits.map(\.0.lastPathComponent))
             """)
     }
 
