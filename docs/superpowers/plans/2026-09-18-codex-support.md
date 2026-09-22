@@ -1216,20 +1216,25 @@ doc comment，**不該砍**），單一個檔就吃掉 20 行餘裕；漂移要�
 
 ---
 
-### T13 整批的驗收（交付前逐條打勾）
+### T13 整批的驗收（**T13k 逐條結案，2026-09-22，`c3db1da` ＋ 本 commit**）
 
-| # | 項目 | 判準 |
-|---|---|---|
-| 1 | 兩條 S0 關閉 | CX47／CX48（S0-1）與 CX40／CX49／CX36④⑤（S0-2）全綠，且各自的 mutation 在 **r12 的碼上是紅的** |
-| 2 | 七條 S1 關閉或明寫接受 | S1-1 → CX50/51/52；S1-2 → CX53；S1-3 → CX54/55；S1-4 → CX56；S1-5 → CX57；S1-6／S1-7 → T13l 的圖 |
-| 3 | 三條「Codex 不在場時位元組不變」 | CX50①、CX53、`.unavailable` 的既有零像素守衛，**全部是 `==` 不是「看起來一樣」** |
-| 4 | mutation 帳 | CX47–CX57 **11 條**逐條 `mutation / 指名測試 / 秒數`；**兩個等價 mutant 也要記**（CX47②、CX49③） |
-| 5 | test-edit scrutiny | CX40 改名＋翻轉、CX36 擴充、`emptyRowsMessage` 分格、`.disconnectCodex` 那格——**四處各附三欄** |
-| 6 | 單檔行數 | `IsolationTests.fileLengthLimit` 綠；**特別看** `PanelView.swift`（189→190，餘裕 10）、 `PanelModel.swift`（172→180）、`AppDelegate.swift`（T13a 之後 ≈126） |
-| 7 | `Sources/` 淨增 | 逐檔「估／實」兩欄（spec §8.1 的 r13 表）；DoD #7 **仍是 MISS，不調門檻**，超標數字如實更新 |
-| 8 | `#expect(` 淨增 | 只准上升；附 HEAD 絕對值（指令固定 `grep -rho '#expect(' Tests \| wc -l`，**基準 2026**——2026-09-21 於 `7515b44` 實測。r13 寫的 2025 是 T12 帳本裡的舊值，**本 change 第二次犯同族的端點漂移**，而 DoD #2 要求附絕對值正是為了抓它） |
-| 9 | 既有 gate 全綠 | 連跑 3 次 0 flake；**特別重跑清單**見下 |
-| 10 | 量測數字入帳 | §10-20（Options 展開＋snippet 的高度）與 §10-22（chip 寬度）必須是真數字 |
+| # | 項目 | 判準 | 結果 |
+|---|---|---|---|
+| 1 | 兩條 S0 關閉 | CX47／CX48（S0-1）與 CX40／CX49／CX36④⑤（S0-2）全綠，且各自的 mutation 在 **r12 的碼上是紅的** | **✓**（鏈 A／鏈 B 完成報告逐條附 mutation 與秒數；DoD 帳 CX47–CX57 列） |
+| 2 | 七條 S1 關閉或明寫接受 | S1-1 → CX50/51/52；S1-2 → CX53；S1-3 → CX54/55；S1-4 → CX56；S1-5 → CX57；S1-6／S1-7 → T13l 的圖 | **✓ 六條**；**S1-6／S1-7 待 T13l**（另一個 agent 進行中，證據圖不影響程式面） |
+| 3 | 三條「Codex 不在場時位元組不變」 | CX50①、CX53、`.unavailable` 的既有零像素守衛，**全部是 `==` 不是「看起來一樣」** | **✓**（三條皆落地，見 DoD 帳） |
+| 4 | mutation 帳 | CX47–CX57 **11 條**逐條 `mutation / 指名測試 / 秒數`；**兩個等價 mutant 也要記**（CX47②、CX49③） | **✓**（DoD「Gate mutation 帳」CX47–CX57 列；等價 mutant 兩筆已記，見 known gap 28） |
+| 5 | test-edit scrutiny | CX40 改名＋翻轉、CX36 擴充、`emptyRowsMessage` 分格、`.disconnectCodex` 那格——**四處各附三欄** | **✓**（四處在鏈 A／鏈 B 完成報告；CX40 改名紀錄在 spec §6.4 第 10 項） |
+| 6 | 單檔行數 | `IsolationTests.fileLengthLimit` 綠；**特別看**逼近上限的幾個檔 | **✓ 現場實測**：`Sources/` 超過 200 行 **0 個**、`Tests/` 超過 300 行 **0 個**。最緊的五個：`StatusItemController.swift` **200/200**、`PanelModel.swift` 194、`InstallAffordance.swift` 194、`PanelView.swift` 190、`InstallState.swift` 179；`AppDelegatePanelActionsWiredTests.swift` 298/300。**下一次動這幾個檔要先拆**（known gap 34 m7 已記） |
+| 7 | `Sources/` 淨增 | 逐檔「估／實」兩欄；DoD #7 **仍是 MISS，不調門檻** | **✓ 記錄完成**：`Sources/` 現場實測 **9713 行**。對 `c131c30`（7846）**+1867**、對 main `9ec85d0`（7876）**+1837**——門檻 1150，**MISS 約 687–717**。r13 估 T13 增量約 270，**實際約 310**（9403 → 9713）。**門檻不調**，是否重設基準是使用者的裁決（known gap 26） |
+| 8 | `#expect(` 淨增 | 只准上升；附 HEAD 絕對值（指令固定 `grep -rho '#expect(' Tests \| wc -l`） | **✓ 現場實測**：`#expect(` **2083**（基準 2026，**+57**）、`@Test` **977**。兩者皆上升 |
+| 9 | 既有 gate 全綠 | 連跑 3 次 0 flake；**特別重跑清單**見下 | **部分**：鏈 B rebase 後全量 **969 tests／0 issues**（657+312，known gap 36）。**連跑 3 次 0 flake 留 integrator 重跑**（本 task 只動文件，不重跑測試——主目錄與 T13l 的 worktree 同時在動，避免搶 `.build`） |
+| 10 | 量測數字入帳 | §10-20（Options 展開＋snippet 的高度）與 §10-22（三處寬度）必須是真數字 | **✓**：§10-20 填入 1849／1840（修前）→ **1056／1047**（修後，仍超 780，維持明寫接受）；§10-22 填入三處代表值 ＋ 全域 **34/58 超寬**、最寬 510pt、換行代價 **+16.0pt**，並記入 T13i 2026-09-22 的重量結論（對天花板最壞組合不適用） |
+| 11 | **零殘留與紅線**（T13k 現場補驗） | `AURA_CODEX_PENDING` 命中 0；`plugin/hooks/hooks.json` 與 `Package.swift` 對基準 diff 為空 | **✓ 三項現場實測皆符合** |
+
+**留給 integrator 的三項**：連跑 3 次全量 0 flake（#9）· `claude plugin validate --strict` ·
+`verify-install.sh`／`verify-uninstall.sh --only 7`。**T13k 不重跑測試**：主目錄與 T13l 的 worktree
+同時在動，`swift test` 會搶 `.build` 的鎖（CLAUDE.md 陷阱第 2 條）。
 
 **必須重跑的既有 gate（彙總，逐條在報告裡寫結論）**：
 `CodexWiringSmokeTests`（CX24 五段）· `CodexSectionViewTests`（CX36 九個代表值）·

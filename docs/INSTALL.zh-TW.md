@@ -220,8 +220,9 @@ app bundle 本身這五個位置，任何一項還在就非零退出並印出是
 
 ## 狀態目錄
 
-`~/.agentaura/sessions/<session_id>.json` —— 每個 Claude Code session 一個檔，
-內容是瞬時狀態，可隨時安全刪除（app 會在下一個 hook 事件時重建）。
+`~/.agentaura/sessions/<session_id>.json` —— 每個 session 一個檔，內容是瞬時狀態。
+**Claude Code 與 Codex 的 session 都落在這同一個目錄**，靠檔案裡的 `agent` 欄位區分
+（沒有這個欄位就是 Claude Code）。可隨時安全刪除（app 會在下一個 hook 事件時重建）。
 
 ## 從舊版升級
 

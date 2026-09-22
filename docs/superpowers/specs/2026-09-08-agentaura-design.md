@@ -638,6 +638,24 @@ window 被抽掉——只造成尾巴留到下次開關面板（狀態檔仍在�
 > 從真實 view 推導）；`.claude` 不顯示標籤（D-b）。**聚合燈不分 agent**，兩個上游共用同一顆
 > 聚合燈，還是一顆（L2）。
 
+> **2026-09-22 更新（change `codex-support` T13，persona 第一輪 NO-GO 的修復批次）：**
+> 面板**所有會講「接上了沒有」的字串都必須是雙 agent 感知的**，這是 persona 判 S0／S1 的那一族。
+> 三件事：
+> 1. **三處狀態字串共用一個推導**（標題／footer chip／CTA 窄條 → `PanelModel.statusLabel`，D-y）。
+>    Codex 已接上時字串是「Codex 已接上 · Claude Code：<既有 healthLabel>」，**Codex 子句在前**
+>    （footer chip 是 `lineLimit(1)` ＋ 尾端截斷，被犧牲的必須是版本號而不是剛講的那件事）；
+>    **Codex 不在場時逐位元組等於原本的 `install.healthLabel`**（沒裝 Codex 的人零 diff）。
+>    只有 `.connected` 算「Codex 已接上」——`.connectedStalePath` 的檔案雖然在，但指向另一個位置的
+>    AgentAura，宣稱接上會是下一個謊。
+> 2. **接上成功的 banner 走自己的 kind，退場條件依 kind 分流**（D-v）：`.connected`（Claude）
+>    維持「出現任何一列就退場」；**`.codexConnected` 只在出現 Codex 的列時退場**。
+>    出現一個 Claude 列並未兌現 Codex 的任何承諾，而那條 banner 是「Codex 會問你一次是否信任」
+>    唯一的說明處（無法偵測信任狀態，只能講）。
+> 3. **空列訊息依 Codex 狀態分兩句**（D-z）：Codex 已接上時同時點名兩個 agent，否則逐位元組不變。
+>
+> **這三處在 diff 裡原本一個字都沒被動到**——新增一個訊號源時，要問的不是「我改的碼對不對」，
+> 而是「**哪些既有的推導因為這個新訊號而變成謊**」。機器關卡守的是被改動的碼，所以它們全綠。
+
 ### 3.8 安裝可逆性與自我健檢（R6）
 
 前一個專案 的實際失效方式：直接改 `settings.json`，app 被移除後 7 個 hook 全部孤兒化，

@@ -294,8 +294,10 @@ overwrite the whole file the next time you reconnect, but there's no need to wai
 
 ## State directory
 
-`~/.agentaura/sessions/<session_id>.json` — one file per Claude Code session, holding its
-current state. Safe to delete at any time; the app rebuilds it on the next hook event.
+`~/.agentaura/sessions/<session_id>.json` — one file per session, holding its current state.
+**Claude Code and Codex sessions both land in this one directory**, told apart by the `agent`
+field inside each file (absent means Claude Code). Safe to delete at any time; the app rebuilds
+it on the next hook event.
 
 ## Upgrading from an older version
 

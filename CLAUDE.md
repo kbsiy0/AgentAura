@@ -32,6 +32,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > `docs/superpowers/specs/2026-09-18-codex-support-design.md`、
 > `docs/2026-09-18-codex-hook-probe.md`。Codex 沒有 `error` 訊號來源、也無法偵測信任
 > 狀態——這兩條是平台限制，列為 known gap，不硬推。
+> **persona 第一輪 NO-GO 之後的修復批次（T13，spec r16）**：四道機器關卡全綠、persona 仍判
+> NO-GO（加權 5.68／門檻 6.0），失分**集中在既有的 Claude-only 表面沒有跟著新訊號更新**
+> ——面板三處狀態字串、空列句、以及接上成功 banner 的退場條件，全部改成**雙 agent 感知**
+> （D-y／D-z／D-v）。兩條 S0 的修法：**banner 走自己的 kind、退場條件是「出現 Codex 的列」**；
+> **`pathRejection` 非 nil 一律不給 snippet**（D-w，改前 `.unsupportedCharacter` 會遞出一份
+> 內含它自己剛說會壞的路徑的設定檔）。另加 snippet 區塊固定高度＋可捲與 780pt 面板高度天花板
+> （13 吋顯示 Dock 時「複製」鈕與 footer 原本被裁在畫面外）、Codex 移除走確認框。
+> 三條新 invariant 見下方 Invariants 段。
 
 ## Tech Stack
 
@@ -102,6 +110,9 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 - **`aura-hook --agent` 收到未知值或缺值一律落回 `.claude`，且全程靜默、`exit 0`**（codex-support D-d/D-b —— 只支援一種寫法時，手寫成另一種會靜默標成 claude；`agentArgumentParsing`／`auraHookStaysSilentForEveryAgentArgument` 守）。
 - **`CodexInstaller` 只准碰 `<codexHome>/hooks.json`；只在不存在時寫、只在內容逐位元組相符時刪；絕不碰 `<codexHome>/config.toml`**（codex-support D-i/D-j —— gate `codexInstallerTouchesOnlyHooksJSON`／`codexDisconnectOnlyRemovesOurBytes`）。
 - **對任一側（Claude／Codex）的安裝操作（connect／disconnect／reconnect／完整移除）不得改動另一側的任何位元組**（codex-support R-8 —— 檔案半見 gate `bothSidesNeverDisturbEachOthersFiles`／`...OnProductionPath`；憑證半見 gate `bothSidesNeverDisturbEachOthersCredentials`）。
+- **面板的三處狀態字串（標題／footer chip／CTA 窄條）在 Codex 已接上時不得只反映 Claude**（codex-support D-y／persona r1 S1-1 —— 三處都讀 `install.healthLabel`，Codex 已接上且正在跑時全部寫「還沒接上」，就是本檔 gate 哲學第 2 條那族「同一張畫面兩句互相打架」。唯一 oracle 是 `PanelModel.statusLabel`，Codex 不在場時**逐位元組**等於 `install.healthLabel`；gate `panelStatusLabelIsDualAgentAware`／`dualAgentStatusLabelReachesAllThreeSites`／`healthLabelReadersAreTheNamedSet`）。
+- **接上 Codex 的成功 banner 走自己的 `.codexConnected` kind，退場條件是「出現 Codex 的列」，不是「出現任何一列」**（codex-support D-v／persona r1 S0-1 —— A7 的退場條件是為 Claude banner 推導的；出現一個 **Claude** 列並未兌現 Codex 的任何承諾，而那條 banner 是 F5 之下唯一會講「Codex 會問你信任」的地方。**儲存值對不等於畫面畫了**：gate `codexConnectedBannerOnlyRetiresOnCodexRow`（退場條件）／`codexTrustWarningIsDrawnWithClaudeRowsPresent`（渲染後真的在畫面上））。
+- **`pathRejection` 非 nil 時一律不給 hooks.json snippet**（codex-support D-w／persona r1 S0-2 —— `command` 是裸路徑不加引號、含空白或引號的行為未測，遞一份我們自己剛說可能會壞的設定檔給「最會照著貼」的使用者比不給更糟，而 Codex 對壞掉的 hook 靜默跳過。條件是「有 rejection」不是「等於某一種 rejection」；gate `codexSnippetIsWithheldForEveryPathRejection`／`blockedCharacterCardWithholdsSnippetAndOffersAWayOut`）。
 
 ## Agent 在終端機裡的界線（2026-09-14 事故）
 
@@ -143,8 +154,12 @@ SDD 流程框架（agent 職責、Tier 判定、Gate 分層、N-round checkpoint
 `Sources/AgentAuraApp/**`、`Sources/AuraCore/` 的 `IconAppearance.swift`、`AnimationSchedule.swift`、
 `PanelViewModel.swift`、`LegendModel.swift`、`InstallState.swift`、`PanelAction.swift`、
 `OptionsMenuModel.swift`、`Jargon.swift`、`IconPalette.swift`、`CodexState.swift`、
-`CodexHooksJSON.swift`、`Sources/AuraHookFile/Installer.swift`、
+`CodexHooksJSON.swift`、`PanelModel.swift`、`PanelModel+ConnectCTA.swift`（承載 `statusLabel`／
+`effectiveBanner`／`emptyRowsMessage` 三個使用者看得到的字串推導）、`CodexSnippetSizing.swift`、
+`L10nCodexCards.swift`、`Sources/AuraHookFile/Installer.swift`、
 `Sources/AuraHookFile/CodexInstaller.swift`、`plugin/hooks/hooks.json`
+（`Sources/AgentAuraApp/**` 是整個目錄，所以 `AppDelegate+Lifecycle.swift`／`CodexSectionView.swift`
+這類 App 層新檔不必逐一列。）
 
 ## 易腐事實
 
