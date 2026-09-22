@@ -8,12 +8,16 @@
 
 **只有 `.aqua`（淺色）**：深淺色對比不是這批圖要驗的維度，版面與文案在深淺模式下走同一份 SwiftUI語意色（`.primary`／`.secondary`），需要深色對照時另外要求即可。
 
-## persona r1 指出的視覺問題對照（只標，不修）
+## persona r1 指出的視覺問題對照（T13l：全部補上「修後」欄）
 
-- **S0-1** ↔ `03-connected-banner-*`：接上成功 banner 的兩句話要看得到，這張圖的 `sessions` 刻意留空（`.connected` kind banner 在有活著的 session 時會自動退場，見 #03 的情境註解）——不是遺漏 session，是唯一能讓兩句話同時留在畫面上的組合。
-- **S1-4** ↔ `05-occupied-with-snippet-*` ／ `07-blocked-unsupported-character-*`：面板高度約 944pt，「複製」按鈕落在約 848pt 處（皆為 pt，非這批圖的 px——見上方尺寸單位附註）——snippet 區塊把卡片撐得很高，複製鈕在很下面才看得到。這裡先標記現況，不在這輪修版面。
-- **S1-6** ↔ `07-blocked-unsupported-character-*`：已修——snippet 現在由真的含空白的路徑（`/Users/someone/My Apps/AgentAura.app/Contents/PlugIns/aura-hook`）產生，圖上看得到那條會壞的路徑就在snippet 裡。**r13 前的修前基準**：spec r13 之後這個情境會改成「不給 snippet」，T13 落地後要重渲這張。
-- **S1-7** ↔ `12-notConnected-claude-with-live-codex-session-*`：新增。本 change 的頭號情境（Claude 未接上 ＋ 一列活著的 Codex session）先前完全沒有證據圖——這張如實呈現標題／footer chip／CTA窄條三處目前都只讀 `model.install`（不看 `model.codex`），完全沒提到正在跑的 Codex session。
+- **S0-1（D-v）** ↔ 修前 `03-connected-banner-*`（rows 刻意留空才看得到兩句話）→**修後** `13-codexConnected-banner-persists-with-claude-row-*`（rows 有一列 **Claude**session，banner 仍然出現）＋ `13b-codexConnected-banner-retires-with-codex-row-*`（rows 有一列**Codex** session，banner 已退場，對照組）。退場條件從「rows 非空就退場」改成「出現 Codex 的列（`hasCodexRow`）才退場」。
+- **S0-2（D-w）** ↔ 修前 `07-blocked-unsupported-character-*`（給 snippet＋「複製」）→**修後同檔名**（本次重渲）：`.unsupportedCharacter` 現在**不給 snippet**，只給指名字元的解釋＋出路句——即使餵進去的是真的含空白路徑產的 snippet 也沒有畫（`realSnippetWithSpace` 這條輸入常數繼續留著，證明的是「產得出來」與「畫不畫」是兩回事）。
+- **S1-1（D-y）** ↔ 修前 `12-notConnected-claude-with-live-codex-session-*`（標題／footer chip／CTA 窄條三處逐字「還沒接上」）→ **修後同檔名**（本次重渲）：三處現在讀 `statusLabel`，寫成「Codex connected · Claude Code: Not connected yet」（Codex 子句在前）。
+- **S1-3（D-aa）** ↔ 修前 `05-occupied-with-snippet-*`（只有說明＋snippet＋「複製」，沒有合併指示）→ **修後同檔名**（本次重渲）：多一行合併指示（「把這些 entry 併進你現有的 hooks 物件，不要整份取代」）＋一顆「教我怎麼做」按鈕（送出既有 `.openHelp`）。
+- **S1-4（D-ab）** ↔ 修前 `05-occupied-with-snippet-*` ／ `07-blocked-unsupported-character-*`（面板高度約 944pt，「複製」按鈕落在約 848pt 處，皆為 pt，非這批圖的 px）→ **修後**`14-worst-height-combination-en`：snippet 區塊固定高度＋可捲，天花板 ≤780pt，「複製」鈕與 footer都在畫面內（實測數字見檔名列表那一行）。**這張用的是 CX56 同一個 `install` 代表值（`.broken(.targetMissing, owner: .external)`）與同一個天花板，不是另外挑的數字**。
+- **S2-1（D-x）** ↔ 修前 `10-*` ／ `11-*`（persona r1 現場驗過兩張位元組完全相同）→**修後同檔名**（本次重渲）：兩張**不再相同**——中性開場句共用，但成因／出路依 rejection 分流（#10 講「移到『應用程式』」，#11 指名字元並講「移到不含該字元的位置」）。
+- **S1-6（D-ad）** ↔ `07-blocked-unsupported-character-*`：證據渲染器本身的修正——snippet 輸入改用真的含空白的路徑（`493e0bf` 已修，本次無變動）。
+- **S1-7（D-ad）** ↔ `12-notConnected-claude-with-live-codex-session-*`：新增證據圖本身（`493e0bf` 已加，本次重渲內容因 D-y 落地而更新，見上面 S1-1 那條）。
 
 | 檔名 | 情境（給 persona 看什麼） |
 |---|---|
@@ -29,15 +33,20 @@
 | `05-occupied-with-snippet-zh.png` | P2：occupiedByOther，codexSnippet!=nil——說明＋可複製 snippet（與 CodexHooksJSON.snippet 同源）＋「複製」按鈕 |
 | `06-occupied-must-move-no-snippet-en.png` | P2／R-10：occupiedByOther，pathRejection==.mustMoveToApplications——不給 snippet／複製鈕，改說先把 App 移到「應用程式」 |
 | `06-occupied-must-move-no-snippet-zh.png` | P2／R-10：occupiedByOther，pathRejection==.mustMoveToApplications——不給 snippet／複製鈕，改說先把 App 移到「應用程式」 |
-| `07-blocked-unsupported-character-en.png` | P2：blockedByBundlePath(.unsupportedCharacter(" "))——文案指名是空白字元＋snippet（同源，來源路徑真的含空白：/Users/someone/My Apps/…）＋「複製」按鈕。**r13 前的狀態**（r13 之後這格改成不給 snippet，T13 落地後要重渲） |
-| `07-blocked-unsupported-character-zh.png` | P2：blockedByBundlePath(.unsupportedCharacter(" "))——文案指名是空白字元＋snippet（同源，來源路徑真的含空白：/Users/someone/My Apps/…）＋「複製」按鈕。**r13 前的狀態**（r13 之後這格改成不給 snippet，T13 落地後要重渲） |
+| `07-blocked-unsupported-character-en.png` | P2／S0-2 修後（D-w）：blockedByBundlePath(.unsupportedCharacter(" "))——文案指名是空白字元＋出路句（把 App 移到不含該字元的位置）。**不給 snippet／複製鈕**——即使餵進去的是真的含空白路徑產生的 snippet（`realSnippetWithSpace`）也不畫，修前（`493e0bf`）這格會畫出那條會壞的路徑並給「複製」 |
+| `07-blocked-unsupported-character-zh.png` | P2／S0-2 修後（D-w）：blockedByBundlePath(.unsupportedCharacter(" "))——文案指名是空白字元＋出路句（把 App 移到不含該字元的位置）。**不給 snippet／複製鈕**——即使餵進去的是真的含空白路徑產生的 snippet（`realSnippetWithSpace`）也不畫，修前（`493e0bf`）這格會畫出那條會壞的路徑並給「複製」 |
 | `08-disconnected-banner-en.png` | 斷開成功 banner（codexDisconnected，kind=.disconnected，不會像 #3 那樣因為有 session 而自動退場）＋斷開後 Codex 卡片回到 notConnected 的「接上 Codex」提示 |
 | `08-disconnected-banner-zh.png` | 斷開成功 banner（codexDisconnected，kind=.disconnected，不會像 #3 那樣因為有 session 而自動退場）＋斷開後 Codex 卡片回到 notConnected 的「接上 Codex」提示 |
 | `09-mixed-claude-codex-rows-en.png` | P4：同一份 sessions 列表裡 Claude 列與帶「Codex」標籤的列並存，分得出來、列高不變（見 CodexRowLabelRenderTests 的既有像素／高度守衛） |
 | `09-mixed-claude-codex-rows-zh.png` | P4：同一份 sessions 列表裡 Claude 列與帶「Codex」標籤的列並存，分得出來、列高不變（見 CodexRowLabelRenderTests 的既有像素／高度守衛） |
-| `10-stale-rejection-must-move-withholds-reconnect-en.png` | R-9：connectedStalePath，pathRejection==.mustMoveToApplications——不畫「重新接上」按鈕，換句解釋（與 #6 不同 state：這張是 connectedStalePath，#6 是 occupiedByOther） |
-| `10-stale-rejection-must-move-withholds-reconnect-zh.png` | R-9：connectedStalePath，pathRejection==.mustMoveToApplications——不畫「重新接上」按鈕，換句解釋（與 #6 不同 state：這張是 connectedStalePath，#6 是 occupiedByOther） |
-| `11-stale-rejection-unsupported-character-withholds-reconnect-en.png` | R-9：connectedStalePath，pathRejection==.unsupportedCharacter(" ")——同樣不畫「重新接上」按鈕，與 #10 同一句解釋（文案不預設成因）；與 #7 不同 state：這張是 connectedStalePath，#7 是 blockedByBundlePath |
-| `11-stale-rejection-unsupported-character-withholds-reconnect-zh.png` | R-9：connectedStalePath，pathRejection==.unsupportedCharacter(" ")——同樣不畫「重新接上」按鈕，與 #10 同一句解釋（文案不預設成因）；與 #7 不同 state：這張是 connectedStalePath，#7 是 blockedByBundlePath |
-| `12-notConnected-claude-with-live-codex-session-en.png` | S1-7：install=.notConnected（Claude 未接上）＋一列活著的 Codex session（working）＋Codex 卡片 .connected——看標題／footer chip／CTA 窄條三處在這個組合下寫什麼字（persona r1：三處都只反映 Claude，完全沒提到正在跑的 Codex session） |
-| `12-notConnected-claude-with-live-codex-session-zh.png` | S1-7：install=.notConnected（Claude 未接上）＋一列活著的 Codex session（working）＋Codex 卡片 .connected——看標題／footer chip／CTA 窄條三處在這個組合下寫什麼字（persona r1：三處都只反映 Claude，完全沒提到正在跑的 Codex session） |
+| `10-stale-rejection-must-move-withholds-reconnect-en.png` | R-9／S2-1 修後（D-x）：connectedStalePath，pathRejection==.mustMoveToApplications——不畫「重新接上」按鈕；開場句改成中性事實（只講「這份設定指向另一個位置」，不再宣稱「下次開機就會消失」），成因／出路沿用「把 App 移到『應用程式』」（與 #6 不同 state：這張是 connectedStalePath，#6 是 occupiedByOther） |
+| `10-stale-rejection-must-move-withholds-reconnect-zh.png` | R-9／S2-1 修後（D-x）：connectedStalePath，pathRejection==.mustMoveToApplications——不畫「重新接上」按鈕；開場句改成中性事實（只講「這份設定指向另一個位置」，不再宣稱「下次開機就會消失」），成因／出路沿用「把 App 移到『應用程式』」（與 #6 不同 state：這張是 connectedStalePath，#6 是 occupiedByOther） |
+| `11-stale-rejection-unsupported-character-withholds-reconnect-en.png` | R-9／S2-1 修後（D-x）：connectedStalePath，pathRejection==.unsupportedCharacter(" ")——同樣不畫「重新接上」按鈕，但**不再與 #10 位元組相同**：同一句中性開場之後接的是指名空白字元＋「把 App 移到不含該字元的位置」，不是 #10 的「移到『應用程式』」（修前 `493e0bf` 這兩張是同一張圖，可查證為假的「會消失」子句已拿掉；與 #7 不同 state：這張是 connectedStalePath，#7 是 blockedByBundlePath） |
+| `11-stale-rejection-unsupported-character-withholds-reconnect-zh.png` | R-9／S2-1 修後（D-x）：connectedStalePath，pathRejection==.unsupportedCharacter(" ")——同樣不畫「重新接上」按鈕，但**不再與 #10 位元組相同**：同一句中性開場之後接的是指名空白字元＋「把 App 移到不含該字元的位置」，不是 #10 的「移到『應用程式』」（修前 `493e0bf` 這兩張是同一張圖，可查證為假的「會消失」子句已拿掉；與 #7 不同 state：這張是 connectedStalePath，#7 是 blockedByBundlePath） |
+| `12-notConnected-claude-with-live-codex-session-en.png` | S1-1 修後（D-y）：install=.notConnected（Claude 未接上）＋一列活著的 Codex session（working）＋Codex 卡片 .connected——標題／footer chip／CTA 窄條三處現在都讀 `statusLabel`，寫成「Codex connected · Claude Code: Not connected yet」（Codex 子句在前，見 §3.1），不再是修前（`493e0bf`）三處逐字「還沒接上」 |
+| `12-notConnected-claude-with-live-codex-session-zh.png` | S1-1 修後（D-y）：install=.notConnected（Claude 未接上）＋一列活著的 Codex session（working）＋Codex 卡片 .connected——標題／footer chip／CTA 窄條三處現在都讀 `statusLabel`，寫成「Codex connected · Claude Code: Not connected yet」（Codex 子句在前，見 §3.1），不再是修前（`493e0bf`）三處逐字「還沒接上」 |
+| `13-codexConnected-banner-persists-with-claude-row-en.png` | S0-1 修後（D-v）：.codexConnected banner ＋ rows 含一列 Claude session——banner 仍然出現（兩句話都在）。這是 #03（修前要 rows 留空才看得到兩句話）的直接對照：同一顆 banner 現在能與一列 Claude session 共存，因為退場條件改成看 hasCodexRow，不是看 rows.isEmpty |
+| `13-codexConnected-banner-persists-with-claude-row-zh.png` | S0-1 修後（D-v）：.codexConnected banner ＋ rows 含一列 Claude session——banner 仍然出現（兩句話都在）。這是 #03（修前要 rows 留空才看得到兩句話）的直接對照：同一顆 banner 現在能與一列 Claude session 共存，因為退場條件改成看 hasCodexRow，不是看 rows.isEmpty |
+| `13b-codexConnected-banner-retires-with-codex-row-en.png` | 對照（D-v）：.codexConnected banner ＋ rows 含一列 Codex session——banner 已退場（hasCodexRow==true，承諾已兌現）。與 #13 一起看：#13 有 Claude 列仍顯示 banner，這張有 Codex 列就不顯示，證明退場條件是「有沒有 Codex 的列」不是「rows 是否非空」 |
+| `13b-codexConnected-banner-retires-with-codex-row-zh.png` | 對照（D-v）：.codexConnected banner ＋ rows 含一列 Codex session——banner 已退場（hasCodexRow==true，承諾已兌現）。與 #13 一起看：#13 有 Claude 列仍顯示 banner，這張有 Codex 列就不顯示，證明退場條件是「有沒有 Codex 的列」不是「rows 是否非空」 |
+| `14-worst-height-combination-en.png` | S1-4／CX56 最壞高度組合（D-ab）：install=.broken(.targetMissing, owner:.external)（CX56 的 `.replaceExternal` 代表值）＋ .occupiedByOther 有 snippet ＋ banner=.codexConnected ＋ rows 空 ＋ 英文——固定高度＋可捲的 snippet 區塊落地後，天花板應 ≤780pt（@2x 1560px），「複製」鈕與 footer 都在畫面內。**只有這張圖是英文單張**（CX56 量到的最壞語言，中文版無新增資訊） |
