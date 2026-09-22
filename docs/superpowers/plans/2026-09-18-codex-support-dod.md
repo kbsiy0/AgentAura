@@ -59,7 +59,7 @@ DoD #1 的「全綠」以「修好它之後」為準。
 | 21 | 文件路徑一致 | `README.md`／`SECURITY.md` 都含 `.codex/hooks.json` | CX29 | `grep -l ".codex/hooks.json" README.md README.zh-TW.md SECURITY.md` 三份全部命中 | **PASS** |
 | 22 | help 涵蓋 | 兩個語言都涵蓋**每一個**新的 Options 列標題（含「重新接上 Codex」） | CX28 | `HelpDocOptionsRowCoverageTests` 全綠（含 CX28 mutation②正向對照，6 test case） | **PASS** |
 | 23 | **CX37a／CX37b 的成本** | CX37a **780 條全跑、零 spawn**（毫秒級，**不縮減**）；CX37b **30 條、11 次真 spawn**、走 `SpawnGate`。兩條的 doc comment 要互相點名（a 的等價理由／b 的長度上限理由）。**實測秒數寫進報告** | T06 的完成報告 ＋ 現場重跑 | 現場重跑：CX37a 780 test cases，gate 內部計時 **2.315s**；CX37b 30 test cases，gate 內部計時 **2.291s**。commit 訊息記載的原始數字：CX37a 1.9s／2930 次操作；CX37b 4.2–8.4s（視全套件負載）／11 次 `installer.connect(` 呼叫 | **PASS** |
-| 24 | persona | 加權 **≥ 6.0**；硬下限四條（見下） | Tier 1，integrator 綠後派 persona-tester | **r1（2026-09-21）：加權 5.68 / 10，NO-GO**。P1 6.0（下限 5，PASS）· **P2 5.2（下限 6，FAIL）** · P3 5.2（下限 5，PASS 但內含 S0）· P4 6.4（下限 5，PASS）。**S0 × 2、S1 × 7、S2 × 6**。三條 no-go 規則各自獨立成立：兩條 S0 硬否決／P2 低於自己的下限／加權不足。**強 gate**（寫使用者真實 `~/.codex/hooks.json`、公開散佈）→ 判定**綁定、不可繞**。修復批次＝**T13**（spec r13 §0.4 D-v–D-ad），完成後送 **r2 retest** | **FAIL（r1）→ 待 r2** |
+| 24 | persona | 加權 **≥ 6.0**；硬下限四條（見下） | Tier 1，integrator 綠後派 persona-tester | **r1（2026-09-21）：加權 5.68 / 10，NO-GO**。P1 6.0（下限 5，PASS）· **P2 5.2（下限 6，FAIL）** · P3 5.2（下限 5，PASS 但內含 S0）· P4 6.4（下限 5，PASS）。**S0 × 2、S1 × 7、S2 × 6**。三條 no-go 規則各自獨立成立：兩條 S0 硬否決／P2 低於自己的下限／加權不足。**強 gate**（寫使用者真實 `~/.codex/hooks.json`、公開散佈）→ 判定**綁定、不可繞**。修復批次＝**T13**（spec r13 §0.4 D-v–D-ad），完成後送 **r2 retest**。**r2（2026-09-22，T13 merge 後 tip `c22fb12`）：加權 7.6 / 10（Δ +1.92），GO**。P1 7.6 · P2 7.6 · P3 7.6 · P4 7.6，四條硬下限全過；**S0 × 0、S1 × 0、S2 × 10**（S2-a／S2-b 建議 release 前 micro-lane 補，見「Known gaps 收口」）。r1 的九條逐條以證據圖 #05／#07／#10／#11／#12／#13／#13b／#14 交叉驗過；兩個新現象（標題 vs footer 不對稱、截尾）判非 finding。報告 `scratchpad/codex-persona-r2.md`（主 session 保管） | **PASS（r2 GO 7.6）** |
 
 ### DoD #7 逐檔「估／實」對照（T12 補；估算來自 spec §8.1）
 
@@ -276,6 +276,21 @@ CX28、CX29、CX32（已知）、CX33、CX34、CX36、CX41、CX46）——**gate
 變成至少 **14 處新命中**，證實這不是偶發，是系統性問題：implementer 常在落地時把單一顆大 gate
 拆成多顆小函式（分頁多、對抗式覆蓋更細），但沒有回頭同步 DoD 帳本裡「指名測試」欄的字面。
 
+
+### persona r2 結果（2026-09-22，T13 merge 後）
+
+**r2 判定：GO（加權 7.6／門檻 6.0，Δ +1.92）**，四個 persona 皆 7.6、硬下限全過，**S0×0、S1×0、S2×10**。
+persona 特別交叉驗證三個修法不是只為截圖成立：S0-1 結構性（`hasCodexRow` 用釘死字面比對，第三種 agent 進來不會誤退場；#13／#13b 單變數 A/B）、
+S0-2 雙層扣住（渲染器仍餵真的含空白路徑 snippet，view 層就是不畫——「產得出來」與「畫不畫」分開驗）、S1-1 未回歸 D-j（`01-unavailable` 高度與 r1 逐位元組相同）。
+兩個新現象判**非 finding**：標題（session 計數句）與 footer（`statusLabel`）回答不同問題且極性對——標題只在狀態沒事時對狀態沉默；截尾「…Not connecte…」因「Claude Code:」前綴完整可見，歸屬清楚。
+
+**十條 S2 中最該先修的兩條（建議 release 前 micro-lane，與腳本 bug 同一個 change）**：
+- **S2-a** 「Show me how／教我怎麼做」開到的 help 只是卡片同一句、無範例，且 `.openHelp` 落在頁面頂端。
+- **S2-b** 卡片說「不要整份取代」，但剪貼簿裡是**整份檔**（root `{"hooks":{…}}`），使用者得自己剝 wrapper 只併內層 12 個鍵——趕時間的人會貼出嵌套壞掉的 JSON。一個 worked example 可同時收掉 S2-a／S2-b。
+其餘 S2：snippet 可視比例約 18%（最後一列切半是唯一捲動線索）、footer 橘點與「Codex connected」同列相衝（純 Codex 使用者永久琥珀）、雙 agent 標題無 `lineLimit`（34/58 格換行，證據圖無換行樣本）、列標籤字體處理、legend Error 無通往解釋的路徑（沿用 r1）、INDEX 兩列過期描述（已修 `1b649b2`）。
+
+**實機清單被 r2 改寫的四格**：③ 在**面板上有一列 session 時**按接上，預期 banner **會**出現；⑤ 重點改為真的去捲 snippet 區塊、確認捲得到底且 scrollbar 出現（離屏渲不出 overlay scrollbar）；⑧補 按「移除 Codex 掛載…」確認對話框跳出且點名 Codex（`NSAlert` 離屏渲不到）；**新增一格**：進到 `broken` 系列 install 狀態且 Codex 已接上，看標題會不會換成兩行。R-8 燈號仍為 code／文案面評分，真機面待實機 ⑧。
+
 ### 建議新增 CX58（`everyNamedGateResolvesToAtLeastOneTest`）
 
 **未實作為真的 swift test**（時間預算緣故），只留下方法與資料供下一輪落地：
@@ -437,6 +452,14 @@ release notes；性質標籤：**平台限制**（我們控制不了）／**設�
      用路徑字串比對，沒有分辨「自己剛開的那個」跟「使用者原本在跑的正式安裝」，會連帶殺掉後者。
    這兩個 bug 都獨立於本 change 的功能正確性，但會讓依賴這些腳本的所有未來驗收與量測失真或有
    破壞性副作用，建議合併成一個小 change 一次修掉。
+
+### 建議 release 前一併處理（不擋 PR，與第 4 件同一個 micro-lane change）
+
+5. **persona r2 的 S2-a／S2-b**：snippet 卡片的合併指示與剪貼簿內容不一致（剪貼簿是整份檔、卡片叫人不要整份取代），
+   「Show me how」開到的 help 無範例——一個 worked example（貼進既有 `hooks.json` 的前後對照）同時收掉兩條。
+6. **CX58 揭露的帳本品質問題**：14 個 gate 的「指名測試」曾與原始碼不符（一顆 gate 拆多支函式未同步帳本），
+   已由 `071a68b` 改成真函式名並由 CX58 `everyNamedGateResolvesToAtLeastOneTest` 常設守住；CX58 的已知盲點是分不出
+   「helper func」與「`@Test` 函式」（CX28 的 `allRows` 就是這樣漏掉的），後續可讓它改讀 `swift test list` 的靜態清單。
 
 ### 平台限制（我們控制不了，明寫接受）
 
