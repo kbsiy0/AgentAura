@@ -90,6 +90,7 @@ claude plugin validate --strict ./plugin     # 平台契約，warning 視為 err
 - **`swift package dump-package` 從 `swift test` 的子行程跑會死結**。必須加 `--scratch-path <temp>`（`Gate.packageTargets()` 已處理）。
 - **中文 commit message 用 `git commit -F - <<'EOF'`**，不要 `-m` —— zsh 的 history expansion 會吃掉 `!`。
 - **診斷 app 行為時 `NSLog` 不進統一日誌**（`log show` 撈不到，加 `--info` 也一樣）。直接跑執行檔把 stderr 導進檔案：`nohup <app>/Contents/MacOS/AgentAuraApp > diag.log 2>&1 &`。
+- **push 任何分支前先本地跑 CI 的 hygiene 掃描**（2026-09-22 PR #8 實踩：證據 fixture 用了 `/Users/<本機使用者名>/My Apps/…` 當「含空白路徑」樣本，push 後 CI 才抓到 13 處歷史命中，只能改寫分支歷史 force-push 清）。掃描與 CI 同一管線：`git rev-list --objects --all | awk '{print $1}' | git cat-file --batch-check='%(objecttype) %(objectname)' | awk '$1=="blob"{print $2}' | git cat-file --batch | grep -c "/Users/"`，非 0 就先查再 push。**測試 fixture 的假路徑一律用 `/Users/someone/…`**，不要用真家目錄。
 - **`FileManager.homeDirectoryForCurrentUser` 不吃 `$HOME`**（讀密碼資料庫），所以無法用假家目錄開隔離實例測安裝流程。
 
 ## Invariants
