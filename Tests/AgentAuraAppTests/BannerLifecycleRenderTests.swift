@@ -32,4 +32,31 @@ struct BannerLifecycleRenderTests {
         for sub in view.subviews { found.append(contentsOf: allButtons(in: sub)) }
         return found
     }
+
+    /// r1 review m5：`L10nCodexCardTextTests.panelBannerCodexConnectedUsesTheSameOracle`
+    /// 改寫後只剩註解宣稱「`.codexConnected` 不會被歸進 `.error` 的紅色分支」，沒有任何斷言
+    /// 釘住它——這裡補上真的像素斷言。`.error` 背景是 `Color.red.opacity(0.12)`（over white
+    /// 約 RGBA(1, 0.88, 0.88)），`.connected`／`.codexConnected` 都走 `Color.accentColor.opacity(0.12)`
+    /// （非紅）。實測：`.error` 命中該紅色調 ≥ 40,000 px，`.connected`／`.codexConnected` 皆 0。
+    @Test("`.error` banner 背景是紅色調；`.connected`／`.codexConnected` 都不是（同一套成功色）")
+    func codexConnectedBannerIsNotRoutedToTheErrorColorBranch() throws {
+        let redish = RGBA(r: 1.0, g: 0.88, b: 0.88, a: 1)
+        func redHitCount(_ banner: PanelBanner) throws -> Int {
+            let hosting = NSHostingView(rootView: BannerView(banner: banner, onAction: { _ in }))
+            hosting.frame = NSRect(x: 0, y: 0, width: 380, height: max(hosting.fittingSize.height, 30))
+            let bitmap = try OffscreenRender.render(hosting, over: .white)
+            return bitmap.count(near: redish, tolerance: 0.03)
+        }
+        let errorHits = try redHitCount(.error("x"))
+        #expect(errorHits >= 40_000, ".error banner 應該真的畫出紅色調背景，實際命中 \(errorHits) px")
+
+        let connectedHits = try redHitCount(.connected(language: .english))
+        #expect(connectedHits == 0, ".connected banner 不該有紅色調背景，實際命中 \(connectedHits) px")
+
+        let codexConnectedHits = try redHitCount(.codexConnected(language: .english))
+        #expect(codexConnectedHits == 0, """
+            .codexConnected banner（T13b 新 kind）不該被誤歸進 .error 的紅色分支，
+            實際命中 \(codexConnectedHits) px
+            """)
+    }
 }
