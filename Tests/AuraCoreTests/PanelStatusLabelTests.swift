@@ -37,11 +37,15 @@ struct PanelStatusLabelTests {
         return pairs
     }
 
+    /// r1 review M1：gate 名 `panelStatusLabelIsDualAgentAware` 拆成 4 個 `@Test`
+    /// （一個 gate 對應純函式層的 4 條斷言）——函式名依 spec §6.3 慣例加 `_<條目>` 後綴，
+    /// 讓 `--filter panelStatusLabelIsDualAgentAware` 能同時抓到全部 4 條。
+    ///
     /// ①（D-j 零 diff）：`codex != .connected` 時，`statusLabel` 逐位元組等於
     /// `install.healthLabel`——沒裝 Codex／Codex 還沒接上的人，這句話一個位元組都不變。
     @Test("① codex != .connected → statusLabel 逐位元組等於 install.healthLabel",
           arguments: Self.installCrossCodexKind(excluding: .connected), Language.allCases)
-    func zeroDiffWhenCodexNotConnected(pair: (InstallState, CodexStateKind), language: Language) {
+    func panelStatusLabelIsDualAgentAware_1(pair: (InstallState, CodexStateKind), language: Language) {
         let (install, codexKind) = pair
         let codex = CodexState.samples(codexKind).first!
         let model = Self.model(install: install, codex: codex, language: language)
@@ -56,7 +60,7 @@ struct PanelStatusLabelTests {
     /// （這正是「組合既有 healthLabel」而不是「另寫一套雙 agent 文案」的理由）。
     @Test("② codex == .connected → 含 Agent.codex.label！且 install.healthLabel 是逐字子字串",
           arguments: InstallStateAllCases.all(), Language.allCases)
-    func includesCodexLabelAndClaudeHalfWhenConnected(install: InstallState, language: Language) {
+    func panelStatusLabelIsDualAgentAware_2(install: InstallState, language: Language) {
         let model = Self.model(install: install, codex: .connected, language: language)
         let label = model.statusLabel(language)
         #expect(label.contains(Agent.codex.label!), "statusLabel 應含 \(Agent.codex.label!)，實際 \(label)")
@@ -70,7 +74,7 @@ struct PanelStatusLabelTests {
     /// 截斷時先犧牲尾巴的版本號，不會犧牲「Codex 已接上」這件剛被 persona 判為 S0 的事。
     @Test("③ codex == .connected 時，Codex 子句在最前面",
           arguments: InstallStateAllCases.all(), Language.allCases)
-    func codexClauseComesFirst(install: InstallState, language: Language) {
+    func panelStatusLabelIsDualAgentAware_3(install: InstallState, language: Language) {
         let model = Self.model(install: install, codex: .connected, language: language)
         #expect(model.statusLabel(language).hasPrefix(Agent.codex.label!), """
             statusLabel 應該以 \(Agent.codex.label!) 開頭，實際 \(model.statusLabel(language))
@@ -92,7 +96,7 @@ struct PanelStatusLabelTests {
 
     @Test("④ PanelModel.make 產出的 title 在 install 非 connected 時逐位元組等於 statusLabel",
           arguments: Self.notConnectedInstallCrossCodexKind(), Language.allCases)
-    func titleMatchesStatusLabelWhenNotConnected(pair: (InstallState, CodexStateKind), language: Language) {
+    func panelStatusLabelIsDualAgentAware_4(pair: (InstallState, CodexStateKind), language: Language) {
         let (install, codexKind) = pair
         let codex = CodexState.samples(codexKind).first!
         let model = Self.model(install: install, codex: codex, language: language)

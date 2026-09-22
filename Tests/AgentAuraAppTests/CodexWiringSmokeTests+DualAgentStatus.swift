@@ -23,6 +23,12 @@ import AuraCore
 ///    （`CodexSectionView.model.title` ＋ `PanelFooterView.model.title`），另外 2 次才是
 ///    真的被實例化的 `Text(model.title)`（標題）與 `ConnectCTABannerView(label:)`（CTA
 ///    窄條）。**不是 spec 草案寫的「2」**——那個數字沒有算進洩漏，本檔用實跑值。
+///
+///    **r1 review M3：這個 4 不得寫死**——多一個持有整份 `model` 的子 view，這個數字就會變，
+///    跟「標題／CTA 有沒有正確接線」這個行為本身無關（CLAUDE.md gate 哲學 #2：每個數字要
+///    推導）。改用 `model.version` 的命中數當**底噪**（`version` 只透過同一兩個子 view
+///    洩漏，不受 `BannerView`／標題／CTA 接線正確與否影響，實測恰為 2），門檻變成
+///    「底噪 + 2」。
 /// 2. **`PanelFooterView` 原本的 `Text("\(...) · v\(...)")` 是字面插值，Swift 選中的是
 ///    `Text(LocalizedStringKey)` 多載，不是 `Text(String)`**——`LocalizedStringKey` 把
 ///    插值拆成「格式鍵＋參數」分開存放，`Mirror` 永遠掃不到組合後的完整字串（實測：
@@ -35,11 +41,22 @@ import AuraCore
 /// **方法**：footer 的組合字面**改用 `PanelFooterView(model:).body` 單獨渲染**（不經過
 /// `PanelView.body`，完全避開上述洩漏——`PanelFooterView` 自己不會巢狀另一個持有整份
 /// `model` 的子 view）；標題／CTA 窄條這兩處合併用**兩條可分辨**的斷言守，都掃整個
-/// `PanelView(model:).body`：② 裸 `statusLabel` 命中數恰為 4（本情境的實測基準，
-/// 任一處被改回就會少 1，變 3）；③ `install.healthLabel(l)` **不得**以裸葉節點單獨出現
-/// （`healthLabel` 是 computed method 呼叫的回傳值，不是任何 stored property，不會被上面
-/// 那個洩漏污染——這條斷言對洩漏完全免疫，任一處改回 `healthLabel` 就會讓這個字串首次
-/// 出現）。標題那一處的**值**另由純函式層的 **CX50④** 守，這裡只驗證 view 真的把它畫出來。
+/// `PanelView(model:).body`：② 裸 `statusLabel` 命中數恰為「底噪 + 2」（`noise` 由
+/// `model.version` 的命中數推導，實測恰 2）；③ `install.healthLabel(l)` **不得**以裸葉節點
+/// 單獨出現（`healthLabel` 是 computed method 呼叫的回傳值，不是任何 stored property，不會
+/// 被上面那個洩漏污染——這條斷言對洩漏完全免疫，任一處改回 `healthLabel` 就會讓這個字串
+/// 首次出現）。標題那一處的**值**另由純函式層的 **CX50④** 守，這裡只驗證 view 真的把它畫出來。
+///
+/// **兩種「改回」mutation 對 labelCount 的影響不同，實跑分別記錄**（r1 review m3 更正）：
+/// ① 把 `PanelModel.swift` 的 `title(for:install:codex:language:)` 改回直接呼叫
+/// `install.healthLabel(language)`（＝ CX50 mutation⑤，不經過共用 `statusLabel` 核心）——
+/// `model.title` 這個**欄位本身**的值連同它的兩份洩漏都變成 `healthLabel`，於是
+/// labelCount **4→1**（只剩 CTA 那一份還算 `statusLabel`），healthLabelCount 0→3，
+/// 且 **CX50④ 也跟著紅**（`model.title` 真的不等於 `model.statusLabel` 了）。
+/// ② 把 `PanelView.swift` 的 CTA 窄條 `label:` 參數改回 `model.install.healthLabel(...)`
+/// （只動 view 層的讀取點，不動 `model.title` 本身）——只少真的被實例化的那一份，
+/// labelCount **4→3**，healthLabelCount 0→1，**CX50④ 維持綠**（純函式層的
+/// `model.title`／`model.statusLabel` 都沒被動到，兩者依然相等）。
 @MainActor
 @Suite("三處狀態字串真的接到 statusLabel（CX51）")
 struct CodexWiringSmokeTestsDualAgentStatus {
@@ -63,10 +80,13 @@ struct CodexWiringSmokeTestsDualAgentStatus {
                     liveness: .alive(pid: 1), updatedAt: Date())
     }
 
+    /// r1 review M1：gate 名 `dualAgentStatusLabelReachesAllThreeSites` 拆成 2 個
+    /// `@Test`（footer 單獨渲染一條、標題＋CTA 合併一條），依 spec §6.3 慣例加 `_<條目>`。
+    ///
     /// ①：footer——單獨渲染 `PanelFooterView`（避開 `PanelView.body` 的洩漏源），
     /// 組合字面 `"<statusLabel> · v<version>"` 恰好出現一次。
     @Test("① footer chip：組合字面 \"<statusLabel> · v<version>\" 恰好出現一次")
-    func footerRendersComposite() {
+    func dualAgentStatusLabelReachesAllThreeSites_1() {
         let model = Self.model(rows: [Self.codexSession("x1")])
         let leaves = CodexSectionViewTests.leafStrings(PanelFooterView(model: model, onAction: { _ in }).body)
         let composite = "\(model.statusLabel(model.language)) · v\(model.version)"
@@ -78,19 +98,34 @@ struct CodexWiringSmokeTestsDualAgentStatus {
     }
 
     /// ②③ 合成一條：標題與 CTA 窄條是否真的接到 statusLabel／有沒有漏接改回 healthLabel。
-    @Test("②③ 標題與 CTA 窄條：裸 statusLabel 命中恰為 4（本情境實測基準）且 healthLabel 不得單獨出現")
-    func titleAndCTAReadStatusLabelNotHealthLabel() {
+    ///
+    /// r1 review M3：`labelCount == 4` 原本是寫死的量測值，其中 2 是
+    /// `CodexSectionView`／`PanelFooterView` 洩漏 `model.title` 的底噪（同 CX48 doc comment
+    /// 記過的洩漏）——多一個持有整份 `model` 的子 view，這個數字就會變，跟「標題／CTA 有沒有
+    /// 正確接線」這個行為本身無關。**改用 `model.version` 的命中數推導底噪**（`version` 只會
+    /// 透過同一兩個子 view 洩漏，不會被 `BannerView`／標題／CTA 是否正確接線影響），門檻變成
+    /// 「底噪 + 2」（標題 1 個真實例化 + CTA 1 個）。
+    /// **另更正舊 doc comment的錯誤宣稱**：標題那一處被改回 `healthLabel` 時，實測是
+    /// **4→1**（不是 4→3）——因為 `model.title` 這個**欄位本身**的值也會跟著變（它的計算
+    /// 邏輯就是 `title(for:install:codex:language:)`，若把 `PanelView.swift` 的讀取點改回
+    /// `install.healthLabel` 只影響「畫出來的那一個」，欄位洩漏的兩份仍然是舊值 `statusLabel`；
+    /// 但若是把 `PanelModel.title` 的**計算邏輯本身**改回（CX50 mutation⑤），欄位值連同兩份
+    /// 洩漏都會變成 `healthLabel`，於是原本算作 `statusLabel` 命中的洩漏兩份也消失，
+    /// 4→1）；CTA 窄條被改回時欄位不受影響，只少真實例化那一份，是 4→3。兩種都在下面的
+    /// mutation 表驗證過。
+    @Test("②③ 標題與 CTA 窄條：裸 statusLabel 命中恰為「底噪 + 2」且 healthLabel 不得單獨出現")
+    func dualAgentStatusLabelReachesAllThreeSites_2() {
         let model = Self.model(rows: [Self.codexSession("x1")])
         let leaves = CodexSectionViewTests.leafStrings(PanelView(model: model, onAction: { _ in }).body)
         let label = model.statusLabel(model.language)
         let healthLabel = model.install.healthLabel(model.language)
 
+        let noise = leaves.filter { $0 == model.version }.count
         let labelCount = leaves.filter { $0 == label }.count
-        #expect(labelCount == 4, """
-            裸 statusLabel 文字在 PanelView(model:).body 應該恰好命中 4 次（2 次是
-            CodexSectionView／PanelFooterView 洩漏 model.title 的既知底噪，另外 2 次
-            才是標題與 CTA 窄條真的實例化）。任一處被改回 healthLabel 都會讓這個數字
-            少 1（變 3）。實際命中 \(labelCount) 次。
+        #expect(labelCount == noise + 2, """
+            裸 statusLabel 文字在 PanelView(model:).body 應該恰好命中「底噪（\(noise)，由
+            model.version 的命中數推導）+ 2」（標題與 CTA 窄條各一次真的實例化）。
+            實際命中 \(labelCount) 次。
             """)
 
         let healthLabelCount = leaves.filter { $0 == healthLabel }.count

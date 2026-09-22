@@ -57,6 +57,10 @@ struct CodexWiringSmokeTestsBanner {
         return leaves.filter { $0 == Self.bannerFullText }.count
     }
 
+    /// r1 review M1：函式名必須逐字等於 spec §6.3／DoD 帳本指名的 gate 名
+    /// `codexTrustWarningIsDrawnWithClaudeRowsPresent`，否則 `--filter` 照文件驗收
+    /// 會靜默 `No matching test cases were run`（exit 0）。
+    ///
     /// 正向：面板上只有一列 **Claude** 的活 session 時，`.codexConnected` banner 仍然要
     /// 真的畫出來——這正是 persona r1 抓到的那一行：r12 的 `effectiveBanner` 只看
     /// `!rows.isEmpty` 就把它抹掉。
@@ -65,7 +69,7 @@ struct CodexWiringSmokeTestsBanner {
     /// 真的被實例化進畫面樹的那一次不該再出現。**兩格合成一條斷言**（命中次數差恰為 1，
     /// 見上方 doc comment 為什麼不能各自獨立用 `.contains`）。
     @Test("Claude 列時 banner 真的畫出來、Codex 列時 banner 真的退場：兩者命中次數差恰為 1")
-    func drawnOnlyWhenClaudeRowsPresentNotCodexRows() {
+    func codexTrustWarningIsDrawnWithClaudeRowsPresent() {
         let withClaudeRow = Self.bannerOccurrenceCount(rows: [Self.session("c1", agent: .claude)])
         let withCodexRow = Self.bannerOccurrenceCount(rows: [Self.session("x1", agent: .codex)])
         #expect(withClaudeRow == withCodexRow + 1, """
@@ -77,11 +81,22 @@ struct CodexWiringSmokeTestsBanner {
             """)
     }
 
-    /// 額外的絕對值下限（防止兩邊都是 0 的退化情況讓上面那條「差 1」意外成立）：
-    /// Claude 列那格至少要有一次命中，證明 banner 確實有被畫出來，不是兩邊都沒畫。
-    @Test("Claude 列時 banner 至少出現一次（不是兩邊都沒畫，差值才有意義）")
-    func drawnAtLeastOnceWithClaudeRows() {
-        let withClaudeRow = Self.bannerOccurrenceCount(rows: [Self.session("c1", agent: .claude)])
-        #expect(withClaudeRow >= 1, "只有 Claude 列時，banner 全文一次都沒出現在渲染後的畫面樹，實際 0 次")
+    /// r1 review M5：舊版寫「`>= 1`」，但洩漏底噪本身已經是 2——這條斷言在算術上不可能失敗
+    /// （`0 == 0 + 1` 為假，兩邊同時歸零也救不了它），且實測在 CX48① mutation（banner 確定
+    /// 沒被畫出來）下這條仍然綠、只有差值那條紅，失敗訊息卻宣稱「實際 0 次」這件證明不了的事。
+    /// **改成推導式底噪**（同 CX51② 的處方）：`model.version` 只會透過 `CodexSectionView.model`／
+    /// `PanelFooterView.model` 兩個持有整份 `model` 的子 view 洩漏，不會被 `BannerView` 真的
+    /// 實例化與否影響——用它的命中數當底噪，門檻變成「底噪 + 1」，兩者都推導自同一份實測，
+    /// 不是憑空湊的數字。
+    @Test("Claude 列時 banner 命中數恰為「模型洩漏底噪 + 1」（不是任意下限）")
+    func codexTrustWarningIsDrawnWithClaudeRowsPresent_noiseFloor() {
+        let model = Self.model(rows: [Self.session("c1", agent: .claude)])
+        let leaves = CodexSectionViewTests.leafStrings(PanelView(model: model, onAction: { _ in }).body)
+        let noise = leaves.filter { $0 == model.version }.count
+        let bannerCount = leaves.filter { $0 == Self.bannerFullText }.count
+        #expect(bannerCount == noise + 1, """
+            只有 Claude 列時，banner 全文命中數應該恰為「模型洩漏底噪（\(noise)，由 model.version
+            的命中數推導）+ 1（BannerView 真的被實例化）」，實際 \(bannerCount) 次
+            """)
     }
 }

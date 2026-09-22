@@ -60,9 +60,12 @@ struct CodexBannerLifecycleTests {
                         codex: .unavailable, codexSnippet: nil, codexPathRejection: nil)
     }
 
+    /// r1 review M1：函式名必須逐字等於 spec §6.3／DoD 帳本指名的 gate 名，否則
+    /// `swift test --filter codexConnectedBannerOnlyRetiresOnCodexRow` 照文件驗收會
+    /// `No matching test cases were run`（exit 0）靜默拿到假綠燈。
     @Test("`.connected` 只在 rows 非空時退場；`.codexConnected` 只在出現 Codex 列時退場；其餘 kind 在每一種列組合下都不退場",
           arguments: PanelBanner.Kind.allCases, RowCombo.allCases)
-    func retiresOnlyOnItsOwnCondition(kind: PanelBanner.Kind, combo: RowCombo) {
+    func codexConnectedBannerOnlyRetiresOnCodexRow(kind: PanelBanner.Kind, combo: RowCombo) {
         let model = Self.model(kind: kind, combo: combo)
         switch kind {
         case .connected:
@@ -87,6 +90,11 @@ struct CodexBannerLifecycleTests {
     /// 另加一格（r15 spec 明列）：只有 Claude 列時 `hasCodexRow` 必須是 `false`——否則
     /// `.codexConnected` 的退場條件仍然等價於 `!rows.isEmpty`，這條 gate 會在一個
     /// 壞掉的實作上全綠（`agentLabel != nil` 那個等價 mutant，見 mutation②）。
+    ///
+    /// r1 review m6：**這一格是承重牆，不是補充**——`codexConnectedBannerOnlyRetiresOnCodexRow`
+    /// 上面那條主測試的期望值 `expectRetired = model.hasCodexRow` 是自我指涉（跟 `hasCodexRow`
+    /// 自己的定義比對）；實測把 `hasCodexRow` 改成 `!rows.isEmpty`（＝ mutation②的鏡像）餵回
+    /// 主測試，20 個 test case **全綠**——只有這裡才會紅。
     @Test("hasCodexRow：只有 Claude 列時必須是 false")
     func hasCodexRowFalseForClaudeOnlyRows() {
         let model = Self.model(kind: .codexConnected, combo: .onlyClaude)

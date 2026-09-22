@@ -48,8 +48,9 @@ struct CodexDisconnectConfirmationTests {
         return (delegate, spy, fakeInstaller, defaults, suite)
     }
 
+    /// r1 review M1：函式名依 spec §6.3 慣例改成 `codexDisconnectGoesThroughConfirmation_<條目>`。
     @Test("不確認（假身不呼叫 onConfirm）→ disconnectCallCount == 0，憑證鍵位元組不變")
-    func doesNotDisconnectWithoutConfirmation() throws {
+    func codexDisconnectGoesThroughConfirmation_1() throws {
         let (delegate, spy, fakeInstaller, defaults, suite) = try makeConnectedDelegate(confirmDisconnectCodex: { _, _ in
             // 刻意不呼叫 onConfirm——模擬使用者按了「取消」。
         })
@@ -75,7 +76,7 @@ struct CodexDisconnectConfirmationTests {
     }
 
     @Test("確認（假身呼叫 onConfirm）→ disconnectCallCount == 1")
-    func disconnectsAfterConfirmation() throws {
+    func codexDisconnectGoesThroughConfirmation_2() throws {
         let (delegate, spy, fakeInstaller, defaults, suite) = try makeConnectedDelegate(confirmDisconnectCodex: { _, onConfirm in
             onConfirm()
         })
@@ -97,7 +98,7 @@ struct CodexDisconnectConfirmationTests {
     /// Claude Code 的既有形狀）——標題／內文／確認鈕三句合起來至少要有一處含
     /// `Agent.codex.label!`。
     @Test("確認框文案含 Agent.codex.label！（點名是哪一側）", arguments: Language.allCases)
-    func copyNamesTheAgent(language: Language) {
+    func codexDisconnectGoesThroughConfirmation_3(language: Language) {
         let title = L10nConfirmationAlerts.disconnectCodexTitle.text(language)
         let body = L10nConfirmationAlerts.disconnectCodexBody.text(language)
         let confirmButton = L10nConfirmationAlerts.disconnectCodexConfirmButton.text(language)

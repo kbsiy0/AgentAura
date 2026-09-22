@@ -23,10 +23,21 @@ import Foundation
 /// **已知假陰性**（同 CX46）：跨行寫法與 block comment 形式的 `healthLabel(` 不會被
 /// 這個單行字面掃描抓到——这是本 gate 承認的邊界，不是宣稱涵蓋一切寫法。
 ///
+/// **已知假陽性**（r1 review m1，實測咬過一次）：doc comment／行內註解裡**提到**
+/// `healthLabel(` 這個字面（例如用反引號說明「這個函式叫 healthLabel(...)」）也會被
+/// 這個單行字面掃描算成命中——寫這份文件時，`L10nCodex+Failures.swift` 的一句 doc comment
+/// 提到 `` `install.healthLabel(l)` `` 就讓②格的集合多算了一個檔，逼著把那句話改寫措辭
+/// 避開字面。與上面的假陰性是同一枚硬幣的兩面：**這個 gate 掃的是文字，不是語意**。
+///
 /// **`TooltipText` 刻意不在這條 gate 想「收斂」的三處狀態字串範圍內**（T13f 量測任務的
 /// 邊界）：tooltip 是選單列的 hover 文字，不是面板的三處狀態字串，它繼續讀
 /// `install.healthLabel` 是刻意的，不是漏掉——它仍然要出現在具名集合裡（它真的呼叫
 /// `healthLabel(`），只是「該不該雙 agent 感知」不是這條 gate 要回答的問題。
+///
+/// **與既有 `NotConnectedViewNoDuplicateHealthLabelSourceScanTests` 的關係**（r1 review m8）：
+/// 那條是 app-shell（PR #7）就有的既有 gate，掃的是單一檔案（`NotConnectedView.swift`）
+/// 不得直接讀 `model.install.healthLabel`；①格落地後它是①格（App 層命中恰 0）的**真子集**
+/// ——不是重複或錯誤，只是兩條 gate 現在守同一件事的不同粒度，日後改①格記得它。
 @Suite("healthLabel 讀取點的來源集合（CX52）")
 struct HealthLabelReaderSourceScanTests {
 
@@ -37,8 +48,9 @@ struct HealthLabelReaderSourceScanTests {
         return e.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 
+    /// r1 review M1：函式名依 spec §6.3 慣例改成 `healthLabelReadersAreTheNamedSet_<條目>`。
     @Test("① Sources/AgentAuraApp/ 內 .healthLabel( 命中數恰為 0")
-    func appLayerHasZeroDirectReaders() throws {
+    func healthLabelReadersAreTheNamedSet_1() throws {
         let root = Gate.repoRoot().appendingPathComponent("Sources/AgentAuraApp")
         let files = try Self.swiftFiles(under: root)
         #expect(files.count >= 15, "Sources/AgentAuraApp 只讀到 \(files.count) 個 .swift —— gate 不能空跑")
@@ -61,7 +73,7 @@ struct HealthLabelReaderSourceScanTests {
     ]
 
     @Test("② Sources/AuraCore/ 內含 healthLabel( 的檔案集合恰等於具名清單")
-    func auraCoreReaderSetMatchesNamedList() throws {
+    func healthLabelReadersAreTheNamedSet_2() throws {
         let root = Gate.repoRoot().appendingPathComponent("Sources/AuraCore")
         let files = try Self.swiftFiles(under: root)
         #expect(files.count >= 15, "Sources/AuraCore 只讀到 \(files.count) 個 .swift —— gate 不能空跑")
