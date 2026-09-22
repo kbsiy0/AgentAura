@@ -91,12 +91,17 @@ struct CodexBannerLifecycleTests {
     /// `.codexConnected` 的退場條件仍然等價於 `!rows.isEmpty`，這條 gate 會在一個
     /// 壞掉的實作上全綠（`agentLabel != nil` 那個等價 mutant，見 mutation②）。
     ///
-    /// r1 review m6：**這一格是承重牆，不是補充**——`codexConnectedBannerOnlyRetiresOnCodexRow`
+    /// r1 review m6／r2 review N1：**這一格是承重牆，不是補充**——`codexConnectedBannerOnlyRetiresOnCodexRow`
     /// 上面那條主測試的期望值 `expectRetired = model.hasCodexRow` 是自我指涉（跟 `hasCodexRow`
     /// 自己的定義比對）；實測把 `hasCodexRow` 改成 `!rows.isEmpty`（＝ mutation②的鏡像）餵回
-    /// 主測試，20 個 test case **全綠**——只有這裡才會紅。
+    /// 主測試，20 個 test case **全綠**——只有這裡才會紅。**N1**：光靠 doc comment 講「只有這裡
+    /// 才會紅」不夠——`swift test --filter codexConnectedBannerOnlyRetiresOnCodexRow` 原本只抓到
+    /// 上面那條自我指涉的主測試（1 test），抓不到這一格；照文件驗收 CX47 這個 gate 名，會在
+    /// `hasCodexRow` 壞掉時仍然回報 `1 test passed`、exit 0——**假綠燈搬到了隔壁**，M1 想解決的
+    /// 問題沒有真的解決。函式名因此也加上 gate 名前綴（同其餘六個已改名的 gate同一個形狀），
+    /// 讓 `--filter codexConnectedBannerOnlyRetiresOnCodexRow` 能同時抓到這一格。
     @Test("hasCodexRow：只有 Claude 列時必須是 false")
-    func hasCodexRowFalseForClaudeOnlyRows() {
+    func codexConnectedBannerOnlyRetiresOnCodexRow_2() {
         let model = Self.model(kind: .codexConnected, combo: .onlyClaude)
         #expect(model.hasCodexRow == false, """
             只有一列 Claude 的 session，hasCodexRow 應該是 false——否則 `.codexConnected`

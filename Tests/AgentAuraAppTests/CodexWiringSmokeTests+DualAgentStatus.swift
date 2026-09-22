@@ -126,6 +126,9 @@ struct CodexWiringSmokeTestsDualAgentStatus {
             裸 statusLabel 文字在 PanelView(model:).body 應該恰好命中「底噪（\(noise)，由
             model.version 的命中數推導）+ 2」（標題與 CTA 窄條各一次真的實例化）。
             實際命中 \(labelCount) 次。
+            （r2 review n1：這裡假設 model.version 不會被畫面上任何真實 view 直接印出來，
+            只透過 CodexSectionView／PanelFooterView 洩漏——若哪天 PanelView 開始直接畫版本號，
+            這條會因無關理由變紅，那時候要重新推導底噪，不是回頭寫死數字）
             """)
 
         let healthLabelCount = leaves.filter { $0 == healthLabel }.count

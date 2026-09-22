@@ -96,7 +96,10 @@ struct CodexWiringSmokeTestsBanner {
         let bannerCount = leaves.filter { $0 == Self.bannerFullText }.count
         #expect(bannerCount == noise + 1, """
             只有 Claude 列時，banner 全文命中數應該恰為「模型洩漏底噪（\(noise)，由 model.version
-            的命中數推導）+ 1（BannerView 真的被實例化）」，實際 \(bannerCount) 次
+            的命中數推導）+ 1（BannerView 真的被實例化）」，實際 \(bannerCount) 次。
+            （r2 review n1：這裡假設 model.version 不會被畫面上任何真實 view 直接印出來，
+            只透過 CodexSectionView／PanelFooterView 洩漏——若哪天 PanelView 開始直接畫版本號，
+            這條會因無關理由變紅，那時候要重新推導底噪，不是回頭寫死數字）
             """)
     }
 }
