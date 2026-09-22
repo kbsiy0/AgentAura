@@ -49,7 +49,7 @@ struct CodexSnippetHeightTests {
     /// 主域固定給真的產生器輸出（STEP1 確認的真正最壞態，不能被稀釋成「snippet nil」的
     /// 矮版本）；其餘三態（`.unavailable`／`.notConnected`／`.connected`）皆無 rejection、
     /// 無 snippet。`.occupiedByOther` 的「snippet nil」矮子變體另外補一條獨立檢查
-    /// （`occupiedByOtherWithoutSnippetFitsWithinCeiling`，review m1「順手補」）。
+    /// （`snippetCardFitsOnA13InchScreen_2`，review m1「順手補」）。
     func codexInputs(for state: CodexState) -> (snippet: String?, rejection: CodexHookPathCheck.Rejection?) {
         switch state {
         case .unavailable, .notConnected, .connected:
@@ -101,7 +101,7 @@ struct CodexSnippetHeightTests {
 
     /// 五維乘積的每一格：`preferredContentSize.height` 不得超過 780pt。
     @Test("CX56①：五維乘積（224 格）preferredContentSize.height ≤ 780pt")
-    func heightWithinCeilingAcrossFullDomain() {
+    func snippetCardFitsOnA13InchScreen_1() {
         var violations: [String] = []
         for state in Self.allCodexStates {
             for language in Language.allCases {
@@ -130,7 +130,7 @@ struct CodexSnippetHeightTests {
     /// `.occupiedByOther` 真的 snippet（那才是真正的最壞態，`CodexSnippetHeightMeasurement`
     /// STEP1 確認過），這裡補這個更矮的子變體，避免「窮盡」名不副實。
     @Test("CX56①補：.occupiedByOther，codexSnippet == nil 的矮子變體也在天花板內")
-    func occupiedByOtherWithoutSnippetFitsWithinCeiling() {
+    func snippetCardFitsOnA13InchScreen_2() {
         var violations: [String] = []
         for language in Language.allCases {
             for sessionCount in [0, 3] {
@@ -160,7 +160,7 @@ struct CodexSnippetHeightTests {
     /// 其餘態沒有 snippet 也沒有「複製」按鈕。按鈕身份用點擊辨識，不用陣列索引
     /// （`FooterPositionStabilityTests` 的既有手法與踩過的坑：橋接順序不等於宣告順序）。
     @Test("CX56②：.occupiedByOther 有 snippet 時，「複製」與 footer 按鈕的 minY 都在天花板內")
-    func buttonsWithinCeilingWhenSnippetShown() throws {
+    func snippetCardFitsOnA13InchScreen_3() throws {
         var violations: [String] = []
         for language in Language.allCases {
             for sessionCount in [0, 3] {
@@ -218,7 +218,7 @@ struct CodexSnippetHeightTests {
     /// 渲一段 6 行等寬文字量出來（r15／n4：不得進 AuraCore，那層量不了文字），
     /// 且與 `CodexSnippetSizing` 上限用的行高是**同一個**量到的值（r16／n6）。
     @Test("CX56③：snippet 區塊高度不得低於 6 個視覺列")
-    func snippetBlockMeetsMinimumVisibleLines() {
+    func snippetCardFitsOnA13InchScreen_4() {
         let sixLines = Array(repeating: "X", count: CodexSnippetSizing.minVisibleLines).joined(separator: "\n")
         let hosting = NSHostingView(rootView:
             Text(sixLines).font(.system(size: 10, design: .monospaced)).padding(8))
